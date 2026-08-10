@@ -118,18 +118,19 @@ Per lo sviluppo in locale servono anche Node 22+ e istanze di PostgreSQL e Redis
 
 1. Vai su <https://discord.com/developers/applications> e crea una nuova applicazione.
 2. Sezione **Bot**: crea il bot, copia il token in `DISCORD_TOKEN`.
-3. Sempre nella sezione **Bot**, attiva i *Privileged Gateway Intents*:
-   - **Server Members Intent** — necessario per join, ruoli e profili
-   - **Message Content Intent** — necessario allo scanner dei contenuti
-   - Presence Intent (facoltativo)
+3. Sempre nella sezione **Bot**, attiva **tutti e tre** i *Privileged Gateway Intents*:
+   - **Server Members Intent** — join, ruoli, profili
+   - **Message Content Intent** — scanner dei contenuti
+   - **Presence Intent** — rilevamento account compromessi
 
+   > Devono essere accesi tutti e tre: il client li richiede in blocco e Discord, se anche uno
+   > solo manca, non degrada ma chiude la connessione con `Used disallowed intents` (close code
+   > 4014). Nei log compare come un riavvio in ciclo del servizio `bot`.
+   >
    > Dal 10 giugno 2026 la soglia per l'approvazione non è più «100 server» ma **10.000 utenti
    > unici** raggiunti dall'app. Sotto quella soglia gli intent si attivano direttamente dal
    > Developer Portal. La verifica del bot a 100 server resta un procedimento separato, e
    > l'approvazione degli intent va rinnovata ogni anno.
-   >
-   > Senza `MESSAGE_CONTENT` il bot parte comunque: lo scanner non potrà leggere i messaggi, ma
-   > anti-raid, anti-nuke, registro e controllo account continuano a funzionare.
 
 4. Sezione **OAuth2**: copia *Client ID* e *Client Secret*. Aggiungi come redirect
    `https://tuodominio.it/api/auth/callback` (in locale: `http://localhost:8080/api/auth/callback`).

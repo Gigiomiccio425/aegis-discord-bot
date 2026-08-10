@@ -62,7 +62,11 @@ x-common-env: &common-env
 
 services:
   aegis-postgres:
-    image: postgres:17-alpine
+    # Debian e non Alpine: su alcune installazioni di ZimaOS il bash
+    # dell'immagine Alpine non risulta eseguibile e Postgres non parte,
+    # fallendo con «env: can't execute bash: Permission denied» prima di
+    # scrivere una riga di log.
+    image: postgres:17
     container_name: aegis-postgres
     restart: unless-stopped
     environment:
@@ -204,9 +208,10 @@ x-casaos:
         1. Crea l'applicazione su https://discord.com/developers/applications
 
 
-        2. Sezione **Bot**: copia il token, e attiva i due Privileged Gateway
-        Intents — *Server Members* e *Message Content*. Senza, anti-raid e
-        scanner non hanno nulla da leggere.
+        2. Sezione **Bot**: copia il token, e attiva **tutti e tre** i
+        Privileged Gateway Intents — *Presence*, *Server Members* e *Message
+        Content*. Se ne manca anche uno solo Discord rifiuta la connessione con
+        «Used disallowed intents» e il bot riparte in ciclo senza collegarsi.
 
 
         3. Sezione **OAuth2**: copia *Client ID* e *Client Secret*, e aggiungi

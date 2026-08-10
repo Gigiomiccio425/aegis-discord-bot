@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     );
   });
 
-  await client.login(token);
+  await login(client, token);
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'spegnimento in corso');
@@ -73,6 +73,41 @@ async function main(): Promise<void> {
   });
 
   void invalidateCustomCommands;
+}
+
+/**
+ * Collega il client, traducendo i due rifiuti tipici del gateway in istruzioni.
+ *
+ * Discord li segnala con messaggi di una riga sola, senza dire cosa fare: con
+ * `restart: unless-stopped` il container riparte in ciclo e nei log resta solo
+ * lo stack, che non aiuta chi sta installando il bot per la prima volta.
+ */
+async function login(client: ReturnType<typeof createClient>, token: string): Promise<void> {
+  try {
+    await client.login(token);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.includes('disallowed intents')) {
+      logger.fatal(
+        'Discord ha rifiutato la connessione: intent privilegiati non concessi.\n' +
+          'Developer Portal → la tua applicazione → Bot → Privileged Gateway Intents.\n' +
+          'Servono accesi TUTTI E TRE: Presence, Server Members, Message Content.\n' +
+          'Discord non li concede parzialmente: se ne manca uno chiude la connessione.',
+      );
+      process.exit(1);
+    }
+
+    if (message.includes('invalid token') || message.includes('TOKEN_INVALID')) {
+      logger.fatal(
+        'Discord ha rifiutato il token. Developer Portal → Bot → Reset Token, ' +
+          'poi aggiorna DISCORD_TOKEN. Attenzione a non copiare il client secret al suo posto.',
+      );
+      process.exit(1);
+    }
+
+    throw error;
+  }
 }
 
 void main().catch((error) => {

@@ -12,16 +12,20 @@ const log = childLogger('client');
 /**
  * Intent richiesti.
  *
- * `GuildMessages` + `MessageContent` sono privilegiati. Dal 10 giugno 2026 la
- * soglia per l'approvazione non è più "100 server" ma 10.000 utenti unici
- * raggiunti dall'app; sotto quella soglia bastano gli interruttori nel
- * Developer Portal. La verifica del bot a 100 server resta un procedimento
- * separato, e l'approvazione degli intent va rinnovata ogni anno.
+ * Tre sono privilegiati e vanno accesi nel Developer Portal: `GuildMembers`,
+ * `GuildPresences`, `MessageContent`. Discord non li concede parzialmente: se
+ * ne manca uno chiude la connessione con `Used disallowed intents` (close code
+ * 4014), quindi l'elenco qui sotto è tutto-o-niente.
  *
- * Il bot deve funzionare anche senza `MessageContent`: in quel caso lo scanner
- * dei contenuti non può leggere il testo, ma anti-raid, anti-nuke, logging e
- * controllo account continuano a lavorare. Meglio un bot parziale che un bot
- * che non parte.
+ * È una scelta: sono i tre da cui dipendono le difese principali — senza
+ * membri non c'è anti-raid, senza contenuto non c'è scanner, senza presenze non
+ * c'è rilevamento degli account compromessi. Un avvio rumorosamente fallito è
+ * preferibile a un bot che sembra attivo e non protegge nulla.
+ *
+ * Dal 10 giugno 2026 la soglia per l'approvazione non è più "100 server" ma
+ * 10.000 utenti unici raggiunti dall'app; sotto quella soglia bastano gli
+ * interruttori nel Developer Portal. La verifica del bot a 100 server resta un
+ * procedimento separato, e l'approvazione degli intent va rinnovata ogni anno.
  */
 export const REQUIRED_INTENTS = [
   GatewayIntentBits.Guilds,
