@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+.env
+.env.local
+.env.*.local
+
+# dati runtime (allegati archiviati, cache OCR, backup)
+data/
+storage/
+logs/
+*.log
+
+# prisma
+packages/db/prisma/migrations/dev.db*
+packages/db/generated/
+
+# editor / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.claude/
+
+# caddy
+caddy_data/
+caddy_config/

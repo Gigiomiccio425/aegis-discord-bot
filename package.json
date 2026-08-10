@@ -1,0 +1,39 @@
+{
+  "name": "aegis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aegis — bot Discord di sicurezza avanzata con pannello web di controllo",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "npm run generate -w @aegis/db",
+    "db:push": "npm run push -w @aegis/db",
+    "db:migrate": "npm run migrate -w @aegis/db",
+    "db:studio": "npm run studio -w @aegis/db",
+    "dev:bot": "npm run dev -w @aegis/bot",
+    "dev:api": "npm run dev -w @aegis/api",
+    "dev:web": "npm run dev -w @aegis/web",
+    "dev:worker": "npm run dev -w @aegis/worker",
+    "commands:deploy": "npm run commands:deploy -w @aegis/bot",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^2.1.8"
+  }
+}

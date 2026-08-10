@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+/*
+  Tema scuro come impostazione predefinita: il pannello si guarda durante gli
+  incidenti, spesso di notte, e un fondo chiaro a schermo intero è la cosa
+  sbagliata alle tre del mattino.
+*/
+@theme {
+  --color-base: #0f1116;
+  --color-surface: #171a21;
+  --color-surface-2: #1e222b;
+  --color-border: #2a2f3a;
+  --color-accent: #5865f2;
+  --color-danger: #ed4245;
+  --color-warning: #faa61a;
+  --color-success: #3ba55d;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-base);
+  color: #e4e6eb;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  margin: 0;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 5px;
+}

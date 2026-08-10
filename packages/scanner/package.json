@@ -1,0 +1,27 @@
+{
+  "name": "@aegis/scanner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@aegis/shared": "*",
+    "file-type": "^22.0.1",
+    "jsqr": "^1.4.0",
+    "sharp": "^0.35.3",
+    "sharp-phash": "^2.2.0",
+    "tesseract.js": "^7.0.0"
+  }
+}

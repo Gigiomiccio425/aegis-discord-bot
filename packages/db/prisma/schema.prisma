@@ -1,0 +1,822 @@
+// ═══════════════════════════════════════════════════════════════════════
+//  AEGIS — schema dati
+//
+//  Regola trasversale: ogni tabella porta `guildId`. Il bot è multi-server
+//  fin dall'inizio, e aggiungere l'isolamento dopo significherebbe riscrivere
+//  ogni query.
+//
+//  Gli ID Discord sono salvati come String: sono snowflake a 64 bit e un
+//  intero JavaScript non li rappresenta senza perdita di precisione.
+// ═══════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+// In Prisma 7 l'URL di connessione non sta più qui: la CLI lo prende da
+// prisma.config.ts e il client dall'adapter passato al costruttore.
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SERVER E CONFIGURAZIONE
+// ─────────────────────────────────────────────────────────────
+
+model Guild {
+  id          String   @id // snowflake del server
+  name        String
+  iconHash    String?
+  ownerId     String?
+  memberCount Int      @default(0)
+  joinedAt    DateTime @default(now())
+  active      Boolean  @default(true) // false quando il bot viene rimosso
+
+  /// Configurazione completa, validata dagli schemi Zod di @aegis/shared.
+  /// Sta in un unico JSONB perché i moduli cambiano spesso: una colonna per
+  /// impostazione avrebbe significato una migrazione a ogni nuova opzione.
+  config        Json     @default("{}")
+  configVersion Int      @default(1)
+  updatedAt     DateTime @updatedAt
+
+  configHistory ConfigHistory[]
+  auditEvents   AuditEvent[]
+  messages      MessageArchive[]
+  cases         Case[]
+  profiles      UserProfile[]
+  snapshots     Snapshot[]
+  signatures    ThreatSignature[]
+  webhooks      WebhookRecord[]
+  bots          BotRecord[]
+  invites       InviteRecord[]
+  personas      Persona[]
+  commands      CustomCommand[]
+  polls         Poll[]
+  giveaways     Giveaway[]
+  reactionRoles ReactionRoleSet[]
+  tickets       Ticket[]
+  starboard     StarboardEntry[]
+  incidents     Incident[]
+  voiceSessions VoiceSession[]
+  twitchSubs    TwitchSubscription[]
+  socialSources SocialSource[]
+  panelAccess   PanelAccess[]
+
+  @@index([active])
+}
+
+/// Storico delle modifiche alla configurazione: chi ha cambiato cosa e quando.
+/// Serve a rispondere alla domanda "chi ha disattivato l'anti-nuke ieri sera".
+model ConfigHistory {
+  id        String   @id @default(uuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  actorId   String // utente Discord che ha applicato la modifica
+  source    String // "panel" | "command" | "system"
+  /// Percorsi modificati, es. ["security.antiRaid.joinBurst.count"]
+  paths     String[]
+  before    Json
+  after     Json
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  REGISTRO EVENTI
+// ─────────────────────────────────────────────────────────────
+
+/// Log universale. Ogni azione osservabile finisce qui: è la base del pannello
+/// "log explorer", delle timeline utente e delle statistiche della dashboard.
+model AuditEvent {
+  id        BigInt   @id @default(autoincrement())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  type      String // LogEventType di @aegis/shared
+  category  String // LogCategory
+  createdAt DateTime @default(now())
+
+  /// Chi ha compiuto l'azione (moderatore, autore del messaggio, bot).
+  actorId   String?
+  actorTag  String?
+  /// Su chi ricade l'azione (utente bannato, membro che ha ricevuto il ruolo).
+  targetId  String?
+  targetTag String?
+  channelId String?
+  messageId String?
+  roleId    String?
+
+  /// Descrizione breve pronta per il canale di log.
+  summary String?
+  /// Dettagli strutturati: valori prima/dopo, punteggi, URL trovati, ecc.
+  payload Json @default("{}")
+
+  /// Gravità 0-100, valorizzata dai moduli di sicurezza.
+  severity Int @default(0)
+
+  /// Se l'evento è stato generato da un modulo automatico.
+  automated Boolean @default(false)
+
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  @@index([guildId, createdAt(sort: Desc)])
+  @@index([guildId, type, createdAt(sort: Desc)])
+  @@index([guildId, actorId, createdAt(sort: Desc)])
+  @@index([guildId, targetId, createdAt(sort: Desc)])
+  @@index([guildId, category, createdAt(sort: Desc)])
+  @@index([guildId, severity])
+}
+
+/// Copia dei messaggi, necessaria per mostrare *cosa* è stato cancellato.
+/// La modalità di conservazione dipende da `logging.messageContent`:
+/// FULL salva `content`, HASHED solo `fingerprint`, METADATA_ONLY nessuno dei due.
+model MessageArchive {
+  id        String   @id // ID del messaggio Discord
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String
+  authorId  String
+  authorTag String?
+
+  content     String?
+  /// Impronta del contenuto normalizzato: rileva i duplicati senza conservare il testo.
+  fingerprint String?
+  embeds      Json    @default("[]")
+  stickers    Json    @default("[]")
+
+  replyToId String?
+  threadId  String?
+
+  createdAt DateTime
+  editedAt  DateTime?
+  deletedAt DateTime?
+  /// Chi ha cancellato, se diverso dall'autore (moderatore o bot).
+  deletedBy String?
+
+  attachments AttachmentArchive[]
+
+  @@index([guildId, createdAt(sort: Desc)])
+  @@index([guildId, authorId, createdAt(sort: Desc)])
+  @@index([guildId, channelId, createdAt(sort: Desc)])
+  @@index([guildId, fingerprint])
+  @@index([deletedAt])
+}
+
+/// Allegati salvati sul volume locale: gli URL della CDN Discord scadono e
+/// smettono di funzionare appena il messaggio viene eliminato, quindi senza
+/// copia locale le prove svaniscono proprio quando servono.
+model AttachmentArchive {
+  id          String   @id @default(uuid())
+  guildId     String
+  messageId   String
+  message     MessageArchive @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String?
+  sizeBytes   Int
+  /// Percorso relativo dentro STORAGE_DIR.
+  storagePath String?
+  sha256      String?
+  /// Hash percettivo, solo per le immagini: confronto con le campagne note.
+  phash       String?
+  width       Int?
+  height      Int?
+  /// Verdetto dello scanner: CLEAN | SUSPICIOUS | MALICIOUS | UNSCANNED
+  verdict     String   @default("UNSCANNED")
+  scanResult  Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt(sort: Desc)])
+  @@index([phash])
+  @@index([sha256])
+  @@index([verdict])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MODERAZIONE
+// ─────────────────────────────────────────────────────────────
+
+enum CaseType {
+  NOTE
+  WARN
+  MUTE
+  KICK
+  BAN
+  UNBAN
+  QUARANTINE
+  UNQUARANTINE
+  PURGE
+  ROLE_STRIP
+}
+
+enum CaseStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  APPEALED
+  UPHELD
+}
+
+model Case {
+  id        String     @id @default(uuid())
+  guildId   String
+  guild     Guild      @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  /// Numero progressivo per server, quello che si cita in chat ("caso #42").
+  number    Int
+  type      CaseType
+  status    CaseStatus @default(ACTIVE)
+
+  targetId  String
+  targetTag String?
+  actorId   String // moderatore, oppure l'ID del bot se automatico
+  actorTag  String?
+  automated Boolean @default(false)
+  /// Modulo che ha generato il caso: antiRaid, scanner, compromise…
+  module    String?
+
+  reason   String
+  /// Prove: messaggi congelati, URL, punteggi, allegati archiviati.
+  evidence Json   @default("{}")
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+  revokedBy String?
+
+  appealText       String?
+  appealAt         DateTime?
+  appealResolvedAt DateTime?
+  appealResolvedBy String?
+
+  events AuditEvent[]
+
+  @@unique([guildId, number])
+  @@index([guildId, targetId, createdAt(sort: Desc)])
+  @@index([guildId, status])
+  @@index([guildId, expiresAt])
+}
+
+/// Profilo per utente *per server*: risk score, baseline comportamentale e
+/// storico. La baseline è ciò che permette di riconoscere un account
+/// compromesso — un utente noto che di colpo si comporta in modo diverso.
+model UserProfile {
+  id      String @id @default(uuid())
+  guildId String
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId  String
+
+  username        String?
+  displayName     String?
+  avatarHash      String?
+  /// Hash percettivo dell'avatar: confronto anti-impersonificazione con lo staff.
+  avatarPhash     String?
+  accountCreatedAt DateTime?
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  joinedAt        DateTime?
+  leftAt          DateTime?
+  joinCount       Int       @default(1)
+  /// Codice dell'invito usato per entrare, quando ricostruibile.
+  inviteCode      String?
+  invitedBy       String?
+
+  /// Punteggio di rischio 0-100 calcolato da accountGuard.
+  riskScore   Int      @default(0)
+  /// Segnali attivi, es. ["noAvatar","newAccount","staffImpersonation"].
+  riskFlags   String[] @default([])
+  riskUpdatedAt DateTime?
+
+  messageCount Int      @default(0)
+  lastMessageAt DateTime?
+  /// Momento in cui l'utente è tornato attivo dopo un periodo di silenzio.
+  dormantSince DateTime?
+
+  warnCount Int @default(0)
+  caseCount Int @default(0)
+
+  quarantinedAt   DateTime?
+  quarantineReason String?
+  /// Ruoli posseduti prima della quarantena, per poterli restituire.
+  rolesBeforeQuarantine String[] @default([])
+
+  /// Ruoli posseduti all'ultima uscita dal server.
+  ///
+  /// Servono ai "ruoli appiccicosi": chi rientra si ritrova i ruoli che aveva,
+  /// senza doverli richiedere. È anche la difesa contro il trucco più banale —
+  /// uscire e rientrare per liberarsi di un ruolo di silenziamento.
+  lastRoles     String[]  @default([])
+  lastRolesAt   DateTime?
+
+  verifiedAt DateTime?
+  notes      Json      @default("[]")
+
+  @@unique([guildId, userId])
+  @@index([guildId, riskScore(sort: Desc)])
+  @@index([guildId, lastSeenAt])
+  @@index([guildId, quarantinedAt])
+}
+
+/// Sessioni vocali: durata reale in canale, non solo entrata e uscita.
+model VoiceSession {
+  id        String    @id @default(uuid())
+  guildId   String
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId    String
+  channelId String
+  joinedAt  DateTime
+  leftAt    DateTime?
+  seconds   Int?
+  streamed  Boolean   @default(false)
+  video     Boolean   @default(false)
+
+  @@index([guildId, userId, joinedAt(sort: Desc)])
+  @@index([guildId, channelId, joinedAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SICUREZZA
+// ─────────────────────────────────────────────────────────────
+
+enum IncidentKind {
+  RAID
+  NUKE
+  MASS_SPAM
+  COMPROMISE_WAVE
+  MANUAL_LOCKDOWN
+}
+
+/// Un incidente raggruppa tutto ciò che è successo durante un attacco:
+/// serve per il riepilogo post-evento e per annullare in blocco le azioni
+/// automatiche in caso di falsi positivi.
+model Incident {
+  id        String       @id @default(uuid())
+  guildId   String
+  guild     Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  kind      IncidentKind
+  startedAt DateTime     @default(now())
+  endedAt   DateTime?
+
+  /// Attore principale, se identificato (nuke) — nei raid resta vuoto.
+  actorId String?
+  /// Utenti coinvolti: permette il ripristino di massa dei falsi positivi.
+  affectedUserIds String[] @default([])
+  actionsTaken    Json     @default("[]")
+  peakRate        Int      @default(0)
+  summary         String?
+  resolvedBy      String?
+  notes           String?
+
+  @@index([guildId, startedAt(sort: Desc)])
+  @@index([guildId, kind])
+}
+
+enum SnapshotKind {
+  SCHEDULED
+  MANUAL
+  EMERGENCY
+  PRE_RESTORE
+}
+
+/// Fotografia completa della struttura del server.
+///
+/// Limite reale da tenere presente: Discord non consente di ripristinare la
+/// cronologia dei messaggi. Uno snapshot ricostruisce ruoli, canali, permessi e
+/// impostazioni; i messaggi tornano solo se erano già in MessageArchive.
+model Snapshot {
+  id        String       @id @default(uuid())
+  guildId   String
+  guild     Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  kind      SnapshotKind @default(SCHEDULED)
+  createdAt DateTime     @default(now())
+  createdBy String?
+
+  roles     Json @default("[]")
+  channels  Json @default("[]")
+  emojis    Json @default("[]")
+  stickers  Json @default("[]")
+  settings  Json @default("{}")
+  automod   Json @default("[]")
+  /// Coppie utente-ruoli: consente di restituire i ruoli dopo un attacco.
+  memberRoles Json @default("[]")
+
+  sizeBytes  Int      @default(0)
+  restoredAt DateTime?
+  restoredBy String?
+
+  @@index([guildId, createdAt(sort: Desc)])
+}
+
+enum ThreatKind {
+  DOMAIN
+  URL
+  IMAGE_PHASH
+  FILE_SHA256
+  REGEX
+  KEYWORD
+}
+
+/// Firme di minaccia. Alimentate da tre fonti: i feed pubblici (URLhaus,
+/// Phishing.Database), le segnalazioni dello staff dal pannello, e ciò che lo
+/// scanner scopre da solo (es. il pHash di un'immagine appena bloccata).
+model ThreatSignature {
+  id      String     @id @default(uuid())
+  /// null = firma globale valida per tutti i server.
+  guildId String?
+  guild   Guild?     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  kind    ThreatKind
+  value   String
+
+  /// "urlhaus" | "phishing.database" | "safebrowsing" | "manual" | "auto"
+  source      String
+  /// Campagna riconosciuta, es. "mrbeast-giveaway-2026".
+  campaign    String?
+  severity    Int      @default(50)
+  description String?
+
+  hitCount  Int       @default(0)
+  lastHitAt DateTime?
+  createdAt DateTime  @default(now())
+  createdBy String?
+  /// Le firme dei feed scadono e vengono rinnovate a ogni sincronizzazione.
+  expiresAt DateTime?
+  enabled   Boolean   @default(true)
+
+  @@unique([kind, value, guildId])
+  @@index([kind, enabled])
+  @@index([guildId, kind])
+  @@index([campaign])
+}
+
+/// Inventario dei webhook. Un webhook sconosciuto è un canale di uscita per i
+/// dati e un modo per pubblicare messaggi dall'aspetto ufficiale.
+model WebhookRecord {
+  id        String   @id // ID del webhook
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String
+  name      String
+  creatorId String?
+  /// true per i webhook creati da Aegis per le personas.
+  managed   Boolean  @default(false)
+  approved  Boolean  @default(false)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  deletedAt   DateTime?
+  deletedBy   String?
+  messageCount Int     @default(0)
+
+  @@index([guildId, approved])
+}
+
+/// Inventario dei bot presenti, con il punteggio di rischio dei loro permessi.
+/// Un bot con Administrator equivale al server compromesso se il suo
+/// sviluppatore viene colpito.
+model BotRecord {
+  id           String   @id // ID applicazione/bot
+  guildId      String
+  guild        Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name         String
+  addedBy      String?
+  addedAt      DateTime @default(now())
+  removedAt    DateTime?
+  permissions  String   @default("0") // bitfield come stringa
+  riskScore    Int      @default(0)
+  riskFlags    String[] @default([])
+  approved     Boolean  @default(false)
+  lastAuditAt  DateTime?
+
+  @@index([guildId, riskScore(sort: Desc)])
+}
+
+/// Inviti del server: consente di attribuire ogni ingresso a un invito e di
+/// sorvegliare i propri codici. Un codice che si libera diventa immediatamente
+/// rivendicabile da un attaccante come vanity di un altro server.
+model InviteRecord {
+  code      String   @id
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String?
+  inviterId String?
+  uses      Int      @default(0)
+  maxUses   Int      @default(0)
+  temporary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  deletedAt DateTime?
+  /// true per i codici sorvegliati (vanity o inviti pubblicati altrove).
+  watched   Boolean  @default(false)
+  /// Segnalato quando il codice non è più nostro: rischio dirottamento.
+  atRisk    Boolean  @default(false)
+
+  @@index([guildId, deletedAt])
+  @@index([watched, atRisk])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  COMANDI PERSONALIZZATI E PERSONAS
+// ─────────────────────────────────────────────────────────────
+
+/// Identità con nome e immagine propri, realizzata tramite webhook.
+/// Ogni messaggio inviato resta attribuito in AuditEvent all'utente umano che
+/// ha lanciato il comando: la persona non è mai anonimato.
+model Persona {
+  id          String   @id @default(uuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String
+  avatarUrl   String?
+  color       String?
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  messageCount Int     @default(0)
+
+  @@unique([guildId, name])
+}
+
+model CustomCommand {
+  id          String   @id @default(uuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  enabled     Boolean  @default(true)
+
+  allowedRoleIds    String[] @default([])
+  deniedRoleIds     String[] @default([])
+  allowedChannelIds String[] @default([])
+
+  /// Argomenti e passi validati dagli schemi Zod di @aegis/shared.
+  args  Json @default("[]")
+  steps Json @default("[]")
+
+  cooldownSec      Int     @default(3)
+  guildCooldownSec Int     @default(0)
+  ephemeralAck     Boolean @default(true)
+
+  useCount   Int      @default(0)
+  lastUsedAt DateTime?
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+
+  @@unique([guildId, name])
+  @@index([guildId, enabled])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  INTEGRAZIONI
+// ─────────────────────────────────────────────────────────────
+
+model TwitchSubscription {
+  id             String   @id @default(uuid())
+  guildId        String
+  guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  twitchUserId   String
+  twitchLogin    String
+  /// ID della sottoscrizione EventSub lato Twitch.
+  eventsubId     String?
+  eventsubType   String   @default("stream.online")
+  announceChannelId String?
+  liveRoleId     String?
+  lastLiveAt     DateTime?
+  lastAnnouncedAt DateTime?
+  lastClipCheckAt DateTime?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@unique([guildId, twitchUserId, eventsubType])
+  @@index([twitchUserId])
+}
+
+/// Ultimo contenuto visto per una fonte esterna (YouTube, RSS).
+///
+/// Serve a non ripubblicare: senza uno stato persistente, ogni riavvio del
+/// worker riannuncerebbe gli ultimi quindici video del canale.
+model SocialSource {
+  id        String   @id @default(uuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  /// "youtube" | "rss"
+  platform  String
+  /// ID canale YouTube oppure URL del feed.
+  identifier String
+  displayName String?
+
+  /// ID dell'ultimo elemento pubblicato, e la sua data.
+  lastItemId   String?
+  lastItemAt   DateTime?
+  lastCheckedAt DateTime?
+  /// Errori consecutivi: dopo troppi, la fonte viene messa in pausa.
+  failureCount Int      @default(0)
+  lastError    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, platform, identifier])
+  @@index([platform, lastCheckedAt])
+}
+
+model Poll {
+  id          String   @id @default(uuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId   String
+  messageId   String?
+  question    String
+  options     Json     @default("[]")
+  multiSelect Boolean  @default(false)
+  anonymous   Boolean  @default(false)
+  /// Vuoto = tutti possono votare.
+  allowedRoleIds String[] @default([])
+  createdBy   String
+  createdAt   DateTime @default(now())
+  closesAt    DateTime?
+  closedAt    DateTime?
+
+  votes PollVote[]
+
+  @@index([guildId, closesAt])
+}
+
+model PollVote {
+  id        String   @id @default(uuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  /// Nei sondaggi anonimi qui è salvato un hash con sale, non l'ID reale.
+  voterKey  String
+  optionIds Int[]    @default([])
+  votedAt   DateTime @default(now())
+
+  @@unique([pollId, voterKey])
+}
+
+model Giveaway {
+  id          String   @id @default(uuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId   String
+  messageId   String?
+  prize       String
+  winnerCount Int      @default(1)
+  requirements Json    @default("{}")
+  hostId      String
+  createdAt   DateTime @default(now())
+  endsAt      DateTime
+  endedAt     DateTime?
+  winnerIds   String[] @default([])
+
+  entries GiveawayEntry[]
+
+  @@index([guildId, endsAt])
+}
+
+model GiveawayEntry {
+  id         String   @id @default(uuid())
+  giveawayId String
+  giveaway   Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  userId     String
+  enteredAt  DateTime @default(now())
+  /// Motivo dell'esclusione quando i requisiti non sono soddisfatti.
+  rejected   String?
+
+  @@unique([giveawayId, userId])
+}
+
+enum TicketStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+/// Richiesta di assistenza privata fra un utente e lo staff.
+///
+/// Il canale viene creato al momento e distrutto alla chiusura: ciò che resta è
+/// la trascrizione, che è l'unica parte che serve davvero dopo.
+model Ticket {
+  id        String       @id @default(uuid())
+  guildId   String
+  guild     Guild        @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  /// Numero progressivo per server, quello che compare nel nome del canale.
+  number    Int
+  channelId String?
+  openerId  String
+  subject   String
+  status    TicketStatus @default(OPEN)
+
+  createdAt  DateTime  @default(now())
+  claimedBy  String?
+  claimedAt  DateTime?
+  closedAt   DateTime?
+  closedBy   String?
+  closeReason String?
+
+  /// Percorso della trascrizione dentro STORAGE_DIR.
+  transcriptPath String?
+  messageCount   Int    @default(0)
+
+  @@unique([guildId, number])
+  @@index([guildId, status])
+  @@index([guildId, openerId])
+}
+
+/// Messaggio promosso in bacheca dalle reazioni dei membri.
+///
+/// Il collegamento fra messaggio originale e copia in bacheca deve essere
+/// persistente: senza, un riavvio del bot produrrebbe un doppione a ogni nuova
+/// stella su un messaggio già promosso.
+model StarboardEntry {
+  id                String   @id @default(uuid())
+  guildId           String
+  guild             Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  sourceMessageId   String
+  sourceChannelId   String
+  authorId          String
+  starboardMessageId String?
+  count             Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([guildId, sourceMessageId])
+  @@index([guildId, count(sort: Desc)])
+}
+
+model ReactionRoleSet {
+  id        String   @id @default(uuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String
+  messageId String?
+  title     String
+  /// [{ label, emoji, roleId, description }]
+  options   Json     @default("[]")
+  /// EXCLUSIVE = un solo ruolo alla volta; MULTI = liberi; VERIFY = solo aggiunta.
+  mode      String   @default("MULTI")
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@index([guildId])
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PANNELLO
+// ─────────────────────────────────────────────────────────────
+
+enum PanelRole {
+  OWNER
+  ADMIN
+  MOD
+  VIEWER
+}
+
+/// Permessi nel pannello, deliberatamente separati da quelli Discord: chi
+/// amministra il server non deve per forza poter leggere ogni messaggio
+/// archiviato, e viceversa.
+model PanelAccess {
+  id        String    @id @default(uuid())
+  guildId   String
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId    String
+  role      PanelRole @default(VIEWER)
+  grantedBy String?
+  grantedAt DateTime  @default(now())
+  lastLoginAt DateTime?
+
+  @@unique([guildId, userId])
+}
+
+/// Sessioni del pannello. Conservate in tabella (non solo in cookie) per poter
+/// revocare l'accesso all'istante se un account viene compromesso.
+model PanelSession {
+  id        String   @id @default(uuid())
+  userId    String
+  userTag   String?
+  avatar    String?
+  /// Token OAuth cifrati con ENCRYPTION_KEY (AES-256-GCM).
+  tokenEnc  String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  lastSeenAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Registro delle cancellazioni richieste ai sensi dell'art. 17 GDPR.
+/// Conserva solo la prova che la cancellazione è avvenuta, non i dati cancellati.
+model ErasureRequest {
+  id          String   @id @default(uuid())
+  guildId     String?
+  userId      String
+  requestedAt DateTime @default(now())
+  completedAt DateTime?
+  /// Quante righe sono state rimosse per tabella.
+  summary     Json     @default("{}")
+  requestedBy String?
+
+  @@index([userId])
+}

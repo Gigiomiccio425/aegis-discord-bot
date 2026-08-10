@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Il client generato da Prisma 7 è codice TypeScript, non un pacchetto
+    // precompilato: va incluso nella compilazione, quindi la radice è il
+    // pacchetto e l'output finisce in dist/src e dist/generated.
+    "rootDir": ".",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*", "generated/**/*"],
+  "exclude": ["node_modules", "dist", "prisma.config.ts"]
+}

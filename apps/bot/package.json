@@ -1,0 +1,25 @@
+{
+  "name": "@aegis/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "commands:deploy": "tsx src/scripts/deployCommands.ts",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@aegis/db": "*",
+    "@aegis/scanner": "*",
+    "@aegis/shared": "*",
+    "bullmq": "^6.0.9",
+    "discord.js": "^14.27.0",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.4.2",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.0.0"
+  }
+}
