@@ -1,26 +1,63 @@
 # ─────────────────────────────────────────────────────────────
 #  AEGIS — installazione su ZimaOS
 #
-#  Da usare con: App Store → Install a Custom App → incolla questo file.
+#  App Store → Install a Custom App → incolla questo file.
 #
-#  Differenza dal `docker-compose.yml` normale: qui non si compila nulla, si
-#  scaricano immagini già pronte da GitHub Container Registry. L'installer di
-#  ZimaOS non ha i sorgenti sul disco e non può eseguire una build, quindi il
-#  compose di sviluppo non funzionerebbe da quell'interfaccia.
+#  Non compila nulla: scarica immagini già pronte da GitHub Container Registry.
+#  L'installer di ZimaOS non ha i sorgenti sul disco e non può eseguire una
+#  build, quindi il compose di sviluppo da qui non funzionerebbe.
 #
-#  I valori da compilare sono inline e non in un file .env: l'interfaccia di
-#  ZimaOS non conosce i file .env, quindi le variabili vanno modificate qui
-#  prima di premere installa.
+#  ⬇ TUTTO CIÒ CHE DEVI MODIFICARE STA NEL BLOCCO QUI SOTTO ⬇
+#  Il resto del file riusa quei valori: non serve toccarlo, e non c'è il
+#  rischio di cambiare una password in un punto e dimenticarla in un altro.
 # ─────────────────────────────────────────────────────────────
 name: aegis
+
+# ═════════════════════════════════════════════════════════════
+#  1. COMPILA QUI — sette valori, poi non serve altro
+# ═════════════════════════════════════════════════════════════
+
+# Token del bot — Developer Portal → Bot → Reset Token
+x-discord-token: &discord-token 'METTI_QUI_IL_TOKEN_DEL_BOT'
+
+# Application ID — Developer Portal → General Information
+x-discord-client-id: &discord-client-id 'METTI_QUI_IL_CLIENT_ID'
+
+# Client Secret — Developer Portal → OAuth2. Serve solo al pannello.
+x-discord-client-secret: &discord-client-secret 'METTI_QUI_IL_CLIENT_SECRET'
+
+# Il tuo ID Discord (Impostazioni → Avanzate → Modalità sviluppatore,
+# poi tasto destro sul tuo nome → Copia ID utente). Più ID separati da virgola.
+x-owner-ids: &owner-ids 'METTI_QUI_IL_TUO_ID'
+
+# Indirizzo da cui aprirai il pannello. Deve combaciare **esattamente** con
+# quello che digiterai nel browser, porta compresa, ed essere lo stesso che
+# registri come redirect OAuth2 (con /api/auth/callback in fondo).
+x-public-url: &public-url 'http://IP_DELLA_TUA_VPS:780'
+
+# Password del database. Inventala, non serve ricordarla: nessuno la digiterà.
+#
+# ⚠️ Va scritta in DUE punti, qui e dentro l'URL sotto, e devono coincidere.
+# Le àncore YAML copiano un valore intero, non sanno inserirlo dentro una
+# stringa più lunga: se ci fosse un modo di scriverla una volta sola, lo userei.
+x-db-password: &db-password 'CAMBIA_QUESTA_PASSWORD'
+x-database-url: &database-url 'postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-postgres:5432/aegis?schema=public'
+
+# Due segreti DIVERSI fra loro, generati con:  openssl rand -hex 32
+# Il primo firma i cookie del pannello, il secondo cifra i token nel database.
+x-session-secret: &session-secret 'PRIMO_openssl_rand_hex_32'
+x-encryption-key: &encryption-key 'SECONDO_openssl_rand_hex_32_DIVERSO_DAL_PRIMO'
+
+# ═════════════════════════════════════════════════════════════
+#  2. Da qui in giù non serve modificare nulla
+# ═════════════════════════════════════════════════════════════
 
 x-common-env: &common-env
   NODE_ENV: production
   LOG_LEVEL: info
-  DATABASE_URL: postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-postgres:5432/aegis?schema=public
+  DATABASE_URL: *database-url
   REDIS_URL: redis://aegis-redis:6379
-  # openssl rand -hex 32
-  ENCRYPTION_KEY: METTI_QUI_64_CARATTERI_ESADECIMALI
+  ENCRYPTION_KEY: *encryption-key
   STORAGE_DIR: /data/storage
 
 services:
@@ -30,7 +67,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: aegis
-      POSTGRES_PASSWORD: CAMBIA_QUESTA_PASSWORD
+      POSTGRES_PASSWORD: *db-password
       POSTGRES_DB: aegis
     volumes:
       - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
@@ -53,8 +90,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # Applica le migrazioni e termina. Gli altri servizi attendono che abbia
-  # finito: partire con uno schema assente significherebbe errori a raffica.
+  # Applica le migrazioni e termina. Gli altri attendono che abbia finito:
+  # partire con uno schema assente significherebbe errori a raffica.
   aegis-migrate:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
     container_name: aegis-migrate
@@ -73,10 +110,9 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
-      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
-      # ID Discord dei proprietari, separati da virgola.
-      OWNER_IDS: METTI_QUI_IL_TUO_ID
+      DISCORD_TOKEN: *discord-token
+      DISCORD_CLIENT_ID: *discord-client-id
+      OWNER_IDS: *owner-ids
       DEV_GUILD_ID: ''
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
@@ -95,15 +131,16 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
-      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
-      # Facoltative: senza, lo scanner usa solo le blocklist locali.
+      DISCORD_TOKEN: *discord-token
+      DISCORD_CLIENT_ID: *discord-client-id
+      PUBLIC_URL: *public-url
+      # Facoltative: senza, lo scanner usa le sole blocklist locali e le
+      # integrazioni Twitch restano spente.
       GOOGLE_SAFE_BROWSING_KEY: ''
       THREAT_FEEDS_ENABLED: 'true'
       TWITCH_CLIENT_ID: ''
       TWITCH_CLIENT_SECRET: ''
       TWITCH_EVENTSUB_SECRET: ''
-      PUBLIC_URL: http://IP_DELLA_TUA_VPS:780
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
     depends_on:
@@ -122,21 +159,18 @@ services:
     environment:
       <<: *common-env
       API_PORT: '8080'
-      # Deve combaciare esattamente con l'indirizzo digitato nel browser,
-      # porta compresa: è dove Discord rimanda dopo l'accesso.
-      PUBLIC_URL: http://IP_DELLA_TUA_VPS:780
-      # openssl rand -hex 32
-      SESSION_SECRET: METTI_QUI_64_CARATTERI_ESADECIMALI
-      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
-      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
-      DISCORD_CLIENT_SECRET: METTI_QUI_IL_CLIENT_SECRET
-      OWNER_IDS: METTI_QUI_IL_TUO_ID
+      PUBLIC_URL: *public-url
+      SESSION_SECRET: *session-secret
+      DISCORD_TOKEN: *discord-token
+      DISCORD_CLIENT_ID: *discord-client-id
+      DISCORD_CLIENT_SECRET: *discord-client-secret
+      OWNER_IDS: *owner-ids
       TWITCH_EVENTSUB_SECRET: ''
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
-    # La porta è pubblicata direttamente dall'API: su ZimaOS un reverse proxy
-    # in più complicherebbe soltanto, visto che l'interfaccia collega l'app
-    # alla porta che dichiara qui sotto.
+    # La porta la pubblica direttamente l'API: su ZimaOS un reverse proxy in
+    # più complicherebbe soltanto, visto che l'interfaccia collega l'app alla
+    # porta dichiarata qui.
     ports:
       - target: 8080
         published: '780'
@@ -191,38 +225,40 @@ x-casaos:
   tips:
     before_install:
       it_it: >-
-        **Prima di installare compila i valori segnati con `METTI_QUI` e
-        `CAMBIA_QUESTA_PASSWORD`.**
+        **Compila i sette valori nel blocco in cima al file, poi non serve
+        toccare altro.**
 
 
         1. Crea l'applicazione su https://discord.com/developers/applications
 
 
-        2. Sezione **Bot**: copia il token in `DISCORD_TOKEN` e attiva i due
-        Privileged Gateway Intents (*Server Members* e *Message Content*)
+        2. Sezione **Bot**: copia il token, e attiva i due Privileged Gateway
+        Intents — *Server Members* e *Message Content*. Senza, anti-raid e
+        scanner non hanno nulla da leggere.
 
 
         3. Sezione **OAuth2**: copia *Client ID* e *Client Secret*, e aggiungi
         come redirect `http://IP_DELLA_TUA_VPS:780/api/auth/callback`
 
 
-        4. Genera due segreti diversi con `openssl rand -hex 32` e mettili in
-        `SESSION_SECRET` e `ENCRYPTION_KEY`
+        4. Genera due segreti **diversi** con `openssl rand -hex 32`
 
 
-        5. Sostituisci `IP_DELLA_TUA_VPS` con l'indirizzo reale in **tutti** i
-        punti in cui compare: se `PUBLIC_URL` non combacia con quello che
-        digiti nel browser, l'accesso al pannello fallisce
+        5. Sostituisci `IP_DELLA_TUA_VPS` con l'indirizzo reale: se non
+        combacia con quello che digiti nel browser, l'accesso al pannello
+        fallisce con «stato non valido»
 
 
-        6. Metti il tuo ID Discord in `OWNER_IDS`
+        6. Invita il bot e **sposta il suo ruolo in cima alla lista dei
+        ruoli**: Discord non consente di agire su chi sta più in alto, ed è il
+        motivo più frequente per cui una difesa non riesce a sanzionare
 
 
-        Il pannello sarà su `http://IP_DELLA_TUA_VPS:780`. Il bot parte con
-        **tutti i moduli spenti**: si attivano dal pannello, e conviene tenere
-        la modalità prova accesa per qualche giorno prima di far sanzionare.
+        Pannello su `http://IP_DELLA_TUA_VPS:780`. Il bot parte con **tutti i
+        moduli spenti**: si attivano dal pannello, e conviene tenere la
+        modalità prova accesa per qualche giorno prima di far sanzionare.
       en_us: >-
-        **Fill in every value marked `METTI_QUI` and `CAMBIA_QUESTA_PASSWORD`
-        before installing.** You need a Discord application with a bot token,
-        client ID and secret, the two privileged intents enabled, and two
-        secrets generated with `openssl rand -hex 32`.
+        **Fill in the seven values in the block at the top of the file.** You
+        need a Discord application with a bot token, client ID and secret, the
+        two privileged intents enabled, and two different secrets generated
+        with `openssl rand -hex 32`.
