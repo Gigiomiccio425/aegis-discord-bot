@@ -71,11 +71,10 @@ services:
       POSTGRES_DB: aegis
     volumes:
       - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U aegis -d aegis']
-      interval: 10s
-      timeout: 5s
-      retries: 10
+    # Nessun healthcheck: su ZimaOS l'exec dentro i container viene rifiutato
+    # («exec failed: permission denied») e il controllo fallirebbe per sempre,
+    # bloccando chi attende il servizio «sano». L'attesa sta nel comando di
+    # migrazione, che riprova finché il database non risponde.
 
   aegis-redis:
     image: redis:7-alpine
@@ -84,23 +83,20 @@ services:
     command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
     volumes:
       - /DATA/AppData/aegis/redis:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
   # Applica le migrazioni e termina. Gli altri attendono che abbia finito:
   # partire con uno schema assente significherebbe errori a raffica.
   aegis-migrate:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
     container_name: aegis-migrate
-    command: ['npm', 'run', 'deploy', '-w', '@aegis/db']
+    # I `$$` sono voluti: compose li riduce a un `$` prima di passare il comando
+    # alla shell. Con un solo `$`, `$i` verrebbe sostituito da compose stesso
+    # con una stringa vuota e il ciclo perderebbe il contatore.
+    command: ['sh', '-c', 'for i in $$(seq 1 40); do npm run deploy -w @aegis/db && exit 0; echo "database non ancora pronto, riprovo fra 3s ($$i/40)"; sleep 3; done; echo "database irraggiungibile dopo due minuti: guarda i log di aegis-postgres"; exit 1']
     environment:
       <<: *common-env
     depends_on:
-      aegis-postgres:
-        condition: service_healthy
+      - aegis-postgres
     restart: 'no'
 
   aegis-bot:
@@ -117,10 +113,6 @@ services:
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
     depends_on:
-      aegis-postgres:
-        condition: service_healthy
-      aegis-redis:
-        condition: service_healthy
       aegis-migrate:
         condition: service_completed_successfully
 
@@ -144,10 +136,6 @@ services:
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
     depends_on:
-      aegis-postgres:
-        condition: service_healthy
-      aegis-redis:
-        condition: service_healthy
       aegis-migrate:
         condition: service_completed_successfully
 
@@ -175,23 +163,7 @@ services:
       - target: 8080
         published: '780'
         protocol: tcp
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     depends_on:
-      aegis-postgres:
-        condition: service_healthy
-      aegis-redis:
-        condition: service_healthy
       aegis-migrate:
         condition: service_completed_successfully
 
