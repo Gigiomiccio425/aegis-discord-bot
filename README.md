@@ -152,13 +152,22 @@ Per lo sviluppo in locale servono anche Node 22+ e istanze di PostgreSQL e Redis
 
 ## Deploy su ZimaOS
 
-### 1. Prepara i file
-
-Copia sulla VPS l'intera cartella del progetto (o clonala da git), poi crea il file `.env`:
+### 1. Prendi il codice sulla VPS
 
 ```bash
+git clone https://github.com/Gigiomiccio425/aegis-discord-bot.git aegis
+cd aegis
 cp .env.example .env
 ```
+
+Gli aggiornamenti successivi sono `git pull` seguito da una ricostruzione:
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Il file `.env` non è nella repository e non viene toccato da `git pull`: resta quello della tua
+macchina. È voluto — i segreti non stanno in git, e un aggiornamento non deve poterli sovrascrivere.
 
 Genera i due segreti:
 
@@ -181,14 +190,15 @@ Con questo valore Caddy ottiene e rinnova il certificato HTTPS da solo, a patto 
 
 ### 2. Installa come app personalizzata
 
-Nell'interfaccia di ZimaOS: **App Store → Install a Custom App**, incolla il contenuto di
-`docker-compose.yml`.
-
-In alternativa, da terminale nella cartella del progetto:
+Da terminale, nella cartella clonata:
 
 ```bash
 docker compose up -d --build
 ```
+
+In alternativa, dall'interfaccia di ZimaOS: **App Store → Install a Custom App**, incollando il
+contenuto di `docker-compose.yml`. Con questa via serve però che i sorgenti siano comunque presenti
+sul disco, perché il compose li compila: il `git clone` resta il passaggio più semplice.
 
 Il primo avvio compila l'immagine (qualche minuto) e applica le migrazioni del database. L'ordine è
 gestito dal compose: Postgres e Redis devono essere sani, poi gira il servizio `migrate`, poi
