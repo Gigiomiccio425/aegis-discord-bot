@@ -7,6 +7,8 @@ export function Login() {
     stato_non_valido: 'La richiesta è scaduta o non proviene da questo pannello. Riprova.',
     scambio_fallito: 'Discord ha rifiutato lo scambio del codice. Controlla la configurazione OAuth.',
     utente_non_recuperato: 'Non è stato possibile leggere il tuo profilo Discord.',
+    non_autorizzato:
+      'Questo pannello è riservato ai proprietari del bot. Il tuo account non è fra quelli abilitati.',
   };
 
   return (

@@ -25,6 +25,18 @@ const EnvSchema = z.object({
     .default('')
     .transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)),
 
+  /**
+   * Se attivo, solo gli ID elencati in OWNER_IDS possono accedere al pannello.
+   *
+   * Senza, chiunque abbia MANAGE_GUILD su un server dove il bot è presente
+   * ottiene l'accesso come amministratore al primo ingresso — comodo per un bot
+   * condiviso, sbagliato per un'installazione personale.
+   */
+  PANEL_OWNERS_ONLY: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
+
   API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   PUBLIC_URL: z.string().url().default('http://localhost:8080'),
   WEB_DEV_ORIGIN: z.string().url().optional(),

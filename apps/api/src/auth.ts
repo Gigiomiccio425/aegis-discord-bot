@@ -204,13 +204,26 @@ const ROLE_RANK: Record<PanelRole, number> = {
   OWNER: 4,
 };
 
-const ownerIds = (process.env.OWNER_IDS ?? '')
-  .split(',')
-  .map((id) => id.trim())
-  .filter(Boolean);
+/** Letti a ogni chiamata e non una volta sola: il valore arriva dall'ambiente
+ *  e leggerlo qui rende la funzione collaudabile senza reimportare il modulo. */
+export function ownerIds(): string[] {
+  return (process.env.OWNER_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+/** Pannello riservato ai soli proprietari: nessun altro può nemmeno entrare. */
+export function ownersOnly(): boolean {
+  return process.env.PANEL_OWNERS_ONLY === 'true';
+}
 
 export async function getPanelRole(userId: string, guildId: string): Promise<PanelRole | null> {
-  if (ownerIds.includes(userId)) return 'OWNER';
+  if (ownerIds().includes(userId)) return 'OWNER';
+
+  // Con il pannello riservato, nessun ruolo viene riconosciuto a chi non è
+  // proprietario: eventuali accessi concessi in passato smettono di valere.
+  if (ownersOnly()) return null;
 
   const prisma = getPrisma();
   const access = await prisma.panelAccess.findUnique({

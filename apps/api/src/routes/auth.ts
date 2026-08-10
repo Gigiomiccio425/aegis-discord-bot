@@ -3,6 +3,8 @@ import { getPrisma } from '@aegis/db';
 import {
   authorizeUrl,
   canManageGuild,
+  ownerIds,
+  ownersOnly,
   clearSessionCookie,
   createSession,
   exchangeCode,
@@ -46,6 +48,21 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const user = await fetchDiscordUser(tokens.accessToken);
       if (!user) return reply.redirect('/?errore=utente_non_recuperato');
+
+      /**
+       * Pannello riservato ai proprietari.
+       *
+       * Il controllo si fa qui, prima di creare la sessione: rifiutare più
+       * avanti lascerebbe comunque un cookie valido in circolazione. Chi non è
+       * in elenco non ottiene nulla, nemmeno una sessione vuota.
+       */
+      if (ownersOnly() && !ownerIds().includes(user.id)) {
+        logger.warn(
+          { userId: user.id, tag: user.username, ip: request.ip },
+          'accesso al pannello rifiutato: utente non fra i proprietari',
+        );
+        return reply.redirect('/?errore=non_autorizzato');
+      }
 
       const sessionId = await createSession(user, tokens, request);
       setSessionCookie(reply, sessionId);
