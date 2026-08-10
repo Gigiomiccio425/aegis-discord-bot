@@ -1,0 +1,229 @@
+# ─────────────────────────────────────────────────────────────
+#  AEGIS — installazione su ZimaOS
+#
+#  Da usare con: App Store → Install a Custom App → incolla questo file.
+#
+#  Differenza dal `docker-compose.yml` normale: qui non si compila nulla, si
+#  scaricano immagini già pronte da GitHub Container Registry. L'installer di
+#  ZimaOS non ha i sorgenti sul disco e non può eseguire una build, quindi il
+#  compose di sviluppo non funzionerebbe da quell'interfaccia.
+#
+#  I valori da compilare sono inline e non in un file .env: l'interfaccia di
+#  ZimaOS non conosce i file .env, quindi le variabili vanno modificate qui
+#  prima di premere installa.
+# ─────────────────────────────────────────────────────────────
+name: aegis
+
+x-common-env: &common-env
+  NODE_ENV: production
+  LOG_LEVEL: info
+  DATABASE_URL: postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-postgres:5432/aegis?schema=public
+  REDIS_URL: redis://aegis-redis:6379
+  # openssl rand -hex 32
+  ENCRYPTION_KEY: METTI_QUI_64_CARATTERI_ESADECIMALI
+  STORAGE_DIR: /data/storage
+
+services:
+  aegis-postgres:
+    image: postgres:17-alpine
+    container_name: aegis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: CAMBIA_QUESTA_PASSWORD
+      POSTGRES_DB: aegis
+    volumes:
+      - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aegis -d aegis']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  aegis-redis:
+    image: redis:7-alpine
+    container_name: aegis-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - /DATA/AppData/aegis/redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Applica le migrazioni e termina. Gli altri servizi attendono che abbia
+  # finito: partire con uno schema assente significherebbe errori a raffica.
+  aegis-migrate:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    container_name: aegis-migrate
+    command: ['npm', 'run', 'deploy', '-w', '@aegis/db']
+    environment:
+      <<: *common-env
+    depends_on:
+      aegis-postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  aegis-bot:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    container_name: aegis-bot
+    command: ['node', 'apps/bot/dist/index.js']
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
+      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
+      DISCORD_PUBLIC_KEY: ''
+      # ID Discord dei proprietari, separati da virgola.
+      OWNER_IDS: METTI_QUI_IL_TUO_ID
+      DEV_GUILD_ID: ''
+    volumes:
+      - /DATA/AppData/aegis/storage:/data/storage
+    depends_on:
+      aegis-postgres:
+        condition: service_healthy
+      aegis-redis:
+        condition: service_healthy
+      aegis-migrate:
+        condition: service_completed_successfully
+
+  aegis-worker:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    container_name: aegis-worker
+    command: ['node', 'apps/worker/dist/index.js']
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
+      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
+      # Facoltative: senza, lo scanner usa solo le blocklist locali.
+      GOOGLE_SAFE_BROWSING_KEY: ''
+      THREAT_FEEDS_ENABLED: 'true'
+      TWITCH_CLIENT_ID: ''
+      TWITCH_CLIENT_SECRET: ''
+      TWITCH_EVENTSUB_SECRET: ''
+      PUBLIC_URL: http://IP_DELLA_TUA_VPS:780
+    volumes:
+      - /DATA/AppData/aegis/storage:/data/storage
+    depends_on:
+      aegis-postgres:
+        condition: service_healthy
+      aegis-redis:
+        condition: service_healthy
+      aegis-migrate:
+        condition: service_completed_successfully
+
+  aegis-api:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    container_name: aegis-api
+    command: ['node', 'apps/api/dist/index.js']
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      API_PORT: '8080'
+      # Deve combaciare esattamente con l'indirizzo digitato nel browser,
+      # porta compresa: è dove Discord rimanda dopo l'accesso.
+      PUBLIC_URL: http://IP_DELLA_TUA_VPS:780
+      # openssl rand -hex 32
+      SESSION_SECRET: METTI_QUI_64_CARATTERI_ESADECIMALI
+      DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
+      DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
+      DISCORD_CLIENT_SECRET: METTI_QUI_IL_CLIENT_SECRET
+      OWNER_IDS: METTI_QUI_IL_TUO_ID
+      TWITCH_EVENTSUB_SECRET: ''
+    volumes:
+      - /DATA/AppData/aegis/storage:/data/storage
+    # La porta è pubblicata direttamente dall'API: su ZimaOS un reverse proxy
+    # in più complicherebbe soltanto, visto che l'interfaccia collega l'app
+    # alla porta che dichiara qui sotto.
+    ports:
+      - target: 8080
+        published: '780'
+        protocol: tcp
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      aegis-postgres:
+        condition: service_healthy
+      aegis-redis:
+        condition: service_healthy
+      aegis-migrate:
+        condition: service_completed_successfully
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: aegis-api
+  author: Gigiomiccio425
+  developer: Gigiomiccio425
+  category: Network
+  icon: https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docs/icon.svg
+  title:
+    en_us: Aegis
+    it_it: Aegis
+  tagline:
+    en_us: Discord security bot with web control panel
+    it_it: Bot Discord di sicurezza con pannello web
+  description:
+    en_us: >-
+      Self-hosted Discord moderation and security bot. Anti-raid, anti-nuke,
+      image scanning with QR and OCR, deep audit log, and a web control panel.
+    it_it: >-
+      Bot Discord di moderazione e sicurezza self-hosted. Anti-raid, anti-nuke,
+      scanner delle immagini con lettura dei QR e OCR, registro approfondito di
+      ogni azione e pannello di controllo web.
+  index: /
+  port_map: '780'
+  scheme: http
+  webui_port: 780
+  tips:
+    before_install:
+      it_it: >-
+        **Prima di installare compila i valori segnati con `METTI_QUI` e
+        `CAMBIA_QUESTA_PASSWORD`.**
+
+
+        1. Crea l'applicazione su https://discord.com/developers/applications
+
+
+        2. Sezione **Bot**: copia il token in `DISCORD_TOKEN` e attiva i due
+        Privileged Gateway Intents (*Server Members* e *Message Content*)
+
+
+        3. Sezione **OAuth2**: copia *Client ID* e *Client Secret*, e aggiungi
+        come redirect `http://IP_DELLA_TUA_VPS:780/api/auth/callback`
+
+
+        4. Genera due segreti diversi con `openssl rand -hex 32` e mettili in
+        `SESSION_SECRET` e `ENCRYPTION_KEY`
+
+
+        5. Sostituisci `IP_DELLA_TUA_VPS` con l'indirizzo reale in **tutti** i
+        punti in cui compare: se `PUBLIC_URL` non combacia con quello che
+        digiti nel browser, l'accesso al pannello fallisce
+
+
+        6. Metti il tuo ID Discord in `OWNER_IDS`
+
+
+        Il pannello sarà su `http://IP_DELLA_TUA_VPS:780`. Il bot parte con
+        **tutti i moduli spenti**: si attivano dal pannello, e conviene tenere
+        la modalità prova accesa per qualche giorno prima di far sanzionare.
+      en_us: >-
+        **Fill in every value marked `METTI_QUI` and `CAMBIA_QUESTA_PASSWORD`
+        before installing.** You need a Discord application with a bot token,
+        client ID and secret, the two privileged intents enabled, and two
+        secrets generated with `openssl rand -hex 32`.

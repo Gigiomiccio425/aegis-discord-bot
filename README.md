@@ -219,15 +219,35 @@ dell'applicazione Discord.
 
 ### 2. Installa come app personalizzata
 
-Da terminale, nella cartella clonata:
+Due strade, e la differenza sta in *chi* costruisce l'immagine.
+
+#### A. Dall'interfaccia di ZimaOS — nessun terminale
+
+**App Store → Install a Custom App**, incolla il contenuto di
+[`docker-compose.zimaos.yml`](docker-compose.zimaos.yml).
+
+Quel file non compila nulla: scarica immagini già pronte da GitHub Container Registry, costruite
+automaticamente a ogni aggiornamento del progetto. Porta con sé anche i metadati `x-casaos`, quindi
+l'app compare nella dashboard di ZimaOS con icona, nome e il collegamento al pannello.
+
+Prima di premere installa vanno compilati i valori segnati `METTI_QUI` e `CAMBIA_QUESTA_PASSWORD`
+direttamente nell'editor: l'interfaccia di ZimaOS non conosce i file `.env`, quindi le variabili
+stanno inline. L'app store mostra l'elenco dei passaggi anche al momento dell'installazione.
+
+Aggiornare significa ricreare l'app tirando di nuovo l'immagine `latest`.
+
+#### B. Da terminale — se vuoi compilare tu
 
 ```bash
 docker compose up -d --build
 ```
 
-In alternativa, dall'interfaccia di ZimaOS: **App Store → Install a Custom App**, incollando il
-contenuto di `docker-compose.yml`. Con questa via serve però che i sorgenti siano comunque presenti
-sul disco, perché il compose li compila: il `git clone` resta il passaggio più semplice.
+Serve il codice sul disco (il `git clone` del passaggio precedente) e qualche minuto per la prima
+compilazione. È la via giusta se modifichi il codice, perché non dipende dalle immagini pubblicate.
+
+I dati stanno in posti diversi nelle due strade: con il compose di ZimaOS finiscono in
+`/DATA/AppData/aegis/`, con quello di sviluppo in volumi Docker gestiti. Non mescolare le due
+installazioni sullo stesso server.
 
 Il primo avvio compila l'immagine (qualche minuto) e applica le migrazioni del database. L'ordine è
 gestito dal compose: Postgres e Redis devono essere sani, poi gira il servizio `migrate`, poi
@@ -242,6 +262,21 @@ curl http://localhost:8080/health
 ```
 
 Apri il pannello all'indirizzo di `PUBLIC_URL` e accedi con Discord.
+
+### Immagini pubblicate
+
+Ogni push su `main` costruisce e pubblica l'immagine su GitHub Container Registry, per `amd64` e
+`arm64`:
+
+```
+ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+```
+
+È un'immagine sola per bot, API e worker: cambia solo il comando di avvio. Tre immagini identiche
+al 99% sarebbero tre volte il tempo di build e tre volte lo spazio, per nessun guadagno.
+
+Lo stesso workflow esegue controllo dei tipi, test e lint a ogni push: se qualcosa si rompe,
+l'immagine non viene pubblicata.
 
 ### Note specifiche di ZimaOS
 

@@ -1,0 +1,95 @@
+name: Immagine Docker
+
+# L'installer di ZimaOS non compila da sorgente: scarica un'immagine già
+# pronta. Questo workflow la costruisce e la pubblica su GitHub Container
+# Registry, così `docker-compose.zimaos.yml` non ha bisogno del codice sul
+# disco della VPS.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v4
+
+      # QEMU serve solo per arm64: le dipendenze native (sharp, tesseract)
+      # vanno compilate per l'architettura di destinazione, non per quella del
+      # runner.
+      - name: Prepara QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Prepara Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Accedi al registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calcola tag ed etichette
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      - name: Costruisci e pubblica
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: runner
+          # amd64 copre ZimaBoard, ZimaCube e la quasi totalità delle VPS.
+          # arm64 è incluso per i mini-server ARM: la compilazione emulata è
+          # lenta, ma è un costo che si paga una volta sola qui e mai in produzione.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  verifica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installa le dipendenze
+        run: npm ci
+
+      - name: Genera il client Prisma
+        run: npm run db:generate
+
+      - name: Controllo dei tipi
+        run: npx tsc -b
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Lint
+        run: npx eslint .
