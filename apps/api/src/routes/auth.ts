@@ -148,8 +148,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const access = await prisma.panelAccess.findMany({ where: { userId: session.id } });
     const accessMap = new Map(access.map((entry) => [entry.guildId, entry.role]));
 
+    // Un proprietario è OWNER ovunque senza bisogno di una riga in PanelAccess:
+    // `getPanelRole` gliela riconosce direttamente. Filtrare l'elenco su quella
+    // tabella gli mostrerebbe sempre zero server — cioè «Aegis non è presente
+    // in nessuno dei server che amministri» anche a bot invitato e collegato.
+    const isOwner = ownerIds().includes(session.id);
+
     const known = await prisma.guild.findMany({
-      where: { id: { in: [...accessMap.keys()] }, active: true },
+      where: isOwner ? { active: true } : { id: { in: [...accessMap.keys()] }, active: true },
       select: { id: true, name: true, iconHash: true, memberCount: true },
     });
 
@@ -160,7 +166,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         name: guild.name,
         icon: guild.iconHash,
         memberCount: guild.memberCount,
-        role: accessMap.get(guild.id),
+        role: isOwner ? 'OWNER' : accessMap.get(guild.id),
       })),
       // I server dove l'utente è amministratore ma il bot non è ancora entrato:
       // servono a mostrare l'invito nel pannello.
