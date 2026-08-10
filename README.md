@@ -179,14 +179,43 @@ openssl rand -hex 32   # → ENCRYPTION_KEY
 Compila `.env` con token Discord, client ID e secret, i tuoi `OWNER_IDS`, una password robusta per
 Postgres, e `PUBLIC_URL` (il dominio da cui raggiungerai il pannello).
 
-Se hai un dominio, imposta anche:
+### Porte e HTTPS
+
+Il reverse proxy pubblica **780** (HTTP) e **781** (HTTPS), non 80 e 443: sono fuori dagli standard,
+non entrano in conflitto con ZimaOS (che occupa la 80) né con SSH, DNS, mail o database, e restano
+sotto la 1024. Il binding a porte basse funziona perché è il demone Docker a legarle, non il
+processo dentro al container.
 
 ```env
-SITE_ADDRESS=aegis.tuodominio.it
+HTTP_PORT=780
+HTTPS_PORT=781
 ```
 
-Con questo valore Caddy ottiene e rinnova il certificato HTTPS da solo, a patto che le porte 80 e
-443 siano raggiungibili dall'esterno. Senza dominio lascia `SITE_ADDRESS=:80` e accedi via IP.
+Qui c'è però un vincolo che non dipende da questo progetto e va detto chiaro: **spostandosi da 80 e
+443 si perde il certificato HTTPS automatico.** Let's Encrypt verifica il dominio contattando la
+porta 80 o la 443; se lì non c'è nulla, il certificato non viene emesso. Tre soluzioni, in ordine di
+praticità:
+
+| Situazione | Configurazione | Risultato |
+|---|---|---|
+| **Accesso via IP**, rete locale o VPN | `SITE_ADDRESS=:80` · `TLS_DIRECTIVE=` vuoto | `http://IP:780`. Nessun certificato, nessun avviso. Va benissimo se il pannello non è esposto a internet |
+| **Dominio, porte non standard** | `SITE_ADDRESS=https://aegis.tuodominio.it:781` · `TLS_DIRECTIVE=tls internal` | HTTPS con certificato autofirmato. Il browser avvisa la prima volta, poi si accetta l'eccezione. Il traffico è cifrato lo stesso |
+| **Dominio con certificato valido** | `SITE_ADDRESS=aegis.tuodominio.it` · `HTTP_PORT=80` · `HTTPS_PORT=443` | Certificato Let's Encrypt automatico, nessun avviso. Richiede le porte standard libere |
+
+Esiste una quarta via, la validazione DNS, che è l'unica ACME a ignorare le porte: richiede una
+build di Caddy con il modulo del tuo provider DNS e un token API. Se ti serve un certificato valido
+tenendo le porte non standard, è quella la strada.
+
+**`PUBLIC_URL` deve combaciare esattamente** con l'indirizzo che digiti nel browser, porta compresa:
+è l'indirizzo su cui Discord rimanda dopo l'accesso OAuth2. Una porta diversa lì significa accesso
+al pannello che fallisce con «stato non valido».
+
+```env
+PUBLIC_URL=http://192.168.1.50:780
+```
+
+Ricorda di aggiungere lo stesso indirizzo con `/api/auth/callback` fra i redirect OAuth2
+dell'applicazione Discord.
 
 ### 2. Installa come app personalizzata
 
@@ -219,11 +248,9 @@ Apri il pannello all'indirizzo di `PUBLIC_URL` e accedi con Discord.
 - Il reverse proxy (Caddy) è **incluso nel compose**. Su ZimaOS i container avviati dall'interfaccia
   hanno nomi generati e non espongono label, il che rende scomodo un Traefik o un Nginx Proxy
   Manager esterni: farsi il proxy in casa evita il problema.
-- Se le porte 80 e 443 sono già occupate, cambia la mappatura:
-  ```env
-  HTTP_PORT=8080
-  HTTPS_PORT=8443
-  ```
+- Le porte pubblicate sono 780 e 781 proprio per non collidere con l'interfaccia di ZimaOS, che
+  usa la 80. Se le vuoi cambiare, qualunque valore libero va bene: `HTTP_PORT` e `HTTPS_PORT`
+  nel `.env`.
 - I dati persistenti stanno nei volumi Docker `postgres_data`, `redis_data` e `app_storage`. In
   `app_storage` finiscono gli allegati archiviati: dimensionalo di conseguenza se attivi
   l'archiviazione con una retention lunga.

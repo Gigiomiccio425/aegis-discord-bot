@@ -1,18 +1,30 @@
 # Aegis — reverse proxy
 #
-# SITE_ADDRESS controlla il comportamento:
-#   :80                    → solo HTTP, accesso via IP in rete locale
-#   aegis.tuodominio.it    → HTTPS automatico con Let's Encrypt (porte 80 e 443
-#                            devono essere raggiungibili dall'esterno)
+# Le porte pubblicate sull'host sono 780 (HTTP) e 781 (HTTPS): fuori dagli
+# standard, così non entrano in conflitto con ZimaOS, SSH, mail o database.
+# Dentro al container Caddy resta su 80 e 443, che è ciò che si aspetta.
 #
-# L'API Fastify serve sia le rotte /api/* sia il pannello React compilato,
-# quindi qui basta un unico reverse_proxy.
+# SITE_ADDRESS decide il comportamento:
+#
+#   :80                     accesso via http://IP:780 — nessun certificato
+#   aegis.tuodominio.it     HTTPS automatico, ma serve che le porte 80 e 443
+#                           pubbliche arrivino qui (vedi TLS_DIRECTIVE)
+#   https://aegis.tuodominio.it:781
+#                           HTTPS su porta non standard: il certificato non può
+#                           essere ottenuto con la validazione HTTP, quindi
+#                           TLS_DIRECTIVE deve valere `tls internal` oppure una
+#                           configurazione DNS.
+#
+# TLS_DIRECTIVE viene inserito dentro il blocco: vuoto lascia il comportamento
+# predefinito, `tls internal` usa un certificato autofirmato.
 
 {$SITE_ADDRESS} {
+	{$TLS_DIRECTIVE}
+
 	encode zstd gzip
 
 	# Header di sicurezza. Il pannello non carica nulla da domini esterni
-	# tranne le immagini avatar/emoji dalla CDN Discord.
+	# tranne le immagini avatar ed emoji dalla CDN Discord.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"

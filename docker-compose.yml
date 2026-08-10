@@ -151,14 +151,24 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      # Su ZimaOS cambia la porta host se 80/443 sono già occupate,
-      # es. "8443:443". Con dominio pubblico lascia 80+443 per l'HTTPS automatico.
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
+      # Porte non standard, fuori da quelle note e sotto la 1024.
+      # 780 e 781 non sono assegnate a servizi diffusi, quindi non entrano in
+      # conflitto con ZimaOS (che usa la 80) né con SSH, DNS, mail o database.
+      #
+      # Il binding sotto la 1024 richiede privilegi: funziona perché è il demone
+      # Docker a legare la porta, non il processo dentro al container.
+      - "${HTTP_PORT:-780}:80"
+      - "${HTTPS_PORT:-781}:443"
     environment:
-      # Metti il tuo dominio per ottenere HTTPS automatico da Let's Encrypt.
-      # Lascia :80 per accesso solo in rete locale via IP.
+      # Tre modi, in ordine di semplicità:
+      #   :80                    → solo HTTP, accesso via IP:780
+      #   dominio.it             → HTTPS, ma richiede 80 e 443 raggiungibili
+      #   https://dominio.it:781 → HTTPS su porta non standard, con TLS_DIRECTIVE
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      # Vuoto = certificato automatico Let's Encrypt (serve la 443 pubblica).
+      # `tls internal` = certificato autofirmato, avviso del browser una volta.
+      # `tls { dns ... }` = validazione via DNS, l'unica ACME che ignora le porte.
+      TLS_DIRECTIVE: ${TLS_DIRECTIVE:-}
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
