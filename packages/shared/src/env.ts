@@ -14,7 +14,9 @@ const EnvSchema = z.object({
   DISCORD_TOKEN: z.string().min(20).optional(),
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
-  DISCORD_PUBLIC_KEY: z.string().optional(),
+  // Nessuna DISCORD_PUBLIC_KEY: serve solo a verificare le firme delle
+  // interazioni ricevute via HTTP. Aegis usa il gateway, dove le interazioni
+  // arrivano già autenticate dalla connessione.
   DEV_GUILD_ID: z.string().optional(),
 
   /** ID dei proprietari, separati da virgola. */

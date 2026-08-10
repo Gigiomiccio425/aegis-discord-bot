@@ -72,7 +72,6 @@ services:
       <<: *common-env
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
-      DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY}
       OWNER_IDS: ${OWNER_IDS}
       DEV_GUILD_ID: ${DEV_GUILD_ID:-}
     volumes:

@@ -75,7 +75,6 @@ services:
       <<: *common-env
       DISCORD_TOKEN: METTI_QUI_IL_TOKEN_DEL_BOT
       DISCORD_CLIENT_ID: METTI_QUI_IL_CLIENT_ID
-      DISCORD_PUBLIC_KEY: ''
       # ID Discord dei proprietari, separati da virgola.
       OWNER_IDS: METTI_QUI_IL_TUO_ID
       DEV_GUILD_ID: ''
