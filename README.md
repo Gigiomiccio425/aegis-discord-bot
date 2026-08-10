@@ -202,9 +202,53 @@ praticità:
 | **Dominio, porte non standard** | `SITE_ADDRESS=https://aegis.tuodominio.it:781` · `TLS_DIRECTIVE=tls internal` | HTTPS con certificato autofirmato. Il browser avvisa la prima volta, poi si accetta l'eccezione. Il traffico è cifrato lo stesso |
 | **Dominio con certificato valido** | `SITE_ADDRESS=aegis.tuodominio.it` · `HTTP_PORT=80` · `HTTPS_PORT=443` | Certificato Let's Encrypt automatico, nessun avviso. Richiede le porte standard libere |
 
-Esiste una quarta via, la validazione DNS, che è l'unica ACME a ignorare le porte: richiede una
-build di Caddy con il modulo del tuo provider DNS e un token API. Se ti serve un certificato valido
-tenendo le porte non standard, è quella la strada.
+### Con Tailscale: privato e in HTTPS, senza aprire nulla
+
+Se la macchina è nel tuo tailnet, questa è la soluzione migliore su ogni fronte — e risolve anche
+il problema del certificato.
+
+Lega la porta alla sola interfaccia di loopback, così dall'esterno non esiste:
+
+```yaml
+ports:
+  - target: 8080
+    published: '780'
+    host_ip: 127.0.0.1
+    protocol: tcp
+```
+
+Poi, sulla macchina, una volta sola:
+
+```bash
+tailscale serve --bg 780
+```
+
+Il pannello diventa raggiungibile da qualunque tuo dispositivo collegato al tailnet, all'indirizzo
+`https://nome-macchina.tuo-tailnet.ts.net`, **con un certificato valido** emesso da Tailscale. Da
+internet resta invisibile: niente porte aperte, niente firewall da configurare, niente IP da
+ricordare.
+
+```bash
+tailscale serve status   # cosa sta servendo
+tailscale serve off      # smetti di servirlo
+```
+
+Poi in `PUBLIC_URL` metti quell'indirizzo **senza porta** — Tailscale serve sulla 443 — e registra
+lo stesso indirizzo con `/api/auth/callback` fra i redirect OAuth2.
+
+Un avvertimento: questo funziona se Tailscale gira **sulla macchina**, installato con il pacchetto
+di sistema. Se lo esegui come container senza rete host, `tailscale serve` non vede il `127.0.0.1`
+dell'host e non raggiunge il pannello.
+
+Resta anche la via del tunnel SSH, che non richiede nulla:
+
+```bash
+ssh -L 780:127.0.0.1:780 utente@IP_VPS
+```
+
+E c'è una quarta strada per il certificato, la validazione DNS: è l'unica ACME a ignorare le porte,
+ma richiede una build di Caddy con il modulo del tuo provider DNS e un token API. Con Tailscale non
+serve.
 
 **`PUBLIC_URL` deve combaciare esattamente** con l'indirizzo che digiti nel browser, porta compresa:
 è l'indirizzo su cui Discord rimanda dopo l'accesso OAuth2. Una porta diversa lì significa accesso
