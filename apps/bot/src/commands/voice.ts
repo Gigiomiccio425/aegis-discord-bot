@@ -23,6 +23,7 @@ import {
   type TextChannel,
 } from 'discord.js';
 import { GuildConfigSchema } from '@angel/shared';
+import { normalizeForLanguage, scanLanguage } from '@angel/scanner';
 import type { Command } from './types.js';
 import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -422,4 +423,98 @@ const setup: Command = {
   },
 };
 
-export const voiceCommands: Command[] = [say, watch, master, setup];
+/**
+ * Prova il filtro su un testo, senza pubblicarlo e senza sanzionare nessuno.
+ *
+ * Esiste per una ragione precisa: **chi amministra non può provare il filtro
+ * scrivendo in chat**, perché gli amministratori sono esenti e i proprietari
+ * del bot lo sono sempre, per costruzione. Il risultato è che la persona più
+ * probabile a volerlo verificare è anche l'unica che non può, e conclude che
+ * sia rotto.
+ *
+ * Qui le esenzioni non si applicano: si vede cosa il filtro riconosce e cosa
+ * farebbe, che è l'unica domanda a cui serve rispondere.
+ */
+const provaFiltro: Command = {
+  data: new SlashCommandBuilder()
+    .setName('prova-filtro')
+    .setDescription('Mostra cosa riconoscerebbe il filtro in un testo, senza sanzionare nessuno')
+    .addStringOption((option) =>
+      option
+        .setName('testo')
+        .setDescription('Il testo da esaminare')
+        .setRequired(true)
+        .setMaxLength(1000),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('rivolto')
+        .setDescription('Simula un messaggio rivolto a una persona (menzione o risposta)'),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDMPermission(false),
+  requiredPermissions: [PermissionFlagsBits.ManageMessages],
+  async execute({ interaction, config }) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const settings = config.security.language;
+    const testo = interaction.options.getString('testo', true);
+    const rivolto = interaction.options.getBoolean('rivolto') ?? false;
+
+    const esito = scanLanguage(
+      testo,
+      {
+        terms: settings.terms,
+        categories: settings.categories,
+        allowlist: settings.allowlist,
+        weights: settings.weights,
+        targetedBonus: settings.targetedBonus,
+      },
+      { targeted: rivolto },
+    );
+
+    if (esito.matches.length === 0) {
+      await interaction.editReply(
+        '✅ **Nessuna corrispondenza.**\n' +
+          `Normalizzato in: \`${normalizeForLanguage(testo).slice(0, 200)}\`\n` +
+          '-# Se ti aspettavi una corrispondenza: la parola potrebbe non essere in elenco, ' +
+          'la sua categoria potrebbe essere spenta, oppure è fra le eccezioni.',
+      );
+      return;
+    }
+
+    const gravita = esito.matches.some((match) => match.severity === 'GRAVE')
+      ? 'GRAVE'
+      : esito.matches.some((match) => match.severity === 'MEDIA')
+        ? 'MEDIA'
+        : 'LIEVE';
+
+    const progressione = [1, 2, 3, 5, 8].map((volta) => {
+      const passo = [...settings.recidiva.scala]
+        .filter((gradino) => volta >= gradino.infrazioni)
+        .sort((a, b) => b.infrazioni - a.infrazioni)[0];
+      if (!passo || passo.action === 'NONE') return `${volta}ª volta — solo rimozione`;
+      const secondi = Math.round(
+        passo.durationSec * settings.recidiva.moltiplicatori[gravita],
+      );
+      const durata =
+        secondi === 0 ? '' : secondi >= 3600 ? ` ${secondi / 3600}h` : ` ${secondi / 60}min`;
+      return `${volta}ª volta — rimozione + ${passo.action.toLowerCase()}${durata}`;
+    });
+
+    await interaction.editReply(
+      `🔍 **${esito.matches.length} corrispondenz${esito.matches.length === 1 ? 'a' : 'e'}** · punteggio ${esito.score}/100\n\n` +
+        esito.matches
+          .slice(0, 12)
+          .map((match) => `• \`${match.term}\` — ${match.category.toLowerCase()}, ${match.severity.toLowerCase()}`)
+          .join('\n') +
+        (rivolto ? '\n\nConteggiato come rivolto a una persona.' : '') +
+        `\n\n**Cosa succederebbe** (gravità ${gravita.toLowerCase()}):\n` +
+        progressione.map((riga) => `-# ${riga}`).join('\n') +
+        '\n\n-# Nessun messaggio è stato pubblicato e nessuno è stato sanzionato. ' +
+        'Le esenzioni non valgono qui: in chat, amministratori e proprietari del bot non vengono filtrati.',
+    );
+  },
+};
+
+export const voiceCommands: Command[] = [say, watch, master, setup, provaFiltro];

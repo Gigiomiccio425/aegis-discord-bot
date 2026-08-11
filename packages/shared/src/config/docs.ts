@@ -243,6 +243,28 @@ const BY_PATH: Record<string, FieldDoc> = {
       'quando i due ruoli erano lo stesso. Su un server nuovo lascialo vuoto.',
   },
 
+  'security.language.rimuoviSempre': {
+    label: 'Rimuovi sempre il messaggio',
+    help:
+      'Il messaggio sparisce qualunque sia il punteggio. Non e una sanzione: finche la frase ' +
+      'resta pubblicata continua a fare quello che faceva. Spegnerlo significa lasciare in chat ' +
+      'cio che il filtro ha appena riconosciuto come offensivo.',
+  },
+  'security.language.recidiva.finestraMinuti': {
+    label: 'Per quanto si ricorda un episodio',
+    help:
+      'Minuti. La finestra si rinnova a ogni infrazione: e «dall ultima volta», non «dalla prima», ' +
+      'altrimenti chi continua uscirebbe dal conteggio solo perche il primo episodio e lontano. ' +
+      'Chi ha detto una parolaccia il mese scorso ricomincia da capo.',
+  },
+  'security.language.recidiva.scala': {
+    label: 'Cosa fare alla n-esima volta',
+    help:
+      'La progressione. La prima volta non compare qui di proposito: il messaggio e gia stato ' +
+      'rimosso, e aggiungere una sanzione a chi si e lasciato sfuggire una parola insegna solo ' +
+      'che il bot e ostile. Le durate vengono moltiplicate per la gravita.',
+  },
+
   'security.antiRaid.autoLiftAfterSec': {
     label: 'Revoca automatica del blocco',
     help:
@@ -558,6 +580,17 @@ const BY_KEY: Record<string, FieldDoc> = {
     label: 'Cancella l avviso dopo',
     help: 'Secondi dopo i quali il messaggio del bot sparisce. 0 = resta.',
   },
+  infrazioni: {
+    label: 'Alla volta numero',
+    help: 'Quante infrazioni servono nella finestra perche scatti questo gradino.',
+  },
+  moltiplicatori: {
+    label: 'Peso della gravita',
+    help:
+      'Moltiplica la durata del silenziamento. La stessa recidiva vale dieci minuti per una ' +
+      'parolaccia e quaranta per un insulto razzista: la progressione e la stessa, il peso no.',
+  },
+
   /* Anti-nuke */
   botIds: { label: 'Bot in lista bianca', help: 'Bot le cui azioni non fanno mai scattare le soglie.' },
   dangerousPermissions: {
@@ -1177,6 +1210,7 @@ export const COMMAND_DOCS: CommandDoc[] = [
 
   /* ── Utilità ─────────────────────────────────────────────── */
   { name: '/dì', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Fa scrivere il bot in un canale: testo, immagini e GIF.', example: '/dì canale:#annunci testo:Manutenzione alle 21 riquadro:true', caution: 'Solo immagini e GIF, e nessuna menzione di massa: un messaggio del bot sembra venire dallo staff.' },
+  { name: '/prova-filtro', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Mostra cosa riconoscerebbe il filtro in un testo, senza pubblicarlo.', example: '/prova-filtro testo:sei uno stronzo rivolto:true', caution: 'Serve perche in chat amministratori e proprietari del bot sono esenti: sono le persone piu probabili a voler provare il filtro, e le uniche che non possono.' },
   { name: '/prepara-server', group: 'Utilità', permission: 'Amministratore', summary: 'Crea ruoli, canali e configurazione mancanti per far funzionare tutto.', caution: 'Si può rieseguire quando si vuole: verifica cosa esiste già e non duplica nulla.' },
   { name: '/angel-master', group: 'Utilità', permission: 'Amministratore', summary: 'Ricrea il ruolo del proprietario del bot e lo riassegna.', caution: 'Funziona solo per gli ID elencati in OWNER_IDS: a chiunque altro risponde con un rifiuto.' },
   { name: '/stato', group: 'Utilità', permission: 'Gestire il server', summary: 'Quali moduli sono accesi e cosa hanno fatto di recente.' },

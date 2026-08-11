@@ -567,14 +567,74 @@ export const LanguageConfig = ActiveModuleBase.extend({
    */
   targetedBonus: z.number().int().min(0).max(100).default(25),
 
+  /**
+   * Rimuove sempre il messaggio, qualunque sia il punteggio.
+   *
+   * Non è una sanzione: è ciò che serve per primo. Finché la frase resta
+   * pubblicata continua a fare quello che faceva, e nella versione precedente
+   * un insulto grave finiva sull'avvertimento — che non elimina — quindi più
+   * l'offesa era grave, più il messaggio restava lì.
+   */
+  rimuoviSempre: z.boolean().default(true),
+
+  /**
+   * Sanzione crescente sulle recidive.
+   *
+   * Distingue la parola sfuggita dal comportamento. Sanzionare la prima
+   * produce risentimento; non sanzionare il secondo produce un canale
+   * invivibile.
+   */
+  recidiva: z
+    .object({
+      enabled: z.boolean().default(true),
+
+      /**
+       * Per quanti minuti si ricorda un'infrazione.
+       *
+       * La finestra si rinnova a ogni episodio: è «dall'ultima volta», non
+       * «dalla prima», altrimenti chi continua uscirebbe dal conteggio solo
+       * perché il primo episodio è ormai lontano.
+       */
+      finestraMinuti: z.number().int().min(5).max(10080).default(120),
+
+      /** Cosa fare alla n-esima infrazione nella finestra. */
+      scala: z
+        .array(
+          z.object({
+            infrazioni: z.number().int().min(1).max(50),
+            action: ActionKind,
+            /** Durata di base, poi moltiplicata per la gravità. */
+            durationSec: z.number().int().min(0).max(2419200).default(0),
+          }),
+        )
+        .default([
+          // La prima volta il messaggio sparisce e basta: è già successo
+          // qualcosa, e aggiungere una sanzione a chi si è lasciato sfuggire
+          // una parola insegna solo che il bot è ostile.
+          { infrazioni: 2, action: 'WARN', durationSec: 0 },
+          { infrazioni: 3, action: 'TIMEOUT', durationSec: 600 },
+          { infrazioni: 5, action: 'TIMEOUT', durationSec: 3600 },
+          { infrazioni: 8, action: 'TIMEOUT', durationSec: 86400 },
+        ]),
+
+      /**
+       * Moltiplicatore della durata secondo la gravità peggiore trovata.
+       *
+       * La stessa recidiva vale dieci minuti per una parolaccia e quaranta per
+       * un insulto razzista: la progressione è la stessa, il peso no.
+       */
+      moltiplicatori: z
+        .object({
+          LIEVE: z.number().min(0.1).max(10).default(1),
+          MEDIA: z.number().min(0.1).max(10).default(2),
+          GRAVE: z.number().min(0.1).max(10).default(4),
+        })
+        .default({}),
+    })
+    .default({}),
+
   /** Canali dove il filtro non interviene. */
   exemptChannelIds: SnowflakeList,
-
-  ladder: ActionLadder.default([
-    { atScore: 30, action: 'DELETE_MESSAGE', durationSec: 0 },
-    { atScore: 55, action: 'WARN', durationSec: 0 },
-    { atScore: 80, action: 'TIMEOUT', durationSec: 600 },
-  ]),
 }).default({});
 export type LanguageConfig = z.infer<typeof LanguageConfig>;
 
