@@ -64,6 +64,10 @@ jobs:
           # lenta, ma è un costo che si paga una volta sola qui e mai in produzione.
           platforms: linux/amd64,linux/arm64
           push: true
+          # La versione entra nell'immagine: il pannello la mostra e la
+          # confronta con l'ultima release pubblicata su GitHub.
+          build-args: |
+            AEGIS_VERSION=${{ steps.meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

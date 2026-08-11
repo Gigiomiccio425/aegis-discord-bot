@@ -58,6 +58,15 @@ export interface Me {
   pendingInvite: { id: string; name: string; icon: string | null }[];
 }
 
+export interface VersionInfo {
+  running: string;
+  latest: string | null;
+  publishedAt: string | null;
+  url: string;
+  notes: string | null;
+  updateAvailable: boolean;
+}
+
 export interface Stats {
   threatsToday: number;
   threatsWeek: number;

@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { api, type Me } from '../api.js';
+import { api, type Me, type VersionInfo } from '../api.js';
 import { useGuildId } from '../App.js';
 
 const NAV = [
@@ -19,6 +20,7 @@ export function Layout({ me }: { me: Me }) {
   const guildId = useGuildId();
   const navigate = useNavigate();
   const guild = me.guilds.find((entry) => entry.id === guildId);
+  const version = useVersion();
 
   return (
     <div className="flex min-h-screen">
@@ -63,6 +65,25 @@ export function Layout({ me }: { me: Me }) {
         </nav>
 
         <div className="border-t border-[var(--color-border)] p-3">
+          {version && (
+            <div className="mb-2 text-xs">
+              {version.updateAvailable ? (
+                <a
+                  href={version.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-2 py-1.5 text-[#ffd479] hover:bg-[var(--color-warning)]/20"
+                >
+                  Aggiornamento disponibile: {version.latest}
+                  <span className="mt-0.5 block text-[11px] text-neutral-400">
+                    in esecuzione {version.running}
+                  </span>
+                </a>
+              ) : (
+                <span className="text-neutral-500">versione {version.running}</span>
+              )}
+            </div>
+          )}
           <div className="mb-2 truncate text-xs text-neutral-400">{me.user.tag}</div>
           <button
             onClick={() => {
@@ -80,4 +101,30 @@ export function Layout({ me }: { me: Me }) {
       </main>
     </div>
   );
+}
+
+/**
+ * Versione in esecuzione e confronto con l'ultima release.
+ *
+ * L'errore viene ignorato di proposito: se GitHub non risponde o la sessione
+ * scade proprio durante questa chiamata, il pannello non deve mostrare un
+ * avviso per una informazione accessoria.
+ */
+function useVersion(): VersionInfo | null {
+  const [version, setVersion] = useState<VersionInfo | null>(null);
+
+  useEffect(() => {
+    let attivo = true;
+    void api
+      .get<VersionInfo>('/api/version')
+      .then((data) => {
+        if (attivo) setVersion(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      attivo = false;
+    };
+  }, []);
+
+  return version;
 }

@@ -16,6 +16,7 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 - [Requisiti](#requisiti)
 - [Configurazione dell'applicazione Discord](#configurazione-dellapplicazione-discord)
 - [Deploy su ZimaOS](#deploy-su-zimaos)
+- [Aggiornare](#aggiornare)
 - [Sviluppo in locale](#sviluppo-in-locale)
 - [Primo avvio: cosa configurare](#primo-avvio-cosa-configurare)
 - [Il pannello](#il-pannello)
@@ -322,6 +323,77 @@ al 99% sarebbero tre volte il tempo di build e tre volte lo spazio, per nessun g
 
 Lo stesso workflow esegue controllo dei tipi, test e lint a ogni push: se qualcosa si rompe,
 l'immagine non viene pubblicata.
+
+Oltre a `latest`, ogni tag `vX.Y.Z` produce tre riferimenti:
+
+| Tag immagine | Cosa segue |
+|---|---|
+| `:latest` | l'ultima build del ramo principale |
+| `:1.2.3` | quella versione esatta, che non cambia mai |
+| `:1.2` | l'ultima correzione della serie 1.2 |
+
+---
+
+## Aggiornare
+
+Nel compose la versione compare **una volta sola**, in cima:
+
+```yaml
+x-image: &image 'ghcr.io/gigiomiccio425/aegis-discord-bot:latest'
+```
+
+Cambiare quella riga cambia tutti e quattro i servizi. `:latest` aggiorna a ogni ricreazione;
+un tag preciso — `:1.4.0` — resta fermo finché non lo cambi tu, ed è la scelta giusta se preferisci
+decidere quando aggiornare invece di scoprirlo dopo un riavvio.
+
+### I dati restano
+
+Nessun aggiornamento tocca i dati. Vivono nei volumi Docker, che sopravvivono alla ricreazione dei
+container: registro eventi, configurazione, snapshot, archivio messaggi, casi, profili di rischio.
+
+Lo schema del database lo allinea il servizio `aegis-migrate`, che riparte a ogni avvio ed esegue
+`prisma migrate deploy`: applica solo le migrazioni mancanti e non fa nulla se sono già tutte
+presenti. Bot, worker e API attendono che abbia finito prima di partire, quindi non esiste il
+momento in cui il codice nuovo parla a uno schema vecchio.
+
+### La procedura
+
+Sulla VPS, una volta sola:
+
+```bash
+curl -O https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/aggiorna.sh
+```
+
+poi, a ogni aggiornamento:
+
+```bash
+sudo sh aggiorna.sh /DATA/aegis/docker-compose.yml
+```
+
+Lo script copia il database **prima** di toccare qualsiasi cosa, scarica l'immagine e ricrea i
+container. La copia finisce in `/DATA/aegis-backup`, ne tiene le ultime dieci, e se il dump risulta
+vuoto si ferma senza aggiornare: una migrazione non si annulla, e senza un dump valido tornare a
+una versione precedente vorrebbe dire ripartire da zero.
+
+A mano, se preferisci:
+
+```bash
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d
+```
+
+### Sapere cosa sta girando
+
+La versione è scritta nell'immagine dalla CI e compare in fondo alla colonna di sinistra del
+pannello. Se su GitHub esiste una release più recente, al suo posto appare un avviso con il numero
+della nuova versione e il link alle note. Il confronto lo fa l'API, con la risposta di GitHub in
+cache per sei ore.
+
+### Tornare indietro
+
+Rimetti la versione precedente in `x-image`, `docker compose up -d`, e se quella versione aveva uno
+schema diverso ripristina il dump corrispondente — il comando esatto lo stampa `aggiorna.sh` alla
+fine di ogni esecuzione.
 
 ### Note specifiche di ZimaOS
 

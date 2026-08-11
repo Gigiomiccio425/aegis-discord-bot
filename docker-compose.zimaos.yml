@@ -48,6 +48,19 @@ x-database-url: &database-url 'postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-p
 x-session-secret: &session-secret 'PRIMO_openssl_rand_hex_32'
 x-encryption-key: &encryption-key 'SECONDO_openssl_rand_hex_32_DIVERSO_DAL_PRIMO'
 
+# Versione in esecuzione. È l'unica riga da cambiare per aggiornare o per
+# tornare a una versione precedente: i quattro servizi dell'applicazione la
+# riusano.
+#
+#   :latest   sempre l'ultima build del ramo principale
+#   :v1.2.3   una versione precisa, che non cambia sotto i piedi
+#   :1.2      l'ultima correzione della serie 1.2
+#
+# I dati non vengono toccati dall'aggiornamento: vivono nei volumi, che
+# sopravvivono alla ricreazione dei container. Le migrazioni del database le
+# applica `aegis-migrate` a ogni avvio.
+x-image: &image 'ghcr.io/gigiomiccio425/aegis-discord-bot:latest'
+
 # ═════════════════════════════════════════════════════════════
 #  2. Da qui in giù non serve modificare nulla
 # ═════════════════════════════════════════════════════════════
@@ -91,7 +104,7 @@ services:
   # Applica le migrazioni e termina. Gli altri attendono che abbia finito:
   # partire con uno schema assente significherebbe errori a raffica.
   aegis-migrate:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    image: *image
     # Riscarica l'immagine a ogni avvio: `latest` cambia a ogni correzione, e
     # senza questa riga Docker riuserebbe per sempre la copia scaricata la
     # prima volta, facendo sembrare che un bug corretto sia ancora presente.
@@ -108,7 +121,7 @@ services:
     restart: 'no'
 
   aegis-bot:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    image: *image
     pull_policy: always
     container_name: aegis-bot
     command: ['node', 'apps/bot/dist/index.js']
@@ -126,7 +139,7 @@ services:
         condition: service_completed_successfully
 
   aegis-worker:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    image: *image
     pull_policy: always
     container_name: aegis-worker
     command: ['node', 'apps/worker/dist/index.js']
@@ -150,7 +163,7 @@ services:
         condition: service_completed_successfully
 
   aegis-api:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    image: *image
     pull_policy: always
     container_name: aegis-api
     command: ['node', 'apps/api/dist/index.js']

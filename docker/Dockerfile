@@ -33,6 +33,11 @@ RUN npm run db:generate \
 
 # ── Runtime ──────────────────────────────────────────────────
 FROM base AS runner
+# Versione dell'immagine, passata dalla CI (`v1.2.3` dal tag git). Serve al
+# pannello per dire quale versione sta girando e se ne esiste una più recente:
+# senza, l'unico modo di saperlo sarebbe confrontare a mano i digest.
+ARG AEGIS_VERSION=sviluppo
+ENV AEGIS_VERSION=$AEGIS_VERSION
 ENV NODE_ENV=production
 # I dati persistenti (allegati archiviati, snapshot, cache OCR) vivono qui.
 RUN mkdir -p /data/storage && chown -R node:node /data
