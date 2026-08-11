@@ -19,6 +19,7 @@ import { evaluateContent } from '../security/contentGuard.js';
 import { evaluateInvites } from '../security/inviteGuard.js';
 import { evaluateSafety } from '../security/safety.js';
 import { evaluateLanguage } from '../security/languageGuard.js';
+import { trackFlame } from '../security/flameGuard.js';
 import { evaluateCompromise, trackActivity } from '../security/compromise.js';
 
 const log = childLogger('events:messages');
@@ -165,6 +166,11 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
     hasQrCode: hasFinding(content, (code) => code.startsWith('QR_')),
     crossChannelCount: activity.crossChannelCount,
   }).catch(() => null);
+
+  // L'anti-flame guarda lo scambio, non il messaggio: riceve il punteggio del
+  // filtro parole per non dover cercare gli insulti una seconda volta, e
+  // decide sulla base di cosa sta succedendo nel canale.
+  await trackFlame(message, config, language?.score ?? 0).catch(() => undefined);
 
   const decisions = [spam, content, invites, safety, language, compromise].filter(
     (decision): decision is Decision => decision !== null && decision.triggered,

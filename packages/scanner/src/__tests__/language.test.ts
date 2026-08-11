@@ -3,11 +3,20 @@ import { normalizeForLanguage, scanLanguage, type LanguageConfig } from '../lang
 
 const config: LanguageConfig = {
   terms: [
-    { term: 'cazzo', severity: 'LIEVE' },
-    { term: 'stronzo', severity: 'MEDIA' },
-    { term: 'sei un idiota', severity: 'MEDIA' },
-    { term: 'ammazzati', severity: 'GRAVE' },
+    { term: 'cazzo', severity: 'LIEVE', category: 'VOLGARITA' },
+    { term: 'stronzo', severity: 'MEDIA', category: 'INSULTO' },
+    { term: 'sei un idiota', severity: 'MEDIA', category: 'INSULTO' },
+    { term: 'ammazzati', severity: 'GRAVE', category: 'AUTOLESIONISMO' },
   ],
+  categories: {
+    VOLGARITA: true,
+    INSULTO: true,
+    DISCRIMINAZIONE: true,
+    MINACCIA: true,
+    AUTOLESIONISMO: true,
+    BESTEMMIA: true,
+    SESSUALE: true,
+  },
   allowlist: ['cazzuola', 'arsenale', 'Cagliari', 'scazzottata'],
   weights: { LIEVE: 20, MEDIA: 45, GRAVE: 80 },
   targetedBonus: 25,

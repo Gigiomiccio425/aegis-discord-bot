@@ -179,6 +179,54 @@ const BY_PATH: Record<string, FieldDoc> = {
       'eliminarlo una volta perché non torni mai più.',
   },
 
+  'security.language.categories.VOLGARITA': {
+    label: 'Volgarita',
+    help:
+      'Imprecazioni non rivolte a nessuno. Su molti server fanno parte del tono, e vietarle '
+      + 'significa moderare una comunita che non esiste: si spegne qui, senza toccare il resto.',
+  },
+  'security.language.categories.INSULTO': {
+    label: 'Insulti',
+    help: 'Parole che esistono per essere dette a qualcuno. E il nucleo del flame.',
+  },
+  'security.language.categories.DISCRIMINAZIONE': {
+    label: 'Discriminazione',
+    help:
+      'Attacchi a origine, orientamento, disabilita, genere, religione. Non e una questione di '
+      + 'tono: colpisce chiunque legga e si riconosca in quella categoria, non solo chi era il '
+      + 'bersaglio, ed e la ragione per cui le persone se ne vanno e non tornano.',
+  },
+  'security.language.categories.MINACCIA': {
+    label: 'Minacce',
+    help: 'Dichiarazioni di intenzione a fare del male. Vanno viste da una persona, non solo sanzionate.',
+  },
+  'security.language.categories.AUTOLESIONISMO': {
+    label: 'Autolesionismo',
+    help:
+      'Le stesse parole possono essere un insulto o la richiesta di aiuto di chi parla di se. '
+      + 'Categoria separata proprio per questo: conviene portarla al solo avviso allo staff, '
+      + 'perche zittire chi stava chiedendo aiuto e la cosa peggiore che il bot possa fare.',
+  },
+  'security.language.categories.BESTEMMIA': {
+    label: 'Bestemmie',
+    help:
+      'In molti server italiani e la sola regola non negoziabile. Le combinazioni sono infinite: '
+      + 'l elenco copre le forme ricorrenti, le altre si aggiungono qui.',
+  },
+  'security.language.categories.SESSUALE': {
+    label: 'Contenuto sessuale',
+    help:
+      'Spenta di default: su un server di adulti la conversazione sessuale puo essere legittima, '
+      + 'e accenderla senza chiedere significa moderare una comunita che non si conosce.',
+  },
+  'security.flame.messaggio': {
+    label: 'Testo dell avviso',
+    help:
+      'Cosa scrive il bot quando rallenta il canale. Variabile disponibile: {secondi}. Conviene ' +
+      'un tono che non accusi nessuno: chi litiga e gia sulla difensiva, e un cartellino che ' +
+      'suona come un rimprovero riaccende invece di spegnere.',
+  },
+
   'security.antiRaid.autoLiftAfterSec': {
     label: 'Revoca automatica del blocco',
     help:
@@ -444,6 +492,56 @@ const BY_KEY: Record<string, FieldDoc> = {
   },
   term: { label: 'Parola', help: 'La voce da riconoscere. Gli accenti e le maiuscole non contano.' },
 
+  sogliaMessaggio: {
+    label: 'Soglia di ostilita del messaggio',
+    help:
+      'Quanto deve risultare aggressivo un messaggio per entrare nel conteggio. Alzarla riduce '
+      + 'gli interventi ma lascia passare i litigi piu pacati; abbassarla li intercetta prima, '
+      + 'con qualche rallentamento di troppo.',
+  },
+  messaggiPerScatto: {
+    label: 'Messaggi ostili per intervenire',
+    help:
+      'Quanti ne servono nella finestra. Servono comunque almeno due persone diverse: uno che si '
+      + 'sfoga da solo non e un litigio, ed e la distinzione che evita di rallentare un canale '
+      + 'per una giornata storta.',
+  },
+  finestraSec: {
+    label: 'Finestra di osservazione',
+    help: 'Arco di tempo su cui si contano i messaggi ostili.',
+  },
+  rallentaCanale: {
+    label: 'Rallenta il canale',
+    help:
+      'L intervento principale, e volutamente non una sanzione: silenziare chi litiga punisce '
+      + 'allo stesso modo chi ha cominciato e chi ha risposto, e non impedisce che ricomincino '
+      + 'altrove. Togliere la rapidita toglie cio di cui la spirale si nutre.',
+  },
+  slowmodeSec: {
+    label: 'Secondi fra un messaggio e l altro',
+    help: 'Quanto rallentare. Quindici secondi bastano a spezzare il ritmo senza fermare la conversazione.',
+  },
+  durataSlowmodeSec: {
+    label: 'Durata del rallentamento',
+    help: 'Dopo questo tempo il canale torna al valore che aveva prima.',
+  },
+  avvisaInCanale: {
+    label: 'Spiega perche il canale rallenta',
+    help:
+      'Senza, il rallentamento sembra un guasto e qualcuno lo chiede allo staff. Con l avviso, '
+      + 'la maggior parte delle discussioni si raffredda da sola.',
+  },
+  raffreddamentoSec: {
+    label: 'Attesa fra due interventi',
+    help:
+      'Tempo minimo prima che il modulo possa intervenire di nuovo sullo stesso canale. Senza, '
+      + 'un litigio che prosegue riempirebbe il canale di cartellini del bot invece che di '
+      + 'conversazione — il contrario dell obiettivo.',
+  },
+  cancellaAvvisoSec: {
+    label: 'Cancella l avviso dopo',
+    help: 'Secondi dopo i quali il messaggio del bot sparisce. 0 = resta.',
+  },
   /* Anti-nuke */
   botIds: { label: 'Bot in lista bianca', help: 'Bot le cui azioni non fanno mai scattare le soglie.' },
   dangerousPermissions: {
@@ -921,6 +1019,16 @@ export const SECTION_DOCS: Record<string, SectionDoc> = {
       'perche un bot il messaggio lo vede solo dopo la pubblicazione. La seconda e il tuo elenco, ' +
       'che vede cio che AutoMod lascia passare — le forme elusive, le espressioni locali, gli ' +
       'insulti che non sono parolacce — e distingue lo sfogo dall\'aggressione rivolta a qualcuno.',
+  },
+  'security.flame': {
+    summary: 'Interrompe le discussioni che degenerano, prima che diventino un flame.',
+    detail:
+      'Il filtro delle parole guarda un messaggio alla volta; il flame non e un messaggio, e uno ' +
+      'scambio. Una sola inciviltà basta a innescare una discussione che degenera, e da li ogni ' +
+      'risposta e difensiva: chi assiste smette di partecipare e il canale resta alle voci piu ' +
+      'aggressive. La prima risposta qui e **rallentare il canale**, non sanzionare — e l unica ' +
+      'che non richiede di stabilire chi ha cominciato, cosa che in una discussione degenerata di ' +
+      'solito non si puo stabilire affatto.',
   },
   'security.safety': {
     summary: 'Tutela delle persone: adescamento e raccolta di IP.',

@@ -42,6 +42,7 @@ export async function evaluateLanguage(
     message.content,
     {
       terms: settings.terms,
+      categories: settings.categories,
       allowlist: settings.allowlist,
       weights: settings.weights,
       targetedBonus: settings.targetedBonus,

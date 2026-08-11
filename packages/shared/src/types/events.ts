@@ -133,6 +133,8 @@ export const LogEventType = z.enum([
   'BOT_MESSAGE_EDITED',
 
   // ── Sicurezza ───────────────────────────────────────────────
+  /** Discussione degenerata fra piu persone in un canale. */
+  'SECURITY_FLAME_DETECTED',
   'SECURITY_RAID_DETECTED',
   'SECURITY_RAID_ENDED',
   'SECURITY_NUKE_DETECTED',
@@ -323,6 +325,7 @@ export const EVENT_CATEGORY: Record<LogEventType, LogCategory> = {
   BOT_MESSAGE_SENT: 'MODERATION',
   BOT_MESSAGE_EDITED: 'MODERATION',
 
+  SECURITY_FLAME_DETECTED: 'SECURITY',
   SECURITY_RAID_DETECTED: 'SECURITY',
   SECURITY_RAID_ENDED: 'SECURITY',
   SECURITY_NUKE_DETECTED: 'SECURITY',

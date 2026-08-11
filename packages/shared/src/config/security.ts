@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_ALLOWLIST, DEFAULT_WORDLIST } from './wordlist.js';
 import {
   ActionKind,
   ActionLadder,
@@ -458,9 +459,21 @@ export type StickyRolesConfig = z.infer<typeof StickyRolesConfig>;
    parolacce. Arriva dopo, ma può graduare la risposta e distinguere lo sfogo
    dall'aggressione rivolta a qualcuno.
    ═══════════════════════════════════════════════════════════════════════ */
+export const LanguageCategoryName = z.enum([
+  'VOLGARITA',
+  'INSULTO',
+  'DISCRIMINAZIONE',
+  'MINACCIA',
+  'AUTOLESIONISMO',
+  'BESTEMMIA',
+  'SESSUALE',
+]);
+export type LanguageCategoryName = z.infer<typeof LanguageCategoryName>;
+
 export const LanguageTerm = z.object({
   term: z.string().min(2).max(60),
   severity: z.enum(['LIEVE', 'MEDIA', 'GRAVE']).default('MEDIA'),
+  category: LanguageCategoryName.default('INSULTO'),
   /**
    * Cerca anche dentro altre parole. Da usare con parsimonia: è l'opzione che
    * produce i falsi positivi, e un filtro che blocca chi parla di edilizia
@@ -477,27 +490,30 @@ export const LanguageConfig = ActiveModuleBase.extend({
   usePresetSexual: z.boolean().default(false),
 
   /**
-   * Elenco proprio. I valori predefiniti coprono l'italiano corrente, divisi
-   * per gravità: le imprecazioni comuni pesano poco, gli insulti rivolti a
-   * una persona pesano di più, le incitazioni all'autolesionismo pesano
-   * quanto basta a far scattare la risposta più alta da sole.
+   * Categorie attive. Le voci delle categorie spente non vengono cercate.
+   *
+   * Il contenuto sessuale parte spento: su un server di adulti la
+   * conversazione può essere legittima, e accenderlo senza chiedere significa
+   * moderare una comunità che non si conosce.
    */
-  terms: z.array(LanguageTerm).max(500).default([
-    { term: 'cazzo', severity: 'LIEVE', substring: false },
-    { term: 'merda', severity: 'LIEVE', substring: false },
-    { term: 'stronzata', severity: 'LIEVE', substring: false },
-    { term: 'vaffanculo', severity: 'MEDIA', substring: false },
-    { term: 'stronzo', severity: 'MEDIA', substring: false },
-    { term: 'coglione', severity: 'MEDIA', substring: false },
-    { term: 'idiota', severity: 'MEDIA', substring: false },
-    { term: 'imbecille', severity: 'MEDIA', substring: false },
-    { term: 'deficiente', severity: 'MEDIA', substring: false },
-    { term: 'ritardato', severity: 'GRAVE', substring: false },
-    { term: 'handicappato', severity: 'GRAVE', substring: false },
-    { term: 'ammazzati', severity: 'GRAVE', substring: false },
-    { term: 'uccidersi', severity: 'GRAVE', substring: false },
-    { term: 'kys', severity: 'GRAVE', substring: false },
-  ]),
+  categories: z
+    .object({
+      VOLGARITA: z.boolean().default(true),
+      INSULTO: z.boolean().default(true),
+      DISCRIMINAZIONE: z.boolean().default(true),
+      MINACCIA: z.boolean().default(true),
+      AUTOLESIONISMO: z.boolean().default(true),
+      BESTEMMIA: z.boolean().default(true),
+      SESSUALE: z.boolean().default(false),
+    })
+    .default({}),
+
+  /**
+   * Elenco proprio. I valori predefiniti coprono l'italiano corrente, divisi
+   * per categoria e gravità: sono un punto di partenza ragionevole, non una
+   * verità. Si aggiunge, si toglie, si spengono intere categorie.
+   */
+  terms: z.array(LanguageTerm).max(2000).default(DEFAULT_WORDLIST),
 
   /**
    * Parole legittime che contengono una voce dell'elenco. Vincono sempre.
@@ -506,10 +522,7 @@ export const LanguageConfig = ActiveModuleBase.extend({
    * poté registrarsi online. In italiano capita con gli attrezzi da muratore
    * e con qualche nome di città.
    */
-  allowlist: z
-    .array(z.string().min(2).max(60))
-    .max(500)
-    .default(['cazzuola', 'scazzottata', 'arsenale', 'Cagliari', 'merletto', 'incazzatura']),
+  allowlist: z.array(z.string().min(2).max(60)).max(1000).default(DEFAULT_ALLOWLIST),
 
   /** Punti per gravità, sommati fino al punteggio del messaggio. */
   weights: z
@@ -539,6 +552,67 @@ export const LanguageConfig = ActiveModuleBase.extend({
   ]),
 }).default({});
 export type LanguageConfig = z.infer<typeof LanguageConfig>;
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ANTI-FLAME
+
+   Il filtro delle parole guarda un messaggio alla volta; il flame non è un
+   messaggio, è uno scambio. Una sola inciviltà basta a innescare una
+   discussione che degenera, e da lì ogni risposta è difensiva: chi assiste
+   smette di partecipare e il canale resta alle voci più aggressive.
+
+   La prima risposta è **rallentare il canale**, non sanzionare. Silenziare
+   chi litiga punisce allo stesso modo chi ha cominciato e chi ha risposto, e
+   non impedisce che ricomincino altrove; togliere la rapidità toglie invece
+   proprio ciò di cui la spirale si nutre.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const FlameConfig = ActiveModuleBase.extend({
+  /** Quanto deve risultare ostile un messaggio per entrare nel conteggio (0-100). */
+  sogliaMessaggio: z.number().int().min(10).max(100).default(30),
+
+  /** Quanti messaggi ostili nella finestra fanno scattare l'intervento. */
+  messaggiPerScatto: z.number().int().min(2).max(50).default(4),
+
+  /** Ampiezza della finestra, in secondi. */
+  finestraSec: z.number().int().min(15).max(600).default(90),
+
+  /** Applica la modalità lenta al canale. È l'intervento principale. */
+  rallentaCanale: z.boolean().default(true),
+  /** Secondi fra un messaggio e l'altro durante il rallentamento. */
+  slowmodeSec: z.number().int().min(3).max(120).default(15),
+  /** Per quanto tempo resta, prima che il valore precedente venga ripristinato. */
+  durataSlowmodeSec: z.number().int().min(60).max(3600).default(300),
+
+  /** Scrive in canale che sta rallentando e perché. */
+  avvisaInCanale: z.boolean().default(true),
+  /** Testo dell'avviso. Variabile: {secondi} */
+  messaggio: z
+    .string()
+    .max(1000)
+    .default(
+      '🔥 **Un attimo.** La discussione si sta scaldando, quindi il canale rallenta a {secondi} ' +
+        'secondi per qualche minuto.' +
+        String.fromCharCode(10) +
+        'Nessuno è nei guai. Se avete qualcosa da chiarire fra voi, fatelo in privato o chiedete ' +
+        'a un moderatore di fare da tramite.',
+    ),
+  /** Cancella l'avviso dopo N secondi. 0 = resta. */
+  cancellaAvvisoSec: z.number().int().min(0).max(3600).default(300),
+
+  /**
+   * Secondi prima che il modulo possa intervenire di nuovo sullo stesso canale.
+   *
+   * Senza, un litigio che prosegue produrrebbe un avviso ogni pochi secondi:
+   * il canale si riempirebbe di cartellini del bot invece che di conversazione,
+   * che è il contrario dell'obiettivo.
+   */
+  raffreddamentoSec: z.number().int().min(60).max(3600).default(600),
+
+  /** Canali dove il modulo non interviene. */
+  exemptChannelIds: SnowflakeList,
+}).default({});
+export type FlameConfig = z.infer<typeof FlameConfig>;
 
 /* ═══════════════════════════════════════════════════════════════════════
    AUTOMOD SYNC  —  regole native Discord pilotate dal pannello

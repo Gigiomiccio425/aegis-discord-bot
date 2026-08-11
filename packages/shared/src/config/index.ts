@@ -8,6 +8,7 @@ import {
   AutoModSyncConfig,
   BotGuardConfig,
   CompromiseConfig,
+  FlameConfig,
   InviteGuardConfig,
   LanguageConfig,
   SafetyConfig,
@@ -24,6 +25,7 @@ export * from './security.js';
 export * from './scanner.js';
 export * from './logging.js';
 export * from './integrations.js';
+export * from './wordlist.js';
 export * from './docs.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -260,6 +262,7 @@ export const SecurityConfig = z
     webhookGuard: WebhookGuardConfig,
     botGuard: BotGuardConfig,
     language: LanguageConfig,
+    flame: FlameConfig,
     safety: SafetyConfig,
     verification: VerificationConfig,
     stickyRoles: StickyRolesConfig,
@@ -349,6 +352,7 @@ export const MODULE_REGISTRY = [
   { key: 'security.webhookGuard', label: 'Protezione webhook', group: 'Sicurezza' },
   { key: 'security.botGuard', label: 'Controllo bot', group: 'Sicurezza' },
   { key: 'security.language', label: 'Linguaggio', group: 'Sicurezza' },
+  { key: 'security.flame', label: 'Anti-flame', group: 'Sicurezza' },
   { key: 'security.safety', label: 'Tutela utenti', group: 'Sicurezza' },
   { key: 'security.verification', label: 'Verifica ingresso', group: 'Sicurezza' },
   { key: 'security.stickyRoles', label: 'Ruoli appiccicosi', group: 'Sicurezza' },

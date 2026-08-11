@@ -30,13 +30,50 @@
        un insulto rivolto a una persona non sono la stessa cosa.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { normalize } from '@angel/shared';
+
 /** Gravità di una voce dell'elenco. */
 export type LanguageSeverity = 'LIEVE' | 'MEDIA' | 'GRAVE';
+
+/*
+ * Categorie.
+ *
+ * La distinzione serve perché i server non sono tutti uguali e non lo sono
+ * nemmeno le offese. Su un server di gioco la volgarità fa parte del tono e
+ * vietarla significa moderare una comunità che non esiste; l'attacco
+ * all'identità di qualcuno invece non è tono, è la ragione per cui le persone
+ * se ne vanno e non tornano.
+ *
+ * Un elenco unico costringe a scegliere fra tollerare tutto e vietare tutto.
+ * Con le categorie si spegne ciò che nel proprio server non è un problema e
+ * si tiene il resto — che è l'unico modo perché il filtro resti acceso.
+ *
+ * La ripartizione riprende la struttura di HurtLex (Università di Torino,
+ * 17 categorie a partire dal lessico di De Mauro) e le attribuzioni di
+ * Perspective API, semplificate a ciò che uno staff sa decidere guardando
+ * una spunta.
+ */
+export type LanguageCategory =
+  /** Imprecazioni e volgarità non rivolte a nessuno. */
+  | 'VOLGARITA'
+  /** Insulti rivolti a una persona: il nucleo del flame. */
+  | 'INSULTO'
+  /** Attacchi all'identità: origine, orientamento, disabilità, genere, religione. */
+  | 'DISCRIMINAZIONE'
+  /** Minacce e incitazioni alla violenza. */
+  | 'MINACCIA'
+  /** Incitazioni all'autolesionismo. Categoria a sé: la risposta non è punire. */
+  | 'AUTOLESIONISMO'
+  /** Bestemmie. In molti server italiani è la sola regola davvero non negoziabile. */
+  | 'BESTEMMIA'
+  /** Contenuto sessuale esplicito. */
+  | 'SESSUALE';
 
 export interface LanguageTerm {
   /** La parola o l'espressione, in minuscolo e senza accenti. */
   term: string;
   severity: LanguageSeverity;
+  category: LanguageCategory;
   /**
    * Cerca anche dentro altre parole.
    *
@@ -48,6 +85,8 @@ export interface LanguageTerm {
 
 export interface LanguageConfig {
   terms: LanguageTerm[];
+  /** Categorie attive. Le voci delle categorie spente non vengono cercate. */
+  categories: Record<LanguageCategory, boolean>;
   /** Parole legittime che contengono una voce dell'elenco. Vincono sempre. */
   allowlist: string[];
   /** Punti per gravità, sommati fino al punteggio finale. */
@@ -59,12 +98,15 @@ export interface LanguageConfig {
 export interface LanguageMatch {
   term: string;
   severity: LanguageSeverity;
+  category: LanguageCategory;
   /** Come compariva nel testo, prima della normalizzazione. */
   found: string;
 }
 
 export interface LanguageResult {
   matches: LanguageMatch[];
+  /** Categorie effettivamente incontrate: serve a scegliere come rispondere. */
+  categories: LanguageCategory[];
   score: number;
   /** Il messaggio era rivolto a qualcuno in particolare. */
   targeted: boolean;
@@ -99,14 +141,13 @@ const OMOFONI: Record<string, string> = {
  * gli ultimi due, `c4444zzo` resterebbe con quattro `a`.
  */
 export function normalizeForLanguage(input: string): string {
-  const senzaAccenti = input
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+  // `normalize` di @angel/shared toglie già diacritici, caratteri invisibili e
+  // omoglifi cirillici o greci: sono le tre evasioni che qui servivano e che
+  // riscrivere daccapo avrebbe significato mantenerle in due posti, con la
+  // certezza che uno dei due sarebbe rimasto indietro.
+  const base = normalize(input);
 
-  const conLettere = [...senzaAccenti]
-    .map((carattere) => OMOFONI[carattere] ?? carattere)
-    .join('');
+  const conLettere = [...base].map((carattere) => OMOFONI[carattere] ?? carattere).join('');
 
   return (
     conLettere
@@ -141,7 +182,7 @@ export function scanLanguage(
   options: { targeted?: boolean } = {},
 ): LanguageResult {
   const normalizzato = normalizeForLanguage(text);
-  if (!normalizzato) return { matches: [], score: 0, targeted: false };
+  if (!normalizzato) return { matches: [], categories: [], score: 0, targeted: false };
 
   const parole = normalizzato.split(' ');
 
@@ -170,6 +211,7 @@ export function scanLanguage(
   const gia = new Set<string>();
 
   for (const voce of config.terms) {
+    if (config.categories[voce.category] === false) continue;
     const termine = normalizeForLanguage(voce.term);
     if (!termine || gia.has(termine)) continue;
 
@@ -197,16 +239,22 @@ export function scanLanguage(
 
     if (!trovato) continue;
     gia.add(termine);
-    matches.push({ term: voce.term, severity: voce.severity, found: trovato });
+    matches.push({
+      term: voce.term,
+      severity: voce.severity,
+      category: voce.category,
+      found: trovato,
+    });
   }
 
-  if (matches.length === 0) return { matches: [], score: 0, targeted: false };
+  if (matches.length === 0) return { matches: [], categories: [], score: 0, targeted: false };
 
   const targeted = options.targeted ?? false;
   const base = matches.reduce((somma, match) => somma + config.weights[match.severity], 0);
 
   return {
     matches,
+    categories: [...new Set(matches.map((match) => match.category))],
     // Rivolgere l'insulto a qualcuno è ciò che lo trasforma da sfogo in
     // aggressione: pesa di più, ma solo se qualcosa è stato trovato.
     score: Math.min(100, base + (targeted ? config.targetedBonus : 0)),
