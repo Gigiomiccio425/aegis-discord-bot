@@ -28,6 +28,7 @@ import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { listWatched, unwatchUser, watchUser } from '../security/watchlist.js';
 import { ensureOwnerRole } from '../security/ownerRole.js';
+import { provisionGuild } from '../security/provision.js';
 import { isBotOwner } from '../core/permissions.js';
 
 /**
@@ -380,4 +381,45 @@ const master: Command = {
   },
 };
 
-export const voiceCommands: Command[] = [say, watch, master];
+/**
+ * Predisposizione a richiesta, dallo stesso posto in cui si sta guardando il
+ * server. Fa esattamente ciò che fa il pulsante del pannello.
+ */
+const setup: Command = {
+  data: new SlashCommandBuilder()
+    .setName('prepara-server')
+    .setDescription('Crea ruoli, canali e configurazione mancanti. Non duplica nulla')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
+  requiredPermissions: [PermissionFlagsBits.Administrator],
+  async execute({ client, interaction, config }) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const esito = await provisionGuild(client, interaction.guild!, config);
+
+    const righe = [
+      esito.ruoliCreati.length
+        ? `**Ruoli creati:** ${esito.ruoliCreati.join(', ')}`
+        : '**Ruoli:** già presenti',
+      esito.canaliCreati.length
+        ? `**Canali creati:** ${esito.canaliCreati.join(', ')}`
+        : '**Canali:** già presenti',
+      `**Campi compilati:** ${esito.campiCompilati}`,
+      `**Canali isolati a chi non ha verificato:** ${esito.canaliIsolati}`,
+    ];
+
+    if (esito.errori.length > 0) {
+      righe.push(
+        `\n⚠️ Non riuscito: ${esito.errori.join(', ')}\n` +
+          '-# Di solito manca un permesso al bot, o il suo ruolo non è abbastanza in alto.',
+      );
+    }
+
+    await interaction.editReply(
+      `🪶 **Predisposizione completata**\n\n${righe.join('\n')}\n\n` +
+        '-# Puoi rieseguirlo quando vuoi: verifica cosa esiste già e completa solo il mancante.',
+    );
+  },
+};
+
+export const voiceCommands: Command[] = [say, watch, master, setup];

@@ -16,10 +16,72 @@ export function Tools() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-semibold">Strumenti</h1>
+      <ServerSetup />
       <SayAsBot />
       <WatchedUsers />
       <CommandReference />
     </div>
+  );
+}
+
+/* ── Predisposizione ──────────────────────────────────────────────────── */
+
+/**
+ * Pulsante che prepara il server.
+ *
+ * Si può premere quante volte si vuole. Ruoli e canali si cercano per nome e
+ * i campi già compilati non vengono toccati: preme chi non ricorda se aveva
+ * già fatto la configurazione, ed è precisamente il caso in cui un'operazione
+ * non idempotente lascerebbe sei ruoli duplicati.
+ */
+function ServerSetup() {
+  const guildId = useGuildId();
+  const [stato, setStato] = useState<'pronto' | 'invio' | 'fatto'>('pronto');
+  const [error, setError] = useState<string | null>(null);
+
+  const avvia = async () => {
+    setStato('invio');
+    setError(null);
+    try {
+      await api.post(`/api/guilds/${guildId}/actions/setup`);
+      setStato('fatto');
+      setTimeout(() => setStato('pronto'), 8000);
+    } catch (err) {
+      setError((err as Error).message);
+      setStato('pronto');
+    }
+  };
+
+  return (
+    <Card
+      title="Prepara il server"
+      subtitle="Crea ruoli, canali di servizio, assistenza e verifica, e compila la configurazione. Crea solo ciò che manca."
+    >
+      {error && <ErrorBox message={error} />}
+      {stato === 'fatto' && (
+        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
+          Richiesta inviata. Il risultato compare nel registro fra qualche secondo, con l&apos;elenco
+          di ciò che è stato creato.
+        </div>
+      )}
+
+      <ul className="mb-4 space-y-1 text-sm text-neutral-400">
+        <li>• sei ruoli: quarantena, verificato, allerta, staff, in diretta, partecipa</li>
+        <li>• categoria ANGEL con registro, allerta e segnalazioni</li>
+        <li>• categoria Assistenza con sala d&apos;attesa, stanze riservate e ticket</li>
+        <li>• canale di verifica con il pannello, e isolamento di chi non ha verificato</li>
+      </ul>
+
+      <div className="flex items-center gap-3">
+        <Button variant="primary" disabled={stato === 'invio'} onClick={() => void avvia()}>
+          {stato === 'invio' ? 'In corso…' : 'Prepara il server'}
+        </Button>
+        <span className="text-xs text-neutral-500">
+          Si può premere più volte: verifica cosa esiste già e completa solo i passaggi mancanti.
+          Non duplica ruoli e non ricrea canali.
+        </span>
+      </div>
+    </Card>
   );
 }
 

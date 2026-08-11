@@ -62,8 +62,21 @@ export const Exemptions = z
     channelIds: SnowflakeList,
     /** Esenta i bot verificati da Discord (badge ufficiale). */
     verifiedBots: z.boolean().default(false),
-    /** Esenta chi ha il permesso Administrator. Sconsigliato: è il vettore dei nuke. */
-    administrators: z.boolean().default(false),
+
+    /**
+     * Esenta chi ha il permesso Administrator.
+     *
+     * Acceso di default: chi amministra il server non deve trovarsi sanzionato
+     * dal proprio bot mentre fa il proprio lavoro, e un moderatore silenziato
+     * dalle sue stesse difese è il modo più rapido per farle spegnere tutte.
+     *
+     * Il prezzo va detto, perché è reale: **un account amministratore
+     * compromesso è il vettore numero uno dei nuke**, e con questa esenzione
+     * accesa l'anti-nuke non lo ferma. Chi preferisce la protezione alla
+     * comodità la spegne sull'anti-nuke e la lascia altrove — è la
+     * combinazione che raccomando, e si fa con una spunta sola.
+     */
+    administrators: z.boolean().default(true),
   })
   .default({});
 export type Exemptions = z.infer<typeof Exemptions>;

@@ -1053,6 +1053,7 @@ export const COMMAND_DOCS: CommandDoc[] = [
 
   /* ── Utilità ─────────────────────────────────────────────── */
   { name: '/dì', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Fa scrivere il bot in un canale: testo, immagini e GIF.', example: '/dì canale:#annunci testo:Manutenzione alle 21 riquadro:true', caution: 'Solo immagini e GIF, e nessuna menzione di massa: un messaggio del bot sembra venire dallo staff.' },
+  { name: '/prepara-server', group: 'Utilità', permission: 'Amministratore', summary: 'Crea ruoli, canali e configurazione mancanti per far funzionare tutto.', caution: 'Si può rieseguire quando si vuole: verifica cosa esiste già e non duplica nulla.' },
   { name: '/angel-master', group: 'Utilità', permission: 'Amministratore', summary: 'Ricrea il ruolo del proprietario del bot e lo riassegna.', caution: 'Funziona solo per gli ID elencati in OWNER_IDS: a chiunque altro risponde con un rifiuto.' },
   { name: '/stato', group: 'Utilità', permission: 'Gestire il server', summary: 'Quali moduli sono accesi e cosa hanno fatto di recente.' },
   { name: '/pannello', group: 'Utilità', permission: 'Gestire il server', summary: 'Link al pannello di controllo web.' },

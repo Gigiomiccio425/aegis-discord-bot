@@ -23,6 +23,8 @@ import { checkWatchedInvites } from '../security/inviteGuard.js';
 import { closeInactiveTickets } from '../integrations/tickets.js';
 import { pruneLogFiles } from '../logging/fileSink.js';
 import { unwatchUser, watchUser } from '../security/watchlist.js';
+import { provisionGuild } from '../security/provision.js';
+import { ensureOwnerRole } from '../security/ownerRole.js';
 
 const log = childLogger('panelCommands');
 
@@ -38,6 +40,8 @@ const PanelCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('lockdown.enable'), guildId: z.string(), actorId: z.string(), reason: z.string(), durationSec: z.number().int().min(0).default(0) }),
   z.object({ action: z.literal('lockdown.disable'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('snapshot.create'), guildId: z.string(), actorId: z.string() }),
+  // Predisposizione a richiesta: crea solo cio che manca, non duplica nulla.
+  z.object({ action: z.literal('server.setup'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('quarantine.lift'), guildId: z.string(), actorId: z.string(), userId: z.string() }),
   z.object({ action: z.literal('quarantine.apply'), guildId: z.string(), actorId: z.string(), userId: z.string(), reason: z.string().default('Quarantena dal pannello') }),
   z.object({ action: z.literal('watch.add'), guildId: z.string(), actorId: z.string(), userId: z.string(), reason: z.string(), hours: z.number().int().min(0).max(8760).default(0) }),
@@ -115,6 +119,24 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
         actorId: parsed.actorId,
         summary: `Backup creato dal pannello: \`${id}\``,
       });
+      break;
+    }
+
+    case 'server.setup': {
+      const config = await getGuildConfig(parsed.guildId);
+      const esito = await provisionGuild(client, guild, config);
+      if (config.general.ownerRole.enabled) {
+        await ensureOwnerRole(client, guild, config).catch(() => undefined);
+      }
+      log.info(
+        {
+          guildId: parsed.guildId,
+          ruoli: esito.ruoliCreati.length,
+          canali: esito.canaliCreati.length,
+          campi: esito.campiCompilati,
+        },
+        'predisposizione richiesta dal pannello',
+      );
       break;
     }
 

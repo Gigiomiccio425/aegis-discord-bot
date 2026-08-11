@@ -3,6 +3,7 @@ import { getPrisma } from '@angel/db';
 import type { GuildConfig } from '@angel/shared';
 import { recordEvent } from '../logging/auditLogger.js';
 import { childLogger } from '../core/logger.js';
+import { isBotOwner } from '../core/permissions.js';
 
 const log = childLogger('webhookGuard');
 
@@ -51,10 +52,15 @@ export async function auditWebhooks(
   const managedIds = new Set(managed.map((record) => record.id));
 
   for (const webhook of webhooks.values()) {
+    // Stesso criterio della reazione immediata: se qui mancasse il controllo
+    // sull'autore, un webhook legittimo sopravvivrebbe alla creazione e
+    // verrebbe eliminato al primo audit periodico — un guasto che si
+    // manifesta ore dopo, quando nessuno collega più le due cose.
     const approved =
       managedIds.has(webhook.id) ||
       settings.allowedWebhookIds.includes(webhook.id) ||
-      (webhook.owner && settings.allowedCreatorIds.includes(webhook.owner.id));
+      (webhook.owner && settings.allowedCreatorIds.includes(webhook.owner.id)) ||
+      (await creatoDaFidato(guild, config, webhook));
 
     await prisma.webhookRecord
       .upsert({
@@ -112,10 +118,47 @@ export async function onWebhookCreated(
 
   const approved =
     settings.allowedWebhookIds.includes(webhook.id) ||
-    (webhook.owner && settings.allowedCreatorIds.includes(webhook.owner.id));
+    (webhook.owner && settings.allowedCreatorIds.includes(webhook.owner.id)) ||
+    (await creatoDaFidato(guild, config, webhook));
 
   if (approved) return;
   await handleUnauthorized(client, guild, config, webhook);
+}
+
+/**
+ * Il webhook è stato creato da chi ha titolo per farlo?
+ *
+ * Un webhook creato da un amministratore, dal proprietario del server o da un
+ * membro dello staff non viene mai eliminato. È un'integrazione voluta —
+ * GitHub, un servizio di annunci, un ponte con un altro servizio — e
+ * cancellarla significa rompere qualcosa che qualcuno ha configurato di
+ * proposito, senza preavviso e senza modo di sapere cosa fosse.
+ *
+ * Chi ha `ManageWebhooks` può ricrearlo in dieci secondi: eliminarlo non
+ * impedisce nulla a chi è già autorizzato, e danneggia solo gli usi legittimi.
+ * Se quell'account fosse davvero compromesso, il problema non si risolve
+ * togliendo un webhook — si risolve con l'anti-nuke, che agisce sulla persona.
+ *
+ * Resta la segnalazione: il webhook viene registrato e annunciato comunque,
+ * perché sapere che è comparso è utile in ogni caso.
+ */
+async function creatoDaFidato(
+  guild: Guild,
+  config: GuildConfig,
+  webhook: Webhook,
+): Promise<boolean> {
+  const autoreId = webhook.owner?.id;
+  if (!autoreId) return false;
+
+  if (isBotOwner(autoreId)) return true;
+  if (autoreId === guild.ownerId) return true;
+  if (autoreId === guild.client.user?.id) return true;
+
+  const membro = await guild.members.fetch(autoreId).catch(() => null);
+  if (!membro) return false;
+
+  if (membro.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  return config.general.staffRoleIds.some((roleId) => membro.roles.cache.has(roleId));
 }
 
 async function handleUnauthorized(

@@ -288,6 +288,26 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  /* ── Predisposizione del server ────────────────────────────────────────
+     Crea solo ciò che manca. È idempotente per costruzione: i ruoli e i
+     canali si cercano per nome, e un campo già compilato non viene toccato.
+     Premerlo dieci volte di fila non produce dieci copie di niente. */
+
+  app.post<{ Params: { guildId: string } }>(
+    '/api/guilds/:guildId/actions/setup',
+    async (request, reply) => {
+      const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
+      if (!context) return;
+
+      await sendBotCommand({
+        action: 'server.setup',
+        guildId: context.guildId,
+        actorId: context.user.id,
+      });
+      return { ok: true };
+    },
+  );
+
   /* ── Sorveglianza ──────────────────────────────────────────────────────
      Non è una sanzione e non compare all'interessato: mette in evidenza le
      sue azioni nel registro. Basta il livello MOD proprio perché non toglie
