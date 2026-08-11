@@ -14,6 +14,7 @@ import { Integrations } from './pages/Integrations.js';
 import { Archive } from './pages/Archive.js';
 import { User } from './pages/User.js';
 import { Access } from './pages/Access.js';
+import { Tools } from './pages/Tools.js';
 import { Loading } from './components/ui.js';
 
 export function App() {
@@ -51,6 +52,7 @@ export function App() {
         <Route path="integrazioni" element={<Integrations />} />
         <Route path="comandi" element={<Builder />} />
         <Route path="impostazioni" element={<Settings />} />
+        <Route path="strumenti" element={<Tools />} />
         <Route path="accessi" element={<Access />} />
       </Route>
       <Route path="*" element={<GuildRedirect me={me} />} />

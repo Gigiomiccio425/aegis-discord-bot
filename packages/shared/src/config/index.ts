@@ -23,6 +23,7 @@ export * from './security.js';
 export * from './scanner.js';
 export * from './logging.js';
 export * from './integrations.js';
+export * from './docs.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONFIGURAZIONE DI UN SERVER

@@ -12,6 +12,7 @@ const NAV = [
   { to: 'archivio', label: 'Archivio messaggi' },
   { to: 'integrazioni', label: 'Integrazioni' },
   { to: 'comandi', label: 'Comandi e personas' },
+  { to: 'strumenti', label: 'Strumenti' },
   { to: 'impostazioni', label: 'Configurazione' },
   { to: 'accessi', label: 'Accessi al pannello' },
 ];

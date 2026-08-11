@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { describeField, SECTION_DOCS } from '@aegis/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, ErrorBox, Loading, formatDate } from '../components/ui.js';
@@ -128,6 +129,7 @@ export function Settings() {
         </nav>
 
         <Card>
+          <SectionIntro sectionKey={selected} />
           {current && typeof current === 'object' ? (
             <ObjectEditor
               value={current as Json}
@@ -292,6 +294,46 @@ function PanelSessions() {
   );
 }
 
+/**
+ * Introduzione della sezione.
+ *
+ * Risponde alla domanda che viene prima di ogni spunta — questa cosa a che
+ * serve, e mi serve — senza costringere ad aprire il README.
+ */
+function SectionIntro({ sectionKey }: { sectionKey: string }) {
+  const doc = SECTION_DOCS[sectionKey];
+  if (!doc) return null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/60 p-4">
+      <p className="text-sm font-medium text-neutral-200">{doc.summary}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">{stripMarkdown(doc.detail)}</p>
+    </div>
+  );
+}
+
+/** Il grassetto `**così**` non ha senso in HTML: si toglie e basta. */
+function stripMarkdown(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, '$1');
+}
+
+/**
+ * Riga di spiegazione sotto un controllo.
+ *
+ * Nessun fallback generico: se manca la descrizione non compare nulla. Un
+ * aiuto che non aiuta occupa spazio e insegna a ignorare tutti gli altri.
+ */
+function Help({ path }: { path: string }) {
+  const doc = describeField(path);
+  if (!doc) return null;
+  return <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{doc.help}</p>;
+}
+
+/** Etichetta in italiano se esiste, altrimenti il nome tecnico ripulito. */
+function labelFor(path: string, key: string): string {
+  return describeField(path)?.label ?? humanize(key);
+}
+
 function ObjectEditor({
   value,
   path,
@@ -307,51 +349,72 @@ function ObjectEditor({
     <div className={depth > 0 ? 'ml-3 border-l border-[var(--color-border)] pl-3' : ''}>
       {Object.entries(value).map(([key, entry]) => {
         const fullPath = `${path}.${key}`;
-        const label = humanize(key);
+        const label = labelFor(fullPath, key);
 
         if (typeof entry === 'boolean') {
           return (
-            <label key={key} className="flex items-center gap-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={entry}
-                onChange={(event) => onChange(fullPath, event.target.checked)}
-                className="h-4 w-4 accent-[var(--color-accent)]"
-              />
-              <span className="text-neutral-200">{label}</span>
-              {key === 'enabled' && (
-                <Badge tone={entry ? 'success' : 'neutral'}>{entry ? 'attivo' : 'spento'}</Badge>
-              )}
-            </label>
+            <div key={key} className="py-2">
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={entry}
+                  onChange={(event) => onChange(fullPath, event.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="text-neutral-200">{label}</span>
+                {key === 'enabled' && (
+                  <Badge tone={entry ? 'success' : 'neutral'}>{entry ? 'attivo' : 'spento'}</Badge>
+                )}
+              </label>
+              <div className="pl-7">
+                <Help path={fullPath} />
+              </div>
+            </div>
           );
         }
 
         if (typeof entry === 'number') {
           return (
-            <label key={key} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="text-neutral-300">{label}</span>
-              <input
-                type="number"
-                value={entry}
-                onChange={(event) => onChange(fullPath, Number(event.target.value))}
-                className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-              />
-            </label>
+            <div key={key} className="py-2">
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-neutral-300">{label}</span>
+                <input
+                  type="number"
+                  value={entry}
+                  onChange={(event) => onChange(fullPath, Number(event.target.value))}
+                  className="w-32 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+                />
+              </label>
+              <Help path={fullPath} />
+            </div>
           );
         }
 
         if (typeof entry === 'string' || entry === null) {
+          const multiline = typeof entry === 'string' && entry.length > 80;
           return (
-            <label key={key} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="shrink-0 text-neutral-300">{label}</span>
-              <input
-                type="text"
-                value={entry ?? ''}
-                placeholder={entry === null ? 'non impostato' : ''}
-                onChange={(event) => onChange(fullPath, event.target.value || null)}
-                className="w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-              />
-            </label>
+            <div key={key} className="py-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-neutral-300">{label}</span>
+                {multiline ? (
+                  <textarea
+                    value={entry}
+                    rows={3}
+                    onChange={(event) => onChange(fullPath, event.target.value || null)}
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={entry ?? ''}
+                    placeholder={entry === null ? 'non impostato' : ''}
+                    onChange={(event) => onChange(fullPath, event.target.value || null)}
+                    className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+                  />
+                )}
+              </label>
+              <Help path={fullPath} />
+            </div>
           );
         }
 
@@ -361,24 +424,27 @@ function ObjectEditor({
           );
           if (isPrimitive) {
             return (
-              <label key={key} className="block py-2 text-sm">
-                <span className="mb-1 block text-neutral-300">{label}</span>
-                <input
-                  type="text"
-                  value={entry.join(', ')}
-                  onChange={(event) =>
-                    onChange(
-                      fullPath,
-                      event.target.value
-                        .split(',')
-                        .map((item) => item.trim())
-                        .filter(Boolean),
-                    )
-                  }
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-                  placeholder="valori separati da virgola"
-                />
-              </label>
+              <div key={key} className="py-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-neutral-300">{label}</span>
+                  <input
+                    type="text"
+                    value={entry.join(', ')}
+                    onChange={(event) =>
+                      onChange(
+                        fullPath,
+                        event.target.value
+                          .split(',')
+                          .map((item) => item.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+                    placeholder="valori separati da virgola"
+                  />
+                </label>
+                <Help path={fullPath} />
+              </div>
             );
           }
 
@@ -388,17 +454,22 @@ function ObjectEditor({
           return (
             <div key={key} className="py-2 text-sm">
               <span className="mb-1 block text-neutral-300">{label}</span>
-              <JsonEditor value={entry} onChange={(next) => onChange(fullPath, next)} />
+              <Help path={fullPath} />
+              <div className="mt-1">
+                <JsonEditor value={entry} onChange={(next) => onChange(fullPath, next)} />
+              </div>
             </div>
           );
         }
 
         if (typeof entry === 'object') {
+          const doc = describeField(fullPath);
           return (
             <details key={key} className="py-2" open={depth === 0}>
               <summary className="cursor-pointer text-sm font-medium text-neutral-200">
                 {label}
               </summary>
+              {doc && <p className="mt-0.5 text-xs text-neutral-500">{doc.help}</p>}
               <ObjectEditor
                 value={entry as Json}
                 path={fullPath}
