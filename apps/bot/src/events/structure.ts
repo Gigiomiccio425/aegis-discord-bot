@@ -1,5 +1,6 @@
 import {
   Events,
+  OverwriteType,
   PermissionsBitField,
   type Client,
   type GuildChannel,
@@ -46,20 +47,22 @@ export function registerStructureEvents(client: Client): void {
 
   client.on(Events.ChannelUpdate, (oldChannel, newChannel) => {
     if (!('guild' in newChannel)) return;
-    const changes = diffChannel(
-      oldChannel as NonThreadGuildBasedChannel,
-      newChannel as NonThreadGuildBasedChannel,
-    );
-    if (changes.length === 0) return;
+    const before = oldChannel as NonThreadGuildBasedChannel;
+    const after = newChannel as NonThreadGuildBasedChannel;
+
+    // Le due differenze restano separate perché distinguono il tipo di evento:
+    // rinominare un canale e ridarne i permessi a un ruolo non si cercano allo
+    // stesso modo nel registro, e finire nella stessa categoria li confonde.
+    const changes = diffChannel(before, after);
+    const permissions = diffOverwrites(before, after);
+    if (changes.length === 0 && permissions.length === 0) return;
 
     void recordEvent(client, {
       guildId: newChannel.guild.id,
-      type: changes.some((change) => change.startsWith('permessi'))
-        ? 'CHANNEL_PERMISSIONS_UPDATED'
-        : 'CHANNEL_UPDATED',
+      type: permissions.length > 0 ? 'CHANNEL_PERMISSIONS_UPDATED' : 'CHANNEL_UPDATED',
       channelId: newChannel.id,
-      summary: changes.join('\n'),
-      payload: { changes },
+      summary: [...changes, ...permissions].join('\n'),
+      payload: { changes, permissions },
     });
   });
 
@@ -569,18 +572,73 @@ function diffChannel(
   }
   if (oldChannel.parentId !== newChannel.parentId) changes.push('Categoria modificata');
 
-  if (
-    oldChannel.permissionOverwrites.cache.size !== newChannel.permissionOverwrites.cache.size ||
-    [...newChannel.permissionOverwrites.cache.values()].some((overwrite) => {
-      const previous = oldChannel.permissionOverwrites.cache.get(overwrite.id);
-      return (
-        !previous ||
-        previous.allow.bitfield !== overwrite.allow.bitfield ||
-        previous.deny.bitfield !== overwrite.deny.bitfield
+  return changes;
+}
+
+/**
+ * Differenza fra i permessi di due versioni dello stesso canale.
+ *
+ * Prima qui c'era la riga «permessi del canale modificati», che è vera e
+ * inutile: chi legge un registro dopo un incidente deve sapere *a chi* e
+ * *quale* permesso è stato dato, non che qualcosa è cambiato. Con un ruolo che
+ * guadagna in silenzio `ManageChannels` su un canale, quella riga è la
+ * differenza fra accorgersene e non accorgersene.
+ */
+function diffOverwrites(
+  oldChannel: NonThreadGuildBasedChannel,
+  newChannel: NonThreadGuildBasedChannel,
+): string[] {
+  const changes: string[] = [];
+  const ids = new Set([
+    ...oldChannel.permissionOverwrites.cache.keys(),
+    ...newChannel.permissionOverwrites.cache.keys(),
+  ]);
+
+  for (const id of ids) {
+    const before = oldChannel.permissionOverwrites.cache.get(id);
+    const after = newChannel.permissionOverwrites.cache.get(id);
+
+    // `@everyone` ha come ID quello del server: scriverlo come menzione di
+    // ruolo produrrebbe un riferimento che Discord non risolve.
+    const chi =
+      id === newChannel.guild.id
+        ? '@everyone'
+        : (after ?? before)?.type === OverwriteType.Member
+          ? `<@${id}>`
+          : `<@&${id}>`;
+
+    if (!after) {
+      changes.push(`Permessi speciali di ${chi} rimossi`);
+      continue;
+    }
+    if (!before) {
+      const allowed = after.allow.toArray();
+      const denied = after.deny.toArray();
+      changes.push(
+        `Permessi speciali aggiunti per ${chi}` +
+          (allowed.length ? ` · concessi: ${allowed.join(', ')}` : '') +
+          (denied.length ? ` · negati: ${denied.join(', ')}` : ''),
       );
-    })
-  ) {
-    changes.push('permessi del canale modificati');
+      continue;
+    }
+
+    // Un permesso può passare per tre stati (concesso, negato, ereditato), e
+    // ognuna delle sei transizioni possibili è un'informazione diversa: si
+    // confrontano quindi entrambe le maschere, non solo quella dei permessi
+    // concessi.
+    const nowAllowed = new PermissionsBitField(after.allow.bitfield & ~before.allow.bitfield)
+      .toArray()
+      .filter((permission) => !before.allow.has(permission));
+    const nowDenied = new PermissionsBitField(after.deny.bitfield & ~before.deny.bitfield).toArray();
+    const cleared = new PermissionsBitField(
+      (before.allow.bitfield | before.deny.bitfield) & ~(after.allow.bitfield | after.deny.bitfield),
+    ).toArray();
+
+    const parts: string[] = [];
+    if (nowAllowed.length) parts.push(`concessi ${nowAllowed.join(', ')}`);
+    if (nowDenied.length) parts.push(`negati ${nowDenied.join(', ')}`);
+    if (cleared.length) parts.push(`riportati al valore ereditato ${cleared.join(', ')}`);
+    if (parts.length) changes.push(`${chi}: ${parts.join(' · ')}`);
   }
 
   return changes;

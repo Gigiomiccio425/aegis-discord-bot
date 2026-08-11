@@ -2,7 +2,10 @@ import {
   ChannelType,
   DiscordAPIError,
   PermissionFlagsBits,
+  type ForumChannel,
   type Guild,
+  type NewsChannel,
+  type TextChannel,
   type GuildMember,
   type Message,
   type Client,
@@ -21,6 +24,7 @@ import { canActOn, dangerousRoles } from './permissions.js';
 import { createCase } from './cases.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { humanDuration, t } from './i18n.js';
+import { getGuildConfig } from './config.js';
 
 const log = childLogger('enforcer');
 
@@ -67,6 +71,10 @@ export async function applyDecision(ctx: EnforceContext, decision: Decision): Pr
       );
     }
   }
+
+  await announceAction(ctx, decision, applied, dryRun).catch((error) =>
+    log.debug({ err: error }, 'avviso pubblico non pubblicato'),
+  );
 
   await recordEvent(ctx.client, {
     guildId: ctx.guild.id,
@@ -326,6 +334,19 @@ export async function stripDangerousRoles(
 
   if (decision) await openCase(ctx, 'ROLE_STRIP', reason, decision);
 
+  // Il registro elenca ruolo per ruolo quali permessi pericolosi sono stati
+  // tolti. «Rimossi 3 ruoli» non basta a nessuno: chi rivede l'incidente deve
+  // poter dire se la persona aveva davvero i mezzi per fare il danno, e chi
+  // deve rimettere le cose a posto deve sapere cosa restituire.
+  const detail = toRemove.map((roleId) => {
+    const role = ctx.guild.roles.cache.get(roleId);
+    if (!role) return `\`${roleId}\` (ruolo non più esistente)`;
+    const dangerous = role.permissions
+      .toArray()
+      .filter((permission) => ctx.config.security.antiNuke.dangerousPermissions.includes(permission));
+    return `**${role.name}** → ${dangerous.join(', ') || 'nessun permesso pericoloso residuo'}`;
+  });
+
   await recordEvent(ctx.client, {
     guildId: ctx.guild.id,
     type: 'SECURITY_ROLES_STRIPPED',
@@ -334,8 +355,24 @@ export async function stripDangerousRoles(
     targetTag: member.user.tag,
     severity: 90,
     automated: true,
-    summary: `Rimossi ${toRemove.length} ruoli con permessi pericolosi: ${reason}`,
-    payload: { removedRoles: toRemove, module: ctx.module },
+    summary:
+      `Rimossi ${toRemove.length} ruoli a <@${member.id}>: ${reason}\n\n` +
+      detail.slice(0, 10).join('\n') +
+      (detail.length > 10 ? `\n…e altri ${detail.length - 10}` : ''),
+    fields: [
+      {
+        name: 'Come rimettere le cose a posto',
+        value:
+          'I ruoli sono conservati nel profilo dell\'utente: dal pannello, scheda della ' +
+          'persona, si restituiscono con un clic. Non serve ricostruirli a mano.',
+        inline: false,
+      },
+    ],
+    payload: {
+      removedRoles: toRemove,
+      removedRoleNames: detail,
+      module: ctx.module,
+    },
   });
   return true;
 }
@@ -381,6 +418,74 @@ export function purgeRecent(guild: Guild, userId: string, hours: number): number
   return deleted;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   LOCKDOWN
+
+   Tre cose che la prima versione sbagliava, tutte scoperte sul campo:
+
+   1. Lo stato in Redis scadeva dopo 24 ore. Passate quelle, i canali restavano
+      bloccati ma la revoca non trovava più l'elenco e usciva senza fare nulla:
+      il server rimaneva muto e nessun comando lo sbloccava. Ora la chiave non
+      scade, e la scadenza è un campo dentro lo stato — sorvegliato da un ciclo
+      che sopravvive ai riavvii, cosa che un `setTimeout` non fa.
+
+   2. I canali venivano modificati uno alla volta, in serie. Su un server con
+      cinquanta canali significa cinquanta chiamate sequenziali, e il blocco
+      arrivava a raid già concluso. Ora si procede a lotti in parallelo.
+
+   3. Si leggeva solo la cache dei canali, che dopo un riavvio può essere
+      incompleta: i canali non ancora visti restavano aperti. Ora si chiede
+      l'elenco a Discord.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Tipi di canale su cui il lockdown ha effetto.
+ *
+ * I thread non ci sono: ereditano i permessi dal canale che li contiene, e
+ * bloccare il canale li blocca di conseguenza. Elencarli significherebbe
+ * moltiplicare le chiamate per nulla, proprio quando la velocità conta.
+ */
+const LOCKABLE = [
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildForum,
+] as const;
+
+type LockableChannel = TextChannel | NewsChannel | ForumChannel;
+
+/**
+ * Canale bloccabile: ha `permissionOverwrites`, che i thread non hanno.
+ *
+ * Generico perché i due chiamanti partono da insiemi diversi — l'elenco
+ * completo dei canali e il singolo canale recuperato per ID — e restringere
+ * ciascuno al proprio sottoinsieme evita di riaprire il controllo dopo.
+ */
+function isLockable<T extends { type: ChannelType }>(
+  channel: T | null | undefined,
+): channel is Extract<T, LockableChannel> {
+  return channel != null && (LOCKABLE as readonly ChannelType[]).includes(channel.type);
+}
+
+interface LockdownState {
+  reason: string;
+  channels: string[];
+  startedAt: number;
+  /** Timestamp di revoca automatica. 0 = solo manuale. */
+  expiresAt: number;
+  /** Messaggi d'avviso pubblicati, per poterli sostituire alla revoca. */
+  notices: { channelId: string; messageId: string }[];
+}
+
+export async function readLockdownState(guildId: string): Promise<LockdownState | null> {
+  const raw = await getRedis().get(RedisKeys.lockdown(guildId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as LockdownState;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lockdown: canali pubblici in sola lettura e inviti in pausa.
  *
@@ -393,40 +498,80 @@ export async function enableLockdown(
   config: GuildConfig,
   reason: string,
   durationSec: number,
-): Promise<void> {
+): Promise<{ locked: number; alreadyActive: boolean }> {
   const redis = getRedis();
   const key = RedisKeys.lockdown(guild.id);
-  if (await redis.exists(key)) return; // già attivo
+  if (await redis.exists(key)) return { locked: 0, alreadyActive: true };
 
+  const settings = config.security.antiRaid;
+  const everyone = guild.roles.everyone;
   const affected: string[] = [];
+  const notices: LockdownState[ 'notices' ] = [];
 
-  if (config.security.antiRaid.lockChannels) {
-    const everyone = guild.roles.everyone;
-    for (const channel of guild.channels.cache.values()) {
-      if (channel.type !== ChannelType.GuildText) continue;
-      if (config.security.antiRaid.lockdownExemptChannels.includes(channel.id)) continue;
+  // Lo stato si scrive **prima** di toccare i canali: se il processo muore a
+  // metà, la revoca trova comunque un elenco parziale da cui ripartire. Il
+  // contrario — bloccare e poi salvare — lascerebbe un server bloccato di cui
+  // nessuno sa più nulla, che è esattamente il guasto che si sta correggendo.
+  const state: LockdownState = {
+    reason,
+    channels: affected,
+    startedAt: Date.now(),
+    expiresAt: durationSec > 0 ? Date.now() + durationSec * 1000 : 0,
+    notices,
+  };
+  await redis.set(key, JSON.stringify(state));
 
-      const current = channel.permissionOverwrites.cache.get(everyone.id);
-      if (current?.deny.has(PermissionFlagsBits.SendMessages)) continue;
+  if (settings.lockChannels) {
+    // Dall'API e non dalla cache: dopo un riavvio la cache può essere parziale,
+    // e un canale dimenticato aperto è la falla da cui passa tutto il resto.
+    const channels = await guild.channels.fetch().catch(() => null);
+    const targets = [...(channels?.values() ?? [])].filter(
+      (channel) => isLockable(channel) && !settings.lockdownExemptChannels.includes(channel.id),
+    ) as LockableChannel[];
 
-      await channel.permissionOverwrites
-        .edit(everyone, { SendMessages: false }, { reason: truncateReason(reason) })
-        .then(() => affected.push(channel.id))
-        .catch(() => undefined);
+    const announcement = settings.announceLockdown
+      ? settings.lockdownMessage
+          .replace('{motivo}', reason.slice(0, 300))
+          .replace(
+            '{durata}',
+            durationSec > 0 ? `Durata prevista: ${humanDuration(durationSec)}` : '',
+          )
+          .trim()
+      : null;
+
+    for (const batch of chunk(targets, settings.lockdownBatchSize)) {
+      await Promise.allSettled(
+        batch.map(async (channel) => {
+          const current = channel.permissionOverwrites.cache.get(everyone.id);
+          // Già in sola lettura per scelta dello staff: non lo si tocca, perché
+          // alla revoca verrebbe riaperto un canale che doveva restare chiuso.
+          if (current?.deny.has(PermissionFlagsBits.SendMessages)) return;
+
+          await channel.permissionOverwrites.edit(
+            everyone,
+            { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false },
+            { reason: truncateReason(reason) },
+          );
+          affected.push(channel.id);
+
+          if (announcement && channel.isTextBased()) {
+            const sent = await channel
+              .send({ content: announcement, allowedMentions: { parse: [] } })
+              .catch(() => null);
+            if (sent) notices.push({ channelId: channel.id, messageId: sent.id });
+          }
+        }),
+      );
+      await redis.set(key, JSON.stringify(state));
     }
   }
 
-  if (config.security.antiRaid.pauseInvites) {
+  if (settings.pauseInvites) {
     // `invitesDisabled` è la pausa inviti nativa di Discord.
     await guild.disableInvites(true).catch(() => undefined);
   }
 
-  await redis.set(
-    key,
-    JSON.stringify({ reason, channels: affected, startedAt: Date.now() }),
-    'EX',
-    durationSec > 0 ? durationSec + 60 : 86400,
-  );
+  await redis.set(key, JSON.stringify(state));
 
   await recordEvent(client, {
     guildId: guild.id,
@@ -434,54 +579,141 @@ export async function enableLockdown(
     actorId: client.user?.id,
     severity: 95,
     automated: true,
-    summary: `🔒 Server bloccato: ${reason}\nCanali interessati: ${affected.length}`,
-    payload: { channels: affected, durationSec },
+    summary:
+      `🔒 Server bloccato: ${reason}\n` +
+      `Canali chiusi: ${affected.length}` +
+      (durationSec > 0 ? `\nRevoca automatica fra ${humanDuration(durationSec)}` : ''),
+    payload: { channels: affected, durationSec, invitesPaused: settings.pauseInvites },
   });
 
-  if (durationSec > 0) {
-    setTimeout(() => {
-      void disableLockdown(client, guild, 'scadenza automatica');
-    }, durationSec * 1000);
-  }
+  return { locked: affected.length, alreadyActive: false };
 }
 
+/**
+ * Revoca il lockdown.
+ *
+ * Con `force` riapre **tutti** i canali che negano la scrittura a @everyone,
+ * non solo quelli registrati. È la via d'uscita quando lo stato è andato perso
+ * — un Redis svuotato, un ripristino da backup — e il server è rimasto muto
+ * senza che nessun comando riesca a sbloccarlo.
+ */
 export async function disableLockdown(
   client: Client,
   guild: Guild,
   reason: string,
-): Promise<boolean> {
+  options: { force?: boolean; config?: GuildConfig } = {},
+): Promise<{ unlocked: number; hadState: boolean }> {
   const redis = getRedis();
   const key = RedisKeys.lockdown(guild.id);
-  const raw = await redis.get(key);
-  if (!raw) return false;
+  const state = await readLockdownState(guild.id);
+  if (!state && !options.force) return { unlocked: 0, hadState: false };
 
-  const state = JSON.parse(raw) as { channels: string[] };
   const everyone = guild.roles.everyone;
+  let ids = state?.channels ?? [];
 
-  for (const channelId of state.channels) {
-    const channel = guild.channels.cache.get(channelId);
-    if (!channel || channel.type !== ChannelType.GuildText) continue;
-    // Si rimuove solo il divieto aggiunto dal lockdown, non l'intero overwrite:
-    // sovrascriverlo cancellerebbe permessi impostati dallo staff.
-    await channel.permissionOverwrites
-      .edit(everyone, { SendMessages: null }, { reason: truncateReason(reason) })
-      .catch(() => undefined);
+  if (options.force) {
+    const channels = await guild.channels.fetch().catch(() => null);
+    const denied = [...(channels?.values() ?? [])]
+      .filter(
+        (channel) =>
+          isLockable(channel) &&
+          channel.permissionOverwrites.cache
+            .get(everyone.id)
+            ?.deny.has(PermissionFlagsBits.SendMessages),
+      )
+      .map((channel) => channel!.id);
+    ids = [...new Set([...ids, ...denied])];
+  }
+
+  const batchSize = options.config?.security.antiRaid.lockdownBatchSize ?? 10;
+  let unlocked = 0;
+
+  for (const batch of chunk(ids, batchSize)) {
+    await Promise.allSettled(
+      batch.map(async (channelId) => {
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!isLockable(channel)) return;
+        // Si rimuove solo il divieto aggiunto dal lockdown, non l'intero
+        // overwrite: sovrascriverlo cancellerebbe permessi impostati dallo staff.
+        await channel.permissionOverwrites
+          .edit(
+            everyone,
+            { SendMessages: null, SendMessagesInThreads: null, CreatePublicThreads: null },
+            { reason: truncateReason(reason) },
+          )
+          .then(() => {
+            unlocked += 1;
+          })
+          .catch(() => undefined);
+      }),
+    );
   }
 
   await guild.disableInvites(false).catch(() => undefined);
+
+  // L'avviso di revoca prende il posto di quello di blocco, nello stesso
+  // messaggio: due cartellini contraddittori uno sotto l'altro confondono più
+  // del silenzio.
+  const liftText = options.config?.security.antiRaid.lockdownLiftMessage;
+  if (liftText && state?.notices.length) {
+    await Promise.allSettled(
+      state.notices.map(async (notice) => {
+        const channel = await guild.channels.fetch(notice.channelId).catch(() => null);
+        if (!channel?.isTextBased()) return;
+        const message = await channel.messages.fetch(notice.messageId).catch(() => null);
+        await message?.edit({ content: liftText, allowedMentions: { parse: [] } });
+      }),
+    );
+  }
+
   await redis.del(key);
 
   await recordEvent(client, {
     guildId: guild.id,
     type: 'SECURITY_LOCKDOWN_DISABLED',
     actorId: client.user?.id,
-    summary: `🔓 Lockdown revocato: ${reason}`,
+    summary:
+      `🔓 Lockdown revocato: ${reason}\nCanali riaperti: ${unlocked}` +
+      (options.force && !state ? '\n(revoca forzata: nessuno stato salvato)' : ''),
+    payload: { unlocked, forced: options.force ?? false, hadState: Boolean(state) },
   });
-  return true;
+
+  return { unlocked, hadState: Boolean(state) };
 }
 
 export async function isLockedDown(guildId: string): Promise<boolean> {
   return (await getRedis().exists(RedisKeys.lockdown(guildId))) === 1;
+}
+
+/**
+ * Revoca i lockdown scaduti.
+ *
+ * Sostituisce il `setTimeout` di prima, che moriva con il processo: un riavvio
+ * durante un lockdown a tempo lasciava il server bloccato per sempre. Il ciclo
+ * riparte a ogni avvio e ritrova lo stato in Redis.
+ */
+export function startLockdownSweeper(client: Client, intervalMs = 20_000): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    void (async () => {
+      for (const guild of client.guilds.cache.values()) {
+        const state = await readLockdownState(guild.id).catch(() => null);
+        if (!state?.expiresAt || state.expiresAt > Date.now()) continue;
+        const config = await getGuildConfig(guild.id).catch(() => undefined);
+        await disableLockdown(client, guild, 'scadenza automatica', { config }).catch(() =>
+          undefined,
+        );
+      }
+    })();
+  }, intervalMs);
+  // Non deve tenere vivo il processo da solo.
+  timer.unref?.();
+  return timer;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 async function requireVerification(ctx: EnforceContext): Promise<boolean> {
@@ -522,6 +754,84 @@ async function openCase(
     },
     expiresAt: expiresAt ?? null,
   }).catch((error) => log.warn({ err: error }, 'apertura caso fallita'));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AVVISO PUBBLICO
+
+   Il DM è il canale sbagliato per una sanzione automatica: la maggioranza
+   degli utenti tiene chiusi i messaggi privati dagli sconosciuti, e un bot lo
+   è. Chi viene zittito non riceve nulla e non capisce cosa sia successo, chi
+   guardava vede solo un messaggio sparire.
+
+   Un cartellino in chat risolve tutt'e due, e si cancella da solo per non
+   lasciare la cronologia piena di avvisi vecchi.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Descrizione leggibile di ciò che è stato fatto, per l'avviso in chat. */
+const ACTION_LABEL: Record<string, string> = {
+  DELETE_MESSAGE: 'messaggio rimosso',
+  PURGE_RECENT: 'messaggi recenti rimossi',
+  WARN: 'avvertimento',
+  TIMEOUT: 'silenziato temporaneamente',
+  QUARANTINE: 'messo in quarantena',
+  STRIP_ROLES: 'ruoli con permessi rimossi',
+  KICK: 'espulso dal server',
+  BAN: 'bandito dal server',
+  REQUIRE_VERIFICATION: 'verifica richiesta prima di poter scrivere',
+};
+
+async function announceAction(
+  ctx: EnforceContext,
+  decision: Decision,
+  applied: string[],
+  dryRun: boolean,
+): Promise<void> {
+  const settings = ctx.config.general.actionNotice;
+  if (!settings.enabled) return;
+  if (dryRun && !settings.announceDryRun) return;
+
+  // `applied` in modalità prova contiene voci tipo «BAN (simulata)».
+  const kinds = applied.map((entry) => entry.replace(' (simulata)', ''));
+  const meaningful = kinds.filter((kind) => kind in ACTION_LABEL);
+  if (meaningful.length === 0) return;
+
+  // Un messaggio eliminato senza altro seguito è rumore in un server attivo:
+  // chi vuole vederlo comunque ha un interruttore dedicato.
+  if (!settings.announceDeletions && meaningful.every((kind) => kind === 'DELETE_MESSAGE')) return;
+
+  const channelId = settings.channelId ?? ctx.message?.channelId;
+  if (!channelId) return;
+
+  const channel = await ctx.client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased() || !('send' in channel)) return;
+
+  const targetId = ctx.member?.id ?? ctx.message?.author.id;
+  const targetName = ctx.member?.user.tag ?? ctx.message?.author.tag ?? 'un utente';
+  const who =
+    settings.mentionTarget && targetId ? `<@${targetId}>` : `**${targetName.replace(/\*/g, '')}**`;
+
+  const what = [...new Set(meaningful.map((kind) => ACTION_LABEL[kind]))].join(', ');
+  const reason = decision.reasons[0]?.detail ?? '';
+
+  const parts = [`🛡️ ${who} — ${what}${dryRun ? ' *(modalità prova: non applicata)*' : ''}`];
+  if (settings.showReason && reason) parts.push(`Motivo: ${reason.slice(0, 300)}`);
+  if (settings.showModule) parts.push(`-# rilevato da ${ctx.module}`);
+
+  const sent = await channel
+    .send({
+      content: parts.join('\n'),
+      // Si menziona la persona ma non le si notifica addosso una raffica:
+      // l'avviso serve a informare chi legge il canale, non a insistere.
+      allowedMentions: { users: settings.mentionTarget && targetId ? [targetId] : [] },
+    })
+    .catch(() => null);
+
+  if (sent && settings.deleteAfterSec > 0) {
+    setTimeout(() => {
+      void sent.delete().catch(() => undefined);
+    }, settings.deleteAfterSec * 1000).unref?.();
+  }
 }
 
 /** Avvisa in privato. Se l'utente ha i DM chiusi non è un errore. */

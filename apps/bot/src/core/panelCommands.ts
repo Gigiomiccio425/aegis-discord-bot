@@ -2,7 +2,12 @@ import type { Client } from 'discord.js';
 import { z } from 'zod';
 import { childLogger } from './logger.js';
 import { getGuildConfig } from './config.js';
-import { disableLockdown, enableLockdown, liftQuarantine } from './enforcer.js';
+import {
+  disableLockdown,
+  enableLockdown,
+  liftQuarantine,
+  quarantineMember,
+} from './enforcer.js';
 // `liftQuarantine` serve sia al comando dedicato sia all'annullamento generico.
 import { createSnapshot } from '../security/snapshot.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -17,6 +22,7 @@ import { auditBots } from '../security/botGuard.js';
 import { checkWatchedInvites } from '../security/inviteGuard.js';
 import { closeInactiveTickets } from '../integrations/tickets.js';
 import { pruneLogFiles } from '../logging/fileSink.js';
+import { unwatchUser, watchUser } from '../security/watchlist.js';
 
 const log = childLogger('panelCommands');
 
@@ -33,6 +39,23 @@ const PanelCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('lockdown.disable'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('snapshot.create'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('quarantine.lift'), guildId: z.string(), actorId: z.string(), userId: z.string() }),
+  z.object({ action: z.literal('quarantine.apply'), guildId: z.string(), actorId: z.string(), userId: z.string(), reason: z.string().default('Quarantena dal pannello') }),
+  z.object({ action: z.literal('watch.add'), guildId: z.string(), actorId: z.string(), userId: z.string(), reason: z.string(), hours: z.number().int().min(0).max(8760).default(0) }),
+  z.object({ action: z.literal('watch.remove'), guildId: z.string(), actorId: z.string(), userId: z.string() }),
+  // Messaggio scritto dal bot su richiesta del pannello: stesso effetto di
+  // `/dì`, stesse regole — niente menzioni di massa, tutto tracciato.
+  z.object({
+    action: z.literal('message.send'),
+    guildId: z.string(),
+    actorId: z.string(),
+    channelId: z.string(),
+    text: z.string().max(1900).default(''),
+    imageUrl: z.string().max(1000).nullable().default(null),
+    embed: z.boolean().default(false),
+    title: z.string().max(200).nullable().default(null),
+    /** ID di un messaggio del bot da riscrivere invece di pubblicarne uno nuovo. */
+    editMessageId: z.string().nullable().default(null),
+  }),
   z.object({ action: z.literal('commands.reload'), guildId: z.string() }),
   z.object({ action: z.literal('config.reloaded'), guildId: z.string() }),
   // Scadenze gestite dal worker, che non ha una connessione al gateway.
@@ -75,9 +98,14 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
       break;
     }
 
-    case 'lockdown.disable':
-      await disableLockdown(client, guild, 'Revoca dal pannello');
+    case 'lockdown.disable': {
+      // `force` sempre acceso: il pulsante del pannello è la via d'uscita di
+      // chi vede il server bloccato, e deve funzionare anche quando lo stato
+      // salvato è andato perso.
+      const config = await getGuildConfig(parsed.guildId);
+      await disableLockdown(client, guild, 'Revoca dal pannello', { config, force: true });
       break;
+    }
 
     case 'snapshot.create': {
       const id = await createSnapshot(guild, 'MANUAL', parsed.actorId);
@@ -93,6 +121,101 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
     case 'quarantine.lift':
       await liftQuarantine(client, guild, parsed.userId, parsed.actorId);
       break;
+
+    case 'quarantine.apply': {
+      const member = await guild.members.fetch(parsed.userId).catch(() => null);
+      if (!member) {
+        log.warn({ userId: parsed.userId }, 'quarantena richiesta per un membro non presente');
+        break;
+      }
+      const config = await getGuildConfig(parsed.guildId);
+      const done = await quarantineMember(
+        { client, guild, config, member, module: 'pannello' },
+        `${parsed.reason} (da <@${parsed.actorId}>)`,
+      );
+      if (!done) {
+        // Le due cause sono sempre le stesse: manca il ruolo di quarantena, o
+        // il bersaglio ha un ruolo più alto di quello del bot. Entrambe si
+        // risolvono in configurazione, non riprovando.
+        await recordEvent(client, {
+          guildId: parsed.guildId,
+          type: 'SECURITY_QUARANTINE_APPLIED',
+          actorId: parsed.actorId,
+          targetId: parsed.userId,
+          severity: 50,
+          summary:
+            '⚠️ Quarantena **non applicata**: ruolo di quarantena non configurato, ' +
+            'oppure il ruolo del bot non è più in alto di quello della persona.',
+        });
+      }
+      break;
+    }
+
+    case 'watch.add':
+      await watchUser(parsed.guildId, parsed.userId, parsed.actorId, parsed.reason, parsed.hours);
+      await recordEvent(client, {
+        guildId: parsed.guildId,
+        type: 'MOD_WATCH_ADDED',
+        actorId: parsed.actorId,
+        targetId: parsed.userId,
+        severity: 40,
+        summary: `👁️ <@${parsed.userId}> messo sotto sorveglianza dal pannello\n${parsed.reason}`,
+      });
+      break;
+
+    case 'watch.remove':
+      if (await unwatchUser(parsed.guildId, parsed.userId)) {
+        await recordEvent(client, {
+          guildId: parsed.guildId,
+          type: 'MOD_WATCH_REMOVED',
+          actorId: parsed.actorId,
+          targetId: parsed.userId,
+          summary: 'Sorveglianza rimossa dal pannello',
+        });
+      }
+      break;
+
+    case 'message.send': {
+      const channel = await client.channels.fetch(parsed.channelId).catch(() => null);
+      if (!channel?.isTextBased() || !('send' in channel)) break;
+
+      const payload = parsed.embed
+        ? {
+            embeds: [
+              {
+                color: 0xe8d8a0,
+                ...(parsed.title ? { title: parsed.title } : {}),
+                ...(parsed.text ? { description: parsed.text } : {}),
+                ...(parsed.imageUrl ? { image: { url: parsed.imageUrl } } : {}),
+              },
+            ],
+            allowedMentions: { parse: [] as never[] },
+          }
+        : {
+            content: [parsed.text, parsed.imageUrl].filter(Boolean).join('\n'),
+            allowedMentions: { parse: [] as never[] },
+          };
+
+      if (parsed.editMessageId) {
+        const existing = await channel.messages.fetch(parsed.editMessageId).catch(() => null);
+        // Solo i propri messaggi: modificare quelli altrui non è possibile per
+        // Discord, e provarci produrrebbe solo un errore poco chiaro.
+        if (!existing || existing.author.id !== client.user?.id) break;
+        await existing.edit(payload);
+      } else {
+        await channel.send(payload);
+      }
+
+      await recordEvent(client, {
+        guildId: parsed.guildId,
+        type: parsed.editMessageId ? 'BOT_MESSAGE_EDITED' : 'BOT_MESSAGE_SENT',
+        actorId: parsed.actorId,
+        channelId: parsed.channelId,
+        summary: `Messaggio pubblicato dal bot su richiesta di <@${parsed.actorId}> (pannello)`,
+        payload: { text: parsed.text.slice(0, 500), hasImage: Boolean(parsed.imageUrl) },
+      });
+      break;
+    }
 
     case 'commands.reload':
       invalidateCustomCommands(parsed.guildId);

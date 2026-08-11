@@ -271,6 +271,138 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.post<{
+    Params: { guildId: string; userId: string };
+    Body: { reason?: string };
+  }>('/api/guilds/:guildId/users/:userId/quarantine', async (request, reply) => {
+    const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
+    if (!context) return;
+
+    await sendBotCommand({
+      action: 'quarantine.apply',
+      guildId: context.guildId,
+      actorId: context.user.id,
+      userId: request.params.userId,
+      reason: request.body?.reason ?? `Quarantena decisa da ${context.user.tag}`,
+    });
+    return { ok: true };
+  });
+
+  /* ── Sorveglianza ──────────────────────────────────────────────────────
+     Non è una sanzione e non compare all'interessato: mette in evidenza le
+     sue azioni nel registro. Basta il livello MOD proprio perché non toglie
+     nulla a nessuno — chiedere ADMIN significherebbe non usarla mai. */
+
+  app.get<{ Params: { guildId: string } }>(
+    '/api/guilds/:guildId/users/watched',
+    async (request, reply) => {
+      const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
+      if (!context) return;
+
+      const prisma = getPrisma();
+      const rows = await prisma.userProfile.findMany({
+        where: {
+          guildId: context.guildId,
+          watchedAt: { not: null },
+          OR: [{ watchExpiresAt: null }, { watchExpiresAt: { gt: new Date() } }],
+        },
+        orderBy: { watchedAt: 'desc' },
+        select: {
+          userId: true,
+          username: true,
+          displayName: true,
+          riskScore: true,
+          watchedAt: true,
+          watchedBy: true,
+          watchReason: true,
+          watchExpiresAt: true,
+        },
+      });
+      return serializeBigInt(rows);
+    },
+  );
+
+  app.post<{
+    Params: { guildId: string; userId: string };
+    Body: { reason?: string; hours?: number };
+  }>('/api/guilds/:guildId/users/:userId/watch', async (request, reply) => {
+    const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
+    if (!context) return;
+
+    await sendBotCommand({
+      action: 'watch.add',
+      guildId: context.guildId,
+      actorId: context.user.id,
+      userId: request.params.userId,
+      reason: request.body?.reason ?? `Sorveglianza avviata da ${context.user.tag}`,
+      hours: Math.min(Math.max(request.body?.hours ?? 0, 0), 8760),
+    });
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { guildId: string; userId: string } }>(
+    '/api/guilds/:guildId/users/:userId/watch',
+    async (request, reply) => {
+      const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
+      if (!context) return;
+
+      await sendBotCommand({
+        action: 'watch.remove',
+        guildId: context.guildId,
+        actorId: context.user.id,
+        userId: request.params.userId,
+      });
+      return { ok: true };
+    },
+  );
+
+  /* ── Voce del bot ──────────────────────────────────────────────────────
+     Il pannello non parla con Discord: pubblica l'intenzione e il bot la
+     esegue, con le stesse regole di `/dì`. Nessuna menzione di massa parte
+     da qui, e ogni invio resta tracciato con il nome di chi lo ha chiesto. */
+
+  app.post<{
+    Params: { guildId: string };
+    Body: {
+      channelId?: string;
+      text?: string;
+      imageUrl?: string | null;
+      embed?: boolean;
+      title?: string | null;
+      editMessageId?: string | null;
+    };
+  }>('/api/guilds/:guildId/say', async (request, reply) => {
+    const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
+    if (!context) return;
+
+    const body = request.body ?? {};
+    if (!body.channelId) return reply.code(400).send({ error: 'canale mancante' });
+    if (!body.text && !body.imageUrl) {
+      return reply.code(400).send({ error: 'serve almeno un testo o un\'immagine' });
+    }
+    // Stesso vincolo del comando: un allegato pubblicato dal bot sembra venire
+    // dallo staff, e non è il caso di prestare quella credibilità a un file
+    // qualunque servito da un host qualunque.
+    if (body.imageUrl && !/^https:\/\/\S+\.(png|jpe?g|gif|webp|apng|avif)(\?\S*)?$/i.test(body.imageUrl)) {
+      return reply
+        .code(400)
+        .send({ error: 'il link deve essere https e puntare a un\'immagine o a una GIF' });
+    }
+
+    await sendBotCommand({
+      action: 'message.send',
+      guildId: context.guildId,
+      actorId: context.user.id,
+      channelId: body.channelId,
+      text: (body.text ?? '').slice(0, 1900),
+      imageUrl: body.imageUrl ?? null,
+      embed: body.embed ?? false,
+      title: body.title ?? null,
+      editMessageId: body.editMessageId ?? null,
+    });
+    return { ok: true };
+  });
+
   /* ── Utenti a rischio ──────────────────────────────────────────────── */
   app.get<{ Params: { guildId: string } }>(
     '/api/guilds/:guildId/users/risky',

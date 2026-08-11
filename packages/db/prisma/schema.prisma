@@ -300,6 +300,18 @@ model UserProfile {
   /// Ruoli posseduti prima della quarantena, per poterli restituire.
   rolesBeforeQuarantine String[] @default([])
 
+  /// Utente attenzionato: le sue azioni vengono messe in evidenza nel registro
+  /// e finiscono anche nel canale degli alert.
+  ///
+  /// Serve nel caso concreto in cui un moderatore ha un sospetto ma non prove:
+  /// sanzionare sarebbe ingiusto, non fare nulla significa accorgersene dopo.
+  /// Attenzionare non limita nessuno — cambia solo quanto è visibile ciò che fa.
+  watchedAt      DateTime?
+  watchedBy      String?
+  watchReason    String?
+  /// Scadenza della sorveglianza. Nulla = finché non viene tolta a mano.
+  watchExpiresAt DateTime?
+
   /// Ruoli posseduti all'ultima uscita dal server.
   ///
   /// Servono ai "ruoli appiccicosi": chi rientra si ritrova i ruoli che aveva,
@@ -315,6 +327,7 @@ model UserProfile {
   @@index([guildId, riskScore(sort: Desc)])
   @@index([guildId, lastSeenAt])
   @@index([guildId, quarantinedAt])
+  @@index([guildId, watchedAt])
 }
 
 /// Sessioni vocali: durata reale in canale, non solo entrata e uscita.

@@ -125,6 +125,12 @@ export const LogEventType = z.enum([
   'MOD_CASE_UPDATED',
   'MOD_APPEAL_OPENED',
   'MOD_APPEAL_RESOLVED',
+  /** Sorveglianza rafforzata su un utente: nessuna sanzione, sola visibilità. */
+  'MOD_WATCH_ADDED',
+  'MOD_WATCH_REMOVED',
+  /** Messaggio pubblicato dal bot per conto di un membro dello staff. */
+  'BOT_MESSAGE_SENT',
+  'BOT_MESSAGE_EDITED',
 
   // ── Sicurezza ───────────────────────────────────────────────
   'SECURITY_RAID_DETECTED',
@@ -312,6 +318,10 @@ export const EVENT_CATEGORY: Record<LogEventType, LogCategory> = {
   MOD_CASE_UPDATED: 'MODERATION',
   MOD_APPEAL_OPENED: 'MODERATION',
   MOD_APPEAL_RESOLVED: 'MODERATION',
+  MOD_WATCH_ADDED: 'MODERATION',
+  MOD_WATCH_REMOVED: 'MODERATION',
+  BOT_MESSAGE_SENT: 'MODERATION',
+  BOT_MESSAGE_EDITED: 'MODERATION',
 
   SECURITY_RAID_DETECTED: 'SECURITY',
   SECURITY_RAID_ENDED: 'SECURITY',

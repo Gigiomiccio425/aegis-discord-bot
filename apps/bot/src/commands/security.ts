@@ -7,7 +7,11 @@ import {
 import { getPrisma } from '@aegis/db';
 import { scanContent } from '@aegis/scanner';
 import type { Command } from './types.js';
-import { disableLockdown, enableLockdown, isLockedDown } from '../core/enforcer.js';
+import {
+  disableLockdown,
+  enableLockdown,
+  readLockdownState,
+} from '../core/enforcer.js';
 import { createSnapshot, restoreSnapshot } from '../security/snapshot.js';
 import { auditWebhooks } from '../security/webhookGuard.js';
 import { auditBots } from '../security/botGuard.js';
@@ -36,7 +40,18 @@ const lockdown: Command = {
             .setMaxValue(1440),
         ),
     )
-    .addSubcommand((sub) => sub.setName('revoca').setDescription('Sblocca il server'))
+    .addSubcommand((sub) =>
+      sub
+        .setName('revoca')
+        .setDescription('Sblocca il server')
+        .addBooleanOption((option) =>
+          option
+            .setName('forza')
+            .setDescription(
+              'Riapre ogni canale chiuso a @everyone, anche se il bot non risulta averlo bloccato',
+            ),
+        ),
+    )
     .addSubcommand((sub) => sub.setName('stato').setDescription('Verifica se il lockdown è attivo'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
@@ -47,23 +62,63 @@ const lockdown: Command = {
     const guild = interaction.guild!;
 
     if (sub === 'stato') {
-      const active = await isLockedDown(guild.id);
-      await interaction.editReply(active ? '🔒 Lockdown **attivo**' : '🔓 Lockdown non attivo');
+      const state = await readLockdownState(guild.id);
+      if (!state) {
+        await interaction.editReply(
+          '🔓 Lockdown non attivo.\n' +
+            '-# Se i canali risultano comunque chiusi, usa `/lockdown revoca forza:true`.',
+        );
+        return;
+      }
+      const da = Math.round((Date.now() - state.startedAt) / 60000);
+      await interaction.editReply(
+        `🔒 Lockdown **attivo** da ${da} minuti.\n` +
+          `Motivo: ${state.reason}\n` +
+          `Canali chiusi: ${state.channels.length}\n` +
+          (state.expiresAt
+            ? `Revoca automatica: <t:${Math.floor(state.expiresAt / 1000)}:R>`
+            : 'Revoca: solo manuale'),
+      );
       return;
     }
 
     if (sub === 'attiva') {
       const reason = interaction.options.getString('motivo', true);
       const minutes = interaction.options.getInteger('minuti') ?? 0;
-      await enableLockdown(client, guild, config, `${reason} (da ${interaction.user.tag})`, minutes * 60);
+      const result = await enableLockdown(
+        client,
+        guild,
+        config,
+        `${reason} (da ${interaction.user.tag})`,
+        minutes * 60,
+      );
+      if (result.alreadyActive) {
+        await interaction.editReply('Il lockdown era già attivo: nessuna modifica.');
+        return;
+      }
       await interaction.editReply(
-        `🔒 Server bloccato.${minutes > 0 ? ` Sblocco automatico fra ${minutes} minuti.` : ''}`,
+        `🔒 Server bloccato. Canali chiusi: ${result.locked}.` +
+          (minutes > 0 ? ` Sblocco automatico fra ${minutes} minuti.` : ''),
       );
       return;
     }
 
-    const done = await disableLockdown(client, guild, `Revoca manuale di ${interaction.user.tag}`);
-    await interaction.editReply(done ? '🔓 Lockdown revocato.' : 'Il lockdown non era attivo.');
+    const force = interaction.options.getBoolean('forza') ?? false;
+    const result = await disableLockdown(
+      client,
+      guild,
+      `Revoca manuale di ${interaction.user.tag}`,
+      { force, config },
+    );
+
+    if (!result.hadState && !force) {
+      await interaction.editReply(
+        'Il lockdown non risulta attivo.\n' +
+          '-# Se i canali sono comunque chiusi, ripeti con `forza:true`: riapre tutto ciò che nega la scrittura a @everyone.',
+      );
+      return;
+    }
+    await interaction.editReply(`🔓 Lockdown revocato. Canali riaperti: ${result.unlocked}.`);
   },
 };
 

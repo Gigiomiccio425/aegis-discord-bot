@@ -3,6 +3,7 @@ import { ensureGuild } from '../core/config.js';
 import { childLogger } from '../core/logger.js';
 import { checkPrivilegedIntents } from '../core/client.js';
 import { missingBotPermissions } from '../core/permissions.js';
+import { startLockdownSweeper } from '../core/enforcer.js';
 import { registerMessageEvents } from './messages.js';
 import { registerMemberEvents } from './members.js';
 import { registerVoiceEvents } from './voice.js';
@@ -62,6 +63,10 @@ async function onReady(client: Client<true>): Promise<void> {
   );
 
   checkPrivilegedIntents(client);
+
+  // Un lockdown a tempo deve poter scadere anche se il bot è stato riavviato
+  // nel frattempo: il conto alla rovescia sta in Redis, non in memoria.
+  startLockdownSweeper(client);
 
   for (const guild of client.guilds.cache.values()) {
     await ensureGuild({

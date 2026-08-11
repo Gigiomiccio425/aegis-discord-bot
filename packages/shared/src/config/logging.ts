@@ -78,7 +78,21 @@ export const LoggingConfig = ModuleBase.extend({
   /** Copia di ogni evento su file di testo, sul disco della macchina. */
   fileSink: FileSinkConfig,
 
-  /** Canale usato quando una categoria non ha un canale dedicato. */
+  /**
+   * Canale unico: tutto il registro finisce qui, e le rotte per categoria
+   * vengono ignorate senza essere cancellate.
+   *
+   * È l'impostazione predefinita perché configurare quattordici canali prima di
+   * vedere il primo log è il modo più efficace per non attivare mai il registro.
+   * Chi vuole separare le categorie toglie la spunta e le rotte tornano valide
+   * esattamente com'erano.
+   */
+  singleChannel: z.boolean().default(true),
+
+  /**
+   * Canale usato dal modo a canale unico, e ripiego per le categorie senza un
+   * canale dedicato.
+   */
   defaultChannelId: Snowflake.nullable().default(null),
 
   routes: z.record(LogCategory, CategoryRoute).default({}),

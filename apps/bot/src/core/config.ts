@@ -3,6 +3,7 @@ import {
   defaultGuildConfig,
   GuildConfigSchema,
   RedisKeys,
+  withMasterSwitch,
   type GuildConfig,
 } from '@aegis/shared';
 import { getRedis, getSubscriber } from './redis.js';
@@ -24,6 +25,14 @@ const memory = new Map<string, { config: GuildConfig; expiresAt: number }>();
 const MEMORY_TTL_MS = 30_000;
 const REDIS_TTL_SEC = 600;
 
+/**
+ * Configurazione così come la vede il bot: con l'interruttore generale già
+ * applicato, quindi tutti i moduli spenti se qualcuno lo ha abbassato.
+ *
+ * In cache si tiene la versione già trasformata: la trasformazione è pura e
+ * dipende solo dalla configurazione, quindi rifarla a ogni messaggio sarebbe
+ * lavoro identico ripetuto migliaia di volte.
+ */
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
   const cached = memory.get(guildId);
   if (cached && cached.expiresAt > Date.now()) return cached.config;
@@ -32,7 +41,7 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
   const raw = await redis.get(RedisKeys.guildConfig(guildId)).catch(() => null);
   if (raw) {
     try {
-      const parsed = GuildConfigSchema.parse(JSON.parse(raw));
+      const parsed = withMasterSwitch(GuildConfigSchema.parse(JSON.parse(raw)));
       memory.set(guildId, { config: parsed, expiresAt: Date.now() + MEMORY_TTL_MS });
       return parsed;
     } catch {
@@ -41,10 +50,13 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
     }
   }
 
-  const config = await loadFromDatabase(guildId);
+  const stored = await loadFromDatabase(guildId);
+  const config = withMasterSwitch(stored);
   memory.set(guildId, { config, expiresAt: Date.now() + MEMORY_TTL_MS });
+  // In Redis va la configurazione **originale**: la cache è condivisa con gli
+  // altri processi, e uno di essi potrebbe averne bisogno intatta.
   await redis
-    .set(RedisKeys.guildConfig(guildId), JSON.stringify(config), 'EX', REDIS_TTL_SEC)
+    .set(RedisKeys.guildConfig(guildId), JSON.stringify(stored), 'EX', REDIS_TTL_SEC)
     .catch(() => undefined);
   return config;
 }

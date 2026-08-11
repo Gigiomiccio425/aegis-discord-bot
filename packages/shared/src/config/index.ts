@@ -30,8 +30,56 @@ export * from './integrations.js';
    genera i form. Se cambia qui, cambia ovunque — nessuna duplicazione.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════
+   AVVISI PUBBLICI
+
+   Quando il bot sanziona qualcuno, il DM può non arrivare: la maggioranza
+   degli utenti tiene chiusi i messaggi privati dagli sconosciuti, e un bot lo
+   è. Il risultato è una sanzione invisibile — chi la subisce non sa perché è
+   stato zittito, e chi guarda non sa perché un messaggio è sparito.
+
+   L'avviso in canale risolve entrambi i casi. Si cancella da solo dopo un po'
+   per non lasciare la cronologia piena di cartellini.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const ActionNoticeConfig = z
+  .object({
+    /** Scrive in chat l'azione applicata, oltre a tentare il DM. */
+    enabled: z.boolean().default(true),
+    /**
+     * Dove scriverlo. Vuoto = nello stesso canale dove è avvenuto il fatto,
+     * che è quasi sempre la scelta giusta: chi ha visto il messaggio vede
+     * anche perché è stato rimosso.
+     */
+    channelId: Snowflake.nullable().default(null),
+    /** Cancella l'avviso dopo N secondi. 0 = resta per sempre. */
+    deleteAfterSec: z.number().int().min(0).max(3600).default(30),
+    /** Menziona la persona sanzionata. Senza, l'avviso è più discreto. */
+    mentionTarget: z.boolean().default(true),
+    /** Include il motivo. Spegnerlo lascia solo «azione applicata». */
+    showReason: z.boolean().default(true),
+    /** Include il nome del modulo che ha deciso: utile per tarare le soglie. */
+    showModule: z.boolean().default(false),
+    /** Avvisa anche per le sole eliminazioni di messaggi. */
+    announceDeletions: z.boolean().default(true),
+    /** Avvisa anche quando la modalità prova è attiva, indicandolo. */
+    announceDryRun: z.boolean().default(false),
+  })
+  .default({});
+export type ActionNoticeConfig = z.infer<typeof ActionNoticeConfig>;
+
 export const GeneralConfig = z
   .object({
+    /**
+     * Interruttore generale. Spento, il bot registra e basta: nessun modulo
+     * valuta, nessuna sanzione parte, nessuna integrazione pubblica nulla.
+     *
+     * Diverso dalla modalità prova: quella fa girare tutto e trattiene solo la
+     * sanzione finale, utile per tarare. Questo ferma il lavoro a monte, ed è
+     * quello che serve quando qualcosa va storto e va fermato subito senza
+     * ricordarsi quali dodici moduli erano accesi.
+     */
+    masterEnabled: z.boolean().default(true),
+
     locale: z.enum(['it', 'en']).default('it'),
     timezone: z.string().default('Europe/Rome'),
     /** Ruoli considerati staff: esenti dai moduli e destinatari degli alert. */
@@ -47,6 +95,10 @@ export const GeneralConfig = z
      * sanzioni. Indispensabile per tarare le soglie senza colpire i legittimi.
      */
     dryRun: z.boolean().default(false),
+
+    /** Avviso in chat quando il bot sanziona qualcuno. */
+    actionNotice: ActionNoticeConfig,
+
     /**
      * Parola d'ordine dello staff, verificabile con `/verifica-staff`.
      * È la sola difesa pratica contro l'impersonificazione con voce clonata:
@@ -91,6 +143,37 @@ export type GuildConfig = z.infer<typeof GuildConfigSchema>;
 /** Configurazione di default per un server appena aggiunto. */
 export function defaultGuildConfig(): GuildConfig {
   return GuildConfigSchema.parse({});
+}
+
+/**
+ * Applica l'interruttore generale.
+ *
+ * Con `masterEnabled` spento restituisce una copia in cui ogni modulo risulta
+ * disattivato, **senza toccare quanto è salvato**: riaccendendo l'interruttore
+ * si ritrova esattamente la configurazione di prima, spunta per spunta.
+ *
+ * Il registro resta acceso di proposito. Chi spegne tutto lo fa per fermare le
+ * sanzioni, non per smettere di vedere cosa succede — e un server che nessuno
+ * sta più proteggendo è il momento in cui serve di più sapere chi fa cosa.
+ *
+ * Va applicata dove la configurazione viene *letta* dal bot, non dove viene
+ * salvata: il pannello continua a mostrare e modificare i valori veri.
+ */
+export function withMasterSwitch(config: GuildConfig): GuildConfig {
+  if (config.general.masterEnabled) return config;
+
+  const off = <T extends { enabled: boolean }>(module: T): T => ({ ...module, enabled: false });
+
+  return {
+    ...config,
+    security: Object.fromEntries(
+      Object.entries(config.security).map(([key, module]) => [key, off(module)]),
+    ) as SecurityConfig,
+    scanner: off(config.scanner),
+    integrations: Object.fromEntries(
+      Object.entries(config.integrations).map(([key, module]) => [key, off(module)]),
+    ) as IntegrationsConfig,
+  };
 }
 
 /**

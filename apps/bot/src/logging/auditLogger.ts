@@ -19,6 +19,7 @@ import { getPublisher } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { buildLogEmbed } from './formatters.js';
 import { writeToFile } from './fileSink.js';
+import { isWatched } from '../security/watchlist.js';
 
 const log = childLogger('audit');
 
@@ -67,6 +68,20 @@ export async function recordEvent(client: Client, input: AuditInput): Promise<vo
 
   const createdAt = new Date();
 
+  // Utente attenzionato: l'evento resta identico nel database, ma viene messo
+  // in evidenza e non passa mai dal raggruppamento. Chi ha chiesto di
+  // sorvegliare qualcuno vuole vederlo subito, non fra cinque secondi in fondo
+  // a un blocco di dieci embed.
+  const watchedId = await firstWatched(input).catch(() => null);
+  if (watchedId) {
+    input = {
+      ...input,
+      severity: Math.max(input.severity ?? 0, 60),
+      summary: `👁️ **Utente attenzionato** <@${watchedId}>\n${input.summary ?? ''}`.trim(),
+      payload: { ...(input.payload ?? {}), watched: watchedId },
+    };
+  }
+
   await persistEvent(input, category, createdAt).catch((error) => {
     log.error({ err: error, type: input.type }, 'salvataggio evento fallito');
   });
@@ -100,9 +115,30 @@ export async function recordEvent(client: Client, input: AuditInput): Promise<vo
 
   await publishLive(input, category, createdAt).catch(() => undefined);
 
-  await deliverToChannel(client, input, config, category, createdAt, isCritical).catch((error) => {
+  await deliverToChannel(
+    client,
+    input,
+    config,
+    category,
+    createdAt,
+    isCritical || watchedId !== null,
+  ).catch((error) => {
     log.debug({ err: error, type: input.type }, 'invio al canale di log fallito');
   });
+}
+
+/**
+ * Chi fra attore e bersaglio è sotto sorveglianza, se qualcuno lo è.
+ *
+ * Si controlla anche il bersaglio e non solo l'attore: se un utente
+ * attenzionato viene bandito, quella è precisamente l'informazione che chi lo
+ * sorvegliava sta aspettando.
+ */
+async function firstWatched(input: AuditInput): Promise<string | null> {
+  for (const id of [input.actorId, input.targetId]) {
+    if (id && (await isWatched(input.guildId, id))) return id;
+  }
+  return null;
 }
 
 async function persistEvent(
@@ -171,6 +207,15 @@ interface PendingBatch {
  */
 const batches = new Map<string, PendingBatch>();
 
+/**
+ * Le sole categorie che vale la pena accorpare: quelle che in un server attivo
+ * producono decine di eventi al minuto.
+ *
+ * Moderazione, sicurezza, ruoli, canali e webhook restano immediati. Sono rari
+ * e sono esattamente quelli che qualcuno sta aspettando di vedere.
+ */
+const BATCHED_CATEGORIES = new Set(['MESSAGE', 'REACTION', 'VOICE']);
+
 async function deliverToChannel(
   client: Client,
   input: AuditInput,
@@ -201,7 +246,10 @@ async function deliverToChannel(
   );
 
   // Gli eventi critici saltano la coda: durante un nuke i secondi contano.
-  if (isCritical || config.logging.batchSeconds === 0) {
+  // E con loro tutto ciò che non è ad alta frequenza: accodare un ban per
+  // cinque secondi non fa risparmiare nulla — non ce ne sono cento al minuto —
+  // e fa sembrare il registro lento proprio dove si guarda per primo.
+  if (isCritical || config.logging.batchSeconds === 0 || !BATCHED_CATEGORIES.has(category)) {
     await sendEmbeds(client, channelId, [embed], isCritical ? config : undefined);
     return;
   }
@@ -235,6 +283,17 @@ function resolveChannel(
   category: string,
   type: LogEventType,
 ): string | null {
+  // Canale unico: le rotte per categoria restano salvate ma non vengono lette.
+  // L'unica eccezione è il canale degli alert, che ha senso tenere separato
+  // anche in questo modo — chi lo configura vuole poterlo seguire senza
+  // scorrere il registro ordinario.
+  if (config.logging.singleChannel) {
+    if (category === 'SECURITY' && config.general.alertChannelId) {
+      return config.general.alertChannelId;
+    }
+    return config.logging.defaultChannelId;
+  }
+
   const route = config.logging.routes[category as keyof typeof config.logging.routes];
   if (route) {
     if (!route.enabled) return null;

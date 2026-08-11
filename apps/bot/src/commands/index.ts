@@ -15,6 +15,7 @@ import { integrationCommands } from './integrations.js';
 import { archiveCommands } from './archive.js';
 import { appealCommands } from './appeals.js';
 import { eventCommands } from './events.js';
+import { voiceCommands } from './voice.js';
 
 const log = childLogger('commands');
 
@@ -28,6 +29,7 @@ export const commands: Command[] = [
   ...archiveCommands,
   ...appealCommands,
   ...eventCommands,
+  ...voiceCommands,
 ];
 
 export const commandMap = new Map(commands.map((command) => [command.data.name, command]));

@@ -56,6 +56,40 @@ export const AntiRaidConfig = ModuleBase.extend({
   lockdownExemptChannels: SnowflakeList,
 
   /**
+   * Scrive in ogni canale bloccato che il server è in lockdown.
+   *
+   * Senza, chi sta scrivendo vede solo il campo di testo diventare inerte e
+   * non capisce se è stato zittito lui o se è rotto qualcosa. L'avviso costa
+   * un messaggio per canale e toglie di mezzo la metà delle domande allo staff
+   * proprio nel momento in cui è più occupato.
+   */
+  announceLockdown: z.boolean().default(true),
+
+  /** Testo dell'avviso. Variabili: {motivo} {durata} */
+  lockdownMessage: z
+    .string()
+    .max(1500)
+    .default(
+      '🔒 **Server temporaneamente bloccato**\n' +
+        'È in corso un intervento di sicurezza: nessuno può scrivere finché non rientra.\n' +
+        'Motivo: {motivo}\n{durata}',
+    ),
+
+  /** Testo pubblicato alla revoca, negli stessi canali. */
+  lockdownLiftMessage: z
+    .string()
+    .max(1500)
+    .default('🔓 **Blocco rimosso.** Potete tornare a scrivere. Grazie della pazienza.'),
+
+  /**
+   * Canali su cui agire per singolo lotto. Discord accetta poche modifiche di
+   * permessi al secondo per server: mandarne 200 insieme le fa accodare tutte,
+   * e le ultime arrivano dopo minuti — cioè a raid concluso. Un lotto per volta
+   * mantiene la latenza prevedibile.
+   */
+  lockdownBatchSize: z.number().int().min(1).max(50).default(10),
+
+  /**
    * Ban di massa via endpoint bulk (fino a 200 utenti per chiamata) invece di
    * ban singoli: evita il rate limit proprio quando serve velocità.
    */
