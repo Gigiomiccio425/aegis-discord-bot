@@ -92,6 +92,10 @@ services:
   # partire con uno schema assente significherebbe errori a raffica.
   aegis-migrate:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    # Riscarica l'immagine a ogni avvio: `latest` cambia a ogni correzione, e
+    # senza questa riga Docker riuserebbe per sempre la copia scaricata la
+    # prima volta, facendo sembrare che un bug corretto sia ancora presente.
+    pull_policy: always
     container_name: aegis-migrate
     # I `$$` sono voluti: compose li riduce a un `$` prima di passare il comando
     # alla shell. Con un solo `$`, `$i` verrebbe sostituito da compose stesso
@@ -105,6 +109,7 @@ services:
 
   aegis-bot:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    pull_policy: always
     container_name: aegis-bot
     command: ['node', 'apps/bot/dist/index.js']
     restart: unless-stopped
@@ -122,6 +127,7 @@ services:
 
   aegis-worker:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    pull_policy: always
     container_name: aegis-worker
     command: ['node', 'apps/worker/dist/index.js']
     restart: unless-stopped
@@ -145,6 +151,7 @@ services:
 
   aegis-api:
     image: ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+    pull_policy: always
     container_name: aegis-api
     command: ['node', 'apps/api/dist/index.js']
     restart: unless-stopped
@@ -157,6 +164,10 @@ services:
       DISCORD_CLIENT_ID: *discord-client-id
       DISCORD_CLIENT_SECRET: *discord-client-secret
       OWNER_IDS: *owner-ids
+      # Riserva il pannello agli ID in OWNER_IDS. Con 'false' entra chiunque
+      # abbia MANAGE_GUILD su un server dove il bot è presente: per
+      # un'installazione personale va tenuto acceso.
+      PANEL_OWNERS_ONLY: 'true'
       TWITCH_EVENTSUB_SECRET: ''
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
