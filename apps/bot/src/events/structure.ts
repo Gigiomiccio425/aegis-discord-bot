@@ -8,6 +8,7 @@ import {
   type Role,
 } from 'discord.js';
 import { getGuildConfig } from '../core/config.js';
+import { unverifiedRoleId } from '@angel/shared';
 import { recordEvent } from '../logging/auditLogger.js';
 import { onWebhookCreated } from '../security/webhookGuard.js';
 import { onEventInterest } from '../integrations/events.js';
@@ -443,8 +444,7 @@ async function isolaCanaleNuovo(channel: GuildChannel): Promise<void> {
   if (!config?.security.verification.enabled) return;
   if (config.security.verification.mode === 'OFF') return;
 
-  const isolante =
-    config.security.verification.quarantineRoleId ?? config.general.quarantineRoleId;
+  const isolante = unverifiedRoleId(config);
   if (!isolante || channel.id === config.security.verification.verifyChannelId) return;
   if (!channel.guild.roles.cache.has(isolante)) return;
 

@@ -290,6 +290,34 @@ export function defaultGuildConfig(): GuildConfig {
 }
 
 /**
+ * Il ruolo di chi è entrato e non ha ancora verificato.
+ *
+ * Sta qui e non nei singoli chiamanti perché i punti che lo cercano sono
+ * quattro — l'ingresso, il pulsante di verifica, l'isolamento dei canali e la
+ * predisposizione — e una risoluzione ripetuta in quattro posti è una
+ * risoluzione che prima o poi diverge in uno di essi.
+ *
+ * L'ordine tiene conto delle configurazioni salvate prima della 1.8, quando il
+ * ruolo d'ingresso e quello di quarantena erano lo stesso campo.
+ */
+export function unverifiedRoleId(config: GuildConfig): string | null {
+  return config.security.verification.unverifiedRoleId ?? config.security.verification.quarantineRoleId;
+}
+
+/**
+ * Il ruolo di chi è stato messo in quarantena.
+ *
+ * Non ha ripieghi sul ruolo di verifica: se non è configurato la quarantena
+ * non si applica, e nel registro compare l'avviso. Ripiegare sull'altro
+ * ruolo significherebbe isolare un sanzionato con lo stesso ruolo che il bot
+ * toglie a chiunque prema il pulsante di verifica — cioè lasciarlo uscire
+ * dalla sanzione premendo un pulsante.
+ */
+export function quarantineRoleId(config: GuildConfig): string | null {
+  return config.general.quarantineRoleId;
+}
+
+/**
  * Applica l'interruttore generale.
  *
  * Con `masterEnabled` spento restituisce una copia in cui ogni modulo risulta

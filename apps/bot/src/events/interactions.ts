@@ -14,6 +14,7 @@ import {
 } from 'discord.js';
 import { getPrisma } from '@angel/db';
 import { getGuildConfig } from '../core/config.js';
+import { unverifiedRoleId } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { handleCommand } from '../commands/index.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -136,9 +137,9 @@ async function handleVerify(
   if (settings.verifiedRoleId) {
     await member.roles.add(settings.verifiedRoleId, 'Verifica completata').catch(() => undefined);
   }
-  const quarantineRoleId = settings.quarantineRoleId ?? config.general.quarantineRoleId;
-  if (quarantineRoleId) {
-    await member.roles.remove(quarantineRoleId, 'Verifica completata').catch(() => undefined);
+  const daTogliere = unverifiedRoleId(config);
+  if (daTogliere) {
+    await member.roles.remove(daTogliere, 'Verifica completata').catch(() => undefined);
   }
 
   await getPrisma()

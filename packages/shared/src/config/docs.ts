@@ -227,6 +227,22 @@ const BY_PATH: Record<string, FieldDoc> = {
       'suona come un rimprovero riaccende invece di spegnere.',
   },
 
+  'security.verification.unverifiedRoleId': {
+    label: 'Ruolo di chi non ha verificato',
+    help:
+      'Assegnato a chiunque entri, finche non preme il pulsante. E distinto dal ruolo di ' +
+      'quarantena di proposito: non aver ancora verificato e la condizione normale di chi arriva, ' +
+      'la quarantena e un provvedimento. Usare lo stesso ruolo accoglierebbe ogni nuovo membro ' +
+      'con un ruolo che dice «sospetto», e riempirebbe l elenco dei quarantenati di persone che ' +
+      'non hanno fatto nulla.',
+  },
+  'security.verification.quarantineRoleId': {
+    label: 'Ruolo d ingresso (vecchio campo)',
+    help:
+      'Usato solo se il campo qui sopra e vuoto, per le configurazioni salvate prima della 1.8, ' +
+      'quando i due ruoli erano lo stesso. Su un server nuovo lascialo vuoto.',
+  },
+
   'security.antiRaid.autoLiftAfterSec': {
     label: 'Revoca automatica del blocco',
     help:

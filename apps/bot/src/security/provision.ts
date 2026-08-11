@@ -35,7 +35,7 @@ import {
   type Guild,
   type TextChannel,
 } from 'discord.js';
-import { GuildConfigSchema, type GuildConfig } from '@angel/shared';
+import { GuildConfigSchema, unverifiedRoleId, type GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -58,12 +58,33 @@ interface RoleSpec {
 }
 
 const RUOLI: RoleSpec[] = [
+  /*
+   * Due ruoli distinti, e la distinzione non è formale.
+   *
+   * «Non verificato» è la condizione normale di chiunque arrivi: non ha
+   * ancora premuto un pulsante. «Quarantena» è un provvedimento. Usare lo
+   * stesso ruolo per entrambi significa accogliere ogni nuovo membro con un
+   * ruolo che dice «sospetto», e riempire l'elenco dei quarantenati con
+   * persone che non hanno fatto nulla — rendendolo inservibile proprio per
+   * ciò a cui serve.
+   *
+   * Anche gli effetti sono diversi: chi non ha verificato non deve *vedere*
+   * il server, chi è in quarantena lo vede ma non può *scrivere*. Era già
+   * dentro, e togliergli il contesto non aiuta nessuno.
+   */
+  {
+    chiave: 'non-verificato',
+    nome: 'ANGEL · Non verificato',
+    colore: '#6d7c94',
+    descrizione: 'Assegnato a chi entra. Vede solo il canale della verifica, finché non la supera.',
+    percorsi: ['security.verification.unverifiedRoleId'],
+  },
   {
     chiave: 'quarantena',
     nome: 'ANGEL · Quarantena',
     colore: '#8a8578',
     descrizione: 'Isola chi è sospettato: può leggere, non può scrivere da nessuna parte.',
-    percorsi: ['general.quarantineRoleId', 'security.verification.quarantineRoleId'],
+    percorsi: ['general.quarantineRoleId'],
     isolante: true,
   },
   {
@@ -463,8 +484,7 @@ async function creaVerifica(
   modificati: string[],
   risultato: ProvisionResult,
 ): Promise<void> {
-  const isolante =
-    config.security.verification.quarantineRoleId ?? config.general.quarantineRoleId;
+  const isolante = unverifiedRoleId(config);
   if (!isolante || !guild.roles.cache.has(isolante)) return;
 
   /* Il canale, visibile a chi deve ancora verificare. */
@@ -507,6 +527,38 @@ async function creaVerifica(
   }
 
   risultato.canaliIsolati = await isolaNonVerificati(guild, isolante, verifica.id);
+
+  // Fino alla 1.7 il ruolo d'ingresso e quello di quarantena erano lo stesso,
+  // quindi sui server già configurati la quarantena si porta dietro il divieto
+  // di *vedere* i canali. Non è ciò che deve fare: chi è in quarantena era già
+  // dentro, e togliergli il contesto non aiuta nessuno — deve leggere e non
+  // poter scrivere. Il divieto residuo va tolto, quello sulla scrittura resta.
+  const quarantena = config.general.quarantineRoleId;
+  if (quarantena && quarantena !== isolante) {
+    await restituisciVista(guild, quarantena);
+  }
+}
+
+/**
+ * Toglie al ruolo indicato il divieto di vedere i canali, lasciando intatto
+ * tutto il resto.
+ *
+ * `ViewChannel: null` significa «torna a ereditare», non «consenti»: un canale
+ * riservato allo staff resta riservato, perché lì a decidere è `@everyone` o
+ * un altro ruolo, non questo.
+ */
+async function restituisciVista(guild: Guild, roleId: string): Promise<void> {
+  const canali = await guild.channels.fetch().catch(() => null);
+
+  for (const canale of canali?.values() ?? []) {
+    if (!canale || !('permissionOverwrites' in canale)) continue;
+    const attuale = canale.permissionOverwrites.cache.get(roleId);
+    if (!attuale?.deny.has(PermissionFlagsBits.ViewChannel)) continue;
+
+    await canale.permissionOverwrites
+      .edit(roleId, { ViewChannel: null }, { reason: 'La quarantena legge, non scrive' })
+      .catch(() => undefined);
+  }
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import { getPrisma } from '@angel/db';
 import { getGuildConfig } from '../core/config.js';
+import { unverifiedRoleId } from '@angel/shared';
 import { applyDecision } from '../core/enforcer.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -246,7 +247,10 @@ async function applyVerificationGate(
   const settings = config.security.verification;
   if (!settings.enabled || settings.mode === 'OFF') return;
 
-  const roleId = settings.quarantineRoleId ?? config.general.quarantineRoleId;
+  // Il ruolo di chi non ha ancora verificato, non quello di quarantena:
+  // accogliere un nuovo membro con un ruolo che dice «sospetto» è sbagliato
+  // verso di lui e rende inservibile l'elenco dei quarantenati veri.
+  const roleId = unverifiedRoleId(config);
   if (!roleId) return;
 
   await member.roles.add(roleId, 'Verifica d\'ingresso richiesta').catch(() => undefined);

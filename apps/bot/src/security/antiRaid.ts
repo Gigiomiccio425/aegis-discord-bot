@@ -1,6 +1,7 @@
 import type { Client, Guild, GuildMember } from 'discord.js';
 import { getPrisma } from '@angel/db';
 import { nameSimilarity, RedisKeys, type GuildConfig } from '@angel/shared';
+import { unverifiedRoleId } from '@angel/shared';
 import { getRedis, slidingWindowCount, slidingWindowMembers } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -292,7 +293,7 @@ async function applyVerificationGate(
   userIds: string[],
 ): Promise<void> {
   const roleId =
-    config.security.verification.quarantineRoleId ?? config.general.quarantineRoleId;
+    config.general.quarantineRoleId ?? unverifiedRoleId(config);
   if (!roleId) return;
 
   for (const userId of userIds) {

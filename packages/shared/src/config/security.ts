@@ -407,7 +407,32 @@ export const VerificationConfig = ActiveModuleBase.extend({
   mode: z.enum(['OFF', 'BUTTON', 'CAPTCHA', 'PANEL']).default('BUTTON'),
   /** Ruolo concesso dopo la verifica. */
   verifiedRoleId: Snowflake.nullable().default(null),
-  /** Ruolo che isola chi non ha ancora verificato. */
+
+  /**
+   * Ruolo assegnato a chi entra e non ha ancora verificato.
+   *
+   * **Distinto dal ruolo di quarantena**, e la distinzione non è formale.
+   * Non aver ancora premuto un pulsante è la condizione normale di chiunque
+   * arrivi; la quarantena è un provvedimento. Confonderli significa
+   * accogliere ogni nuovo membro con un ruolo che dice «sospetto» — e
+   * riempire l'elenco dei quarantenati con persone che non hanno fatto
+   * nulla, rendendolo inservibile proprio per ciò a cui serve.
+   *
+   * Diversi anche negli effetti: chi non ha verificato non deve vedere il
+   * server, chi è in quarantena lo vede ma non può scrivere — era già dentro
+   * e togliergli il contesto non aiuta nessuno.
+   */
+  unverifiedRoleId: Snowflake.nullable().default(null),
+
+  /**
+   * Vecchio campo, mantenuto per le configurazioni già salvate.
+   *
+   * Fino alla 1.7 il ruolo d'ingresso e quello di quarantena erano lo stesso.
+   * Chi aveva già configurato qui un ruolo continua a funzionare senza
+   * toccare nulla: viene usato solo se `unverifiedRoleId` è vuoto.
+   *
+   * @deprecated Usare `unverifiedRoleId`.
+   */
   quarantineRoleId: Snowflake.nullable().default(null),
   verifyChannelId: Snowflake.nullable().default(null),
   /** Espelle chi non verifica entro N minuti (0 = mai). */

@@ -24,6 +24,7 @@ import { canActOn, dangerousRoles } from './permissions.js';
 import { createCase } from './cases.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { humanDuration, t } from './i18n.js';
+import { unverifiedRoleId } from '@angel/shared';
 import { getGuildConfig } from './config.js';
 
 const log = childLogger('enforcer');
@@ -214,8 +215,9 @@ export async function quarantineMember(
   const member = ctx.member;
   if (!member) return false;
 
-  const roleId =
-    ctx.config.general.quarantineRoleId ?? ctx.config.security.verification.quarantineRoleId;
+  // Solo il ruolo di quarantena. Ripiegare su quello di verifica farebbe
+  // uscire dalla sanzione chiunque prema il pulsante di verifica.
+  const roleId = ctx.config.general.quarantineRoleId;
   if (!roleId) {
     log.warn({ guildId: ctx.guild.id }, 'ruolo di quarantena non configurato');
     return false;
@@ -717,7 +719,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 async function requireVerification(ctx: EnforceContext): Promise<boolean> {
-  const roleId = ctx.config.security.verification.quarantineRoleId ?? ctx.config.general.quarantineRoleId;
+  const roleId = unverifiedRoleId(ctx.config);
   if (!roleId || !ctx.member) return false;
   await ctx.member.roles.add(roleId, 'Verifica richiesta dal controllo account').catch(() => undefined);
   return true;
