@@ -68,6 +68,72 @@ export const ActionNoticeConfig = z
   .default({});
 export type ActionNoticeConfig = z.infer<typeof ActionNoticeConfig>;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   RUOLO DEL PROPRIETARIO
+
+   Un ruolo creato e mantenuto dal bot, assegnato a chi è elencato in
+   `OWNER_IDS`. Serve a non restare mai chiusi fuori dal proprio server: se
+   qualcuno rimuove i tuoi permessi, o un incidente ti lascia senza ruoli, il
+   bot te li restituisce.
+
+   Va detto chiaramente cosa comporta, perché è una scorciatoia che attraversa
+   ogni difesa descritta altrove in questo file: **chiunque compaia in
+   OWNER_IDS ottiene questo ruolo in ogni server dove il bot entra**, senza
+   che il proprietario di quel server debba approvare. Su un bot personale è
+   esattamente ciò che si vuole. Su un bot condiviso con altri sarebbe una
+   porta di servizio, ed è il motivo per cui i permessi predefiniti sono
+   nessuno e l'interruttore parte spento.
+
+   Chi controlla `OWNER_IDS` controlla il bot in modo assoluto: quella
+   variabile sta nel compose, non nel pannello, e non è modificabile da
+   nessuna interfaccia. È una scelta deliberata — un pannello compromesso non
+   deve poter creare nuovi proprietari.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const OwnerRoleConfig = z
+  .object({
+    /**
+     * Spento di default. Accenderlo è una decisione, non un'impostazione che
+     * ci si ritrova addosso senza averla letta.
+     */
+    enabled: z.boolean().default(false),
+
+    name: z.string().min(1).max(100).default('Angel Master'),
+
+    /** Colore esadecimale del ruolo, es. `#d8b45f`. */
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, 'Colore non valido: serve il formato #rrggbb')
+      .default('#d8b45f'),
+
+    /** Mostra chi lo possiede in una sezione separata della lista membri. */
+    hoist: z.boolean().default(true),
+
+    /**
+     * Quali permessi porta con sé.
+     *
+     *   NESSUNO       solo un contrassegno: nessun potere, nessun rischio
+     *   MODERAZIONE   espellere, bandire, silenziare, gestire i messaggi
+     *   AMMINISTRATORE controllo totale del server
+     *
+     * `NESSUNO` è il default e per la maggior parte dei casi è la scelta
+     * giusta: il ruolo serve a essere riconoscibile e a non sparire, mentre i
+     * poteri li dà già l'essere proprietario del server. `AMMINISTRATORE`
+     * significa che un token rubato del bot equivale al server perso, ed è la
+     * ragione per cui non è predefinito.
+     */
+    permissions: z.enum(['NESSUNO', 'MODERAZIONE', 'AMMINISTRATORE']).default('NESSUNO'),
+
+    /**
+     * Riassegna il ruolo se viene tolto, e lo ricrea se viene eliminato.
+     *
+     * È il punto del modulo: senza, basta che qualcuno lo cancelli una volta
+     * perché non torni mai più.
+     */
+    reapply: z.boolean().default(true),
+  })
+  .default({});
+export type OwnerRoleConfig = z.infer<typeof OwnerRoleConfig>;
+
 export const GeneralConfig = z
   .object({
     /**
@@ -99,6 +165,9 @@ export const GeneralConfig = z
 
     /** Avviso in chat quando il bot sanziona qualcuno. */
     actionNotice: ActionNoticeConfig,
+
+    /** Ruolo mantenuto dal bot per chi è elencato in OWNER_IDS. */
+    ownerRole: OwnerRoleConfig,
 
     /**
      * Parola d'ordine dello staff, verificabile con `/verifica-staff`.

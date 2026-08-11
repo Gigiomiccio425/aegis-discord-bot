@@ -22,9 +22,13 @@ import {
   SlashCommandBuilder,
   type TextChannel,
 } from 'discord.js';
+import { GuildConfigSchema } from '@angel/shared';
 import type { Command } from './types.js';
+import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { listWatched, unwatchUser, watchUser } from '../security/watchlist.js';
+import { ensureOwnerRole } from '../security/ownerRole.js';
+import { isBotOwner } from '../core/permissions.js';
 
 /**
  * Estensioni accettate come immagine o animazione.
@@ -307,4 +311,73 @@ const watch: Command = {
   },
 };
 
-export const voiceCommands: Command[] = [say, watch];
+/**
+ * Ripristino del ruolo del proprietario, a richiesta.
+ *
+ * Esiste perché il caso d'uso è un'emergenza: qualcuno ha eliminato il ruolo,
+ * o te lo ha tolto, e aspettare il prossimo riavvio del bot non è una
+ * risposta. Il comando è visibile solo agli amministratori, ma agisce
+ * unicamente per chi è elencato in OWNER_IDS — chiunque altro lo esegua
+ * ottiene un rifiuto.
+ */
+const master: Command = {
+  data: new SlashCommandBuilder()
+    .setName('angel-master')
+    .setDescription('Ricrea il ruolo del proprietario del bot e lo riassegna')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
+  requiredPermissions: [PermissionFlagsBits.Administrator],
+  async execute({ client, interaction, config }) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (!isBotOwner(interaction.user.id)) {
+      await interaction.editReply(
+        'Questo comando è riservato ai proprietari del bot, elencati in `OWNER_IDS`.',
+      );
+      return;
+    }
+
+    // Se il modulo è spento lo accende questo comando, invece di rimandare al
+    // pannello. Eseguirlo *è* la richiesta di attivarlo, e chi lo esegue è già
+    // il solo che potrebbe accenderlo: farglielo fare due volte in due posti
+    // diversi non aggiunge alcuna garanzia.
+    let settings = config.general.ownerRole;
+    let appenaAcceso = false;
+
+    if (!settings.enabled) {
+      const aggiornata = GuildConfigSchema.parse(structuredClone(config));
+      aggiornata.general.ownerRole.enabled = true;
+      await saveGuildConfig(interaction.guildId!, aggiornata, {
+        id: interaction.user.id,
+        source: 'command',
+        paths: ['general.ownerRole.enabled'],
+      });
+      settings = aggiornata.general.ownerRole;
+      config = aggiornata;
+      appenaAcceso = true;
+    }
+
+    const esito = await ensureOwnerRole(client, interaction.guild!, config);
+    if (!esito.ok) {
+      await interaction.editReply(
+        `Non è stato possibile: ${esito.reason}.\n` +
+          '-# Le due cause tipiche sono il permesso «Gestire i ruoli» mancante, ' +
+          'e il ruolo del bot che non è abbastanza in alto nella lista.',
+      );
+      return;
+    }
+
+    await interaction.editReply(
+      `👑 Ruolo **${settings.name}** ${esito.created ? 'creato' : 'già presente'}.\n` +
+        `Assegnato a ${esito.assigned} propriet${esito.assigned === 1 ? 'ario' : 'ari'} presenti nel server.\n` +
+        `Permessi: ${settings.permissions.toLowerCase()}.\n` +
+        (appenaAcceso
+          ? '\nIl modulo era spento e l\'ho acceso: d\'ora in poi il ruolo si ricrea da solo ' +
+            'a ogni avvio, anche se qualcuno lo elimina.\n'
+          : '') +
+        '-# Nome, colore e poteri si cambiano dal pannello: Configurazione → Generale.',
+    );
+  },
+};
+
+export const voiceCommands: Command[] = [say, watch, master];

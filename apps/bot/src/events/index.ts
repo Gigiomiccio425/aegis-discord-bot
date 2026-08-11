@@ -1,9 +1,10 @@
 import { Events, type Client } from 'discord.js';
-import { ensureGuild } from '../core/config.js';
+import { ensureGuild, getGuildConfig } from '../core/config.js';
 import { childLogger } from '../core/logger.js';
 import { checkPrivilegedIntents } from '../core/client.js';
 import { missingBotPermissions } from '../core/permissions.js';
 import { startLockdownSweeper } from '../core/enforcer.js';
+import { ensureOwnerRole } from '../security/ownerRole.js';
 import { registerMessageEvents } from './messages.js';
 import { registerMemberEvents } from './members.js';
 import { registerVoiceEvents } from './voice.js';
@@ -44,6 +45,15 @@ export function registerAllEvents(client: Client): void {
       await deployGuildCommands(client, guild.id).catch((error) =>
         log.error({ err: error, guildId: guild.id }, 'registrazione comandi fallita'),
       );
+
+      // Server nuovo: il ruolo del proprietario si crea qui, non al prossimo
+      // riavvio. È il momento in cui serve — sul server appena aggiunto non si
+      // ha ancora nulla.
+      const config = await getGuildConfig(guild.id).catch(() => null);
+      if (config?.general.ownerRole.enabled) {
+        await ensureOwnerRole(client, guild, config).catch(() => undefined);
+      }
+
       log.info({ guildId: guild.id, name: guild.name }, 'aggiunto a un nuovo server');
     })();
   });
@@ -87,6 +97,17 @@ async function onReady(client: Client<true>): Promise<void> {
     await deployGuildCommands(client, guild.id).catch((error) =>
       log.warn({ err: error, guildId: guild.id }, 'registrazione comandi del server fallita'),
     );
+
+    // Ruolo del proprietario: si ricrea se qualcuno lo ha eliminato e torna a
+    // chi gli spetta. All'avvio e non solo all'ingresso, perché il caso da
+    // coprire è proprio quello in cui è sparito mentre il bot era spento.
+    const config = await getGuildConfig(guild.id).catch(() => null);
+    if (config?.general.ownerRole.enabled) {
+      const esito = await ensureOwnerRole(client, guild, config).catch(() => null);
+      if (esito && !esito.ok) {
+        log.warn({ guildId: guild.id, motivo: esito.reason }, 'ruolo del proprietario non applicato');
+      }
+    }
 
     const me = await guild.members.fetchMe().catch(() => null);
     if (me) {

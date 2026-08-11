@@ -12,6 +12,7 @@ import { getGuildConfig } from '../core/config.js';
 import { applyDecision } from '../core/enforcer.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
+import { onOwnerJoin } from '../security/ownerRole.js';
 import { evaluateAccount } from '../security/accountGuard.js';
 import { onBotJoin } from '../security/botGuard.js';
 import { trackJoin } from '../security/antiRaid.js';
@@ -152,6 +153,11 @@ async function handleUserUpdate(
  */
 async function handleJoin(client: Client, member: GuildMember): Promise<void> {
   const config = await getGuildConfig(member.guild.id);
+
+  // Prima di ogni altra cosa: se chi entra è un proprietario del bot, gli si
+  // restituisce il suo ruolo. È il momento in cui serve davvero — appena
+  // entrati non si hanno ancora permessi su nulla.
+  await onOwnerJoin(client, member, config).catch(() => undefined);
 
   const accountAgeDays = Math.floor((Date.now() - member.user.createdTimestamp) / 86_400_000);
   const invite = config.logging.trackInviteAttribution

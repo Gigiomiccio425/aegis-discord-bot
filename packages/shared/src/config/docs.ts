@@ -103,6 +103,39 @@ const BY_PATH: Record<string, FieldDoc> = {
     help: 'Secondi dopo i quali il cartellino sparisce. 0 = resta. Serve a non riempire la cronologia.',
   },
 
+  'general.ownerRole.enabled': {
+    label: 'Ruolo del proprietario',
+    help:
+      'Crea un ruolo e lo assegna a chi è elencato in OWNER_IDS, ricreandolo se qualcuno lo ' +
+      'elimina. Serve a non restare chiusi fuori dal proprio server. Attenzione: vale in **ogni** ' +
+      'server dove il bot entra, senza che il proprietario di quel server debba approvare.',
+  },
+  'general.ownerRole.name': {
+    label: 'Nome del ruolo',
+    help: 'Il ruolo viene cercato per nome: rinominandolo qui, alla prossima verifica ne nasce uno nuovo.',
+  },
+  'general.ownerRole.color': {
+    label: 'Colore',
+    help: 'Formato #rrggbb. Determina anche il colore del nome nella lista membri.',
+  },
+  'general.ownerRole.hoist': {
+    label: 'Mostra separatamente',
+    help: 'Chi ha il ruolo compare in una sezione a parte nella lista dei membri.',
+  },
+  'general.ownerRole.permissions': {
+    label: 'Poteri del ruolo',
+    help:
+      'NESSUNO è solo un contrassegno e per quasi tutti i casi basta: i poteri li dà già l\'essere ' +
+      'proprietario del server. AMMINISTRATORE significa che un token rubato del bot equivale al ' +
+      'server perso, ed è il motivo per cui non è predefinito.',
+  },
+  'general.ownerRole.reapply': {
+    label: 'Ricrea se eliminato',
+    help:
+      'Rimette il ruolo e lo riassegna a ogni avvio. È il punto del modulo: senza, basta ' +
+      'eliminarlo una volta perché non torni mai più.',
+  },
+
   'security.antiRaid.autoLiftAfterSec': {
     label: 'Revoca automatica del blocco',
     help:
@@ -913,6 +946,7 @@ export const COMMAND_DOCS: CommandDoc[] = [
 
   /* ── Utilità ─────────────────────────────────────────────── */
   { name: '/dì', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Fa scrivere il bot in un canale: testo, immagini e GIF.', example: '/dì canale:#annunci testo:Manutenzione alle 21 riquadro:true', caution: 'Solo immagini e GIF, e nessuna menzione di massa: un messaggio del bot sembra venire dallo staff.' },
+  { name: '/angel-master', group: 'Utilità', permission: 'Amministratore', summary: 'Ricrea il ruolo del proprietario del bot e lo riassegna.', caution: 'Funziona solo per gli ID elencati in OWNER_IDS: a chiunque altro risponde con un rifiuto.' },
   { name: '/stato', group: 'Utilità', permission: 'Gestire il server', summary: 'Quali moduli sono accesi e cosa hanno fatto di recente.' },
   { name: '/pannello', group: 'Utilità', permission: 'Gestire il server', summary: 'Link al pannello di controllo web.' },
   { name: '/ping', group: 'Utilità', permission: 'Nessuno', summary: 'Verifica che il bot risponda e con quale latenza.' },
