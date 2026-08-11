@@ -2,7 +2,14 @@
 # ─────────────────────────────────────────────────────────────
 #  Aggiornamento di ANGEL.
 #
-#      sudo sh aggiorna.sh [percorso-del-compose]
+#      sudo sh aggiorna.sh [percorso-del-compose] [versione]
+#
+#  Con la versione indicata riscrive **ogni** riga `image:` del file, non solo
+#  l'àncora in cima. Serve perché l'app store di ZimaOS espande le àncore YAML
+#  al momento dell'installazione: nella sua copia `x-image` non esiste più, e
+#  modificarla non cambia nulla. Il risultato è un aggiornamento che ricrea
+#  qualche container e ne lascia indietro altri — il guasto peggiore da
+#  diagnosticare, perché non assomiglia a un guasto.
 #
 #  Fa tre cose, in quest'ordine: copia il database, scarica l'immagine nuova,
 #  ricrea i container. L'ordine conta — la copia va fatta *prima* che le
@@ -19,12 +26,14 @@
 set -eu
 
 COMPOSE="${1:-docker-compose.yml}"
+VERSIONE="${2:-}"
+IMMAGINE="${IMMAGINE:-ghcr.io/gigiomiccio425/aegis-discord-bot}"
 BACKUP_DIR="${BACKUP_DIR:-/DATA/aegis-backup}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 if [ ! -f "$COMPOSE" ]; then
 	echo "File compose non trovato: $COMPOSE"
-	echo "Uso: sudo sh aggiorna.sh /percorso/docker-compose.yml"
+	echo "Uso: sudo sh aggiorna.sh /percorso/docker-compose.yml [versione]"
 	exit 1
 fi
 
@@ -66,22 +75,59 @@ ls -1t "$BACKUP_DIR"/aegis-*.sql.gz 2>/dev/null | tail -n +11 | while read -r ve
 	rm -f "$vecchia"
 done
 
-# ── 2. Immagine nuova ────────────────────────────────────────
+# ── 2. Versione, su ogni riga ────────────────────────────────
+# Sostituisce sia l'àncora `x-image` sia le righe `image:` già espanse. Sono
+# la stessa informazione scritta in due modi, e a seconda di come il file è
+# stato installato ne esiste solo uno dei due: cambiarne uno solo lascerebbe
+# metà dei servizi alla versione precedente.
+if [ -n "$VERSIONE" ]; then
+	ATTUALI="$(grep -c "$IMMAGINE" "$COMPOSE" || true)"
+	if [ "$ATTUALI" = "0" ]; then
+		echo "Nel file non compare $IMMAGINE: niente da aggiornare."
+		exit 1
+	fi
+
+	cp "$COMPOSE" "$COMPOSE.prima-di-$STAMP"
+	# Il separatore è la virgola perché il nome dell'immagine contiene barre.
+	sed -i "s,$IMMAGINE:[A-Za-z0-9._-]*,$IMMAGINE:$VERSIONE,g" "$COMPOSE"
+
+	echo "Versione impostata a $VERSIONE su $ATTUALI righe."
+	echo "Copia del file precedente: $COMPOSE.prima-di-$STAMP"
+	grep -n "$IMMAGINE" "$COMPOSE" | sed 's/^/  /'
+fi
+
+# ── 3. Immagine nuova ────────────────────────────────────────
 echo "Scarico l'immagine"
 docker compose -f "$COMPOSE" pull
 
-# ── 3. Ricreazione ───────────────────────────────────────────
-# `up -d` ricrea solo i container la cui immagine o configurazione è cambiata.
-# aegis-migrate riparte e applica le migrazioni mancanti prima che bot, worker
-# e api si avviino: è la dipendenza dichiarata nel compose.
+# ── 4. Ricreazione ───────────────────────────────────────────
+# `up -d` da solo ricrea i container la cui immagine è cambiata, ma su ZimaOS
+# la definizione registrata dall'app store può non coincidere con questo file:
+# `--force-recreate` toglie di mezzo il dubbio. Ricreare un container che era
+# già aggiornato costa qualche secondo; lasciarne indietro uno costa un'ora di
+# ricerca del perché la correzione «non funziona».
 echo "Riavvio i servizi"
-docker compose -f "$COMPOSE" up -d
+docker compose -f "$COMPOSE" up -d --force-recreate --remove-orphans
 
-API="$(docker ps --format '{{.Names}}' | grep -i 'aegis.*api' | head -1)"
-if [ -n "$API" ]; then
-	VERSIONE="$(docker inspect "$API" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^ANGEL_VERSION=//p')"
+# ── 5. Verifica ──────────────────────────────────────────────
+# Si controllano tutti e quattro, non solo l'API: è precisamente il caso in cui
+# un container resta indietro che questa verifica deve intercettare.
+echo
+echo "Versione per container:"
+DISALLINEATI=0
+for NOME in $(docker ps --format '{{.Names}}' | grep -iE 'bot|worker|api' || true); do
+	V="$(docker inspect "$NOME" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^ANGEL_VERSION=//p')"
+	printf '  %-24s %s\n' "$NOME" "${V:-sconosciuta}"
+	if [ -n "$VERSIONE" ] && [ "$V" != "$VERSIONE" ]; then DISALLINEATI=1; fi
+done
+
+if [ "$DISALLINEATI" = "1" ]; then
 	echo
-	echo "Versione in esecuzione: ${VERSIONE:-sconosciuta}"
+	echo "⚠️  Qualche container gira ancora una versione diversa da $VERSIONE."
+	echo "   Succede quando l'app store di ZimaOS conserva una propria copia della"
+	echo "   definizione. Rimuovili a mano e lascia che si ricreino:"
+	echo "     sudo docker rm -f \$(sudo docker ps -q --filter 'name=aegis')"
+	echo "     sudo docker compose -f $COMPOSE up -d"
 fi
 
 echo

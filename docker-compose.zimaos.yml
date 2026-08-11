@@ -48,9 +48,23 @@ x-database-url: &database-url 'postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-p
 x-session-secret: &session-secret 'PRIMO_openssl_rand_hex_32'
 x-encryption-key: &encryption-key 'SECONDO_openssl_rand_hex_32_DIVERSO_DAL_PRIMO'
 
-# Versione in esecuzione. È l'unica riga da cambiare per aggiornare o per
-# tornare a una versione precedente: i quattro servizi dell'applicazione la
-# riusano.
+# ⚠️ DOPO L'INSTALLAZIONE QUESTA RIGA POTREBBE NON ESSERCI PIÙ.
+#
+# L'app store di ZimaOS espande le àncore YAML quando installa: nella sua copia
+# "x-image" non esiste, e al suo posto trovi quattro righe "image:" identiche.
+# Modificare solo questa non cambierebbe nulla, e l'aggiornamento ricreerebbe
+# qualche container lasciandone indietro altri.
+#
+# Se stai modificando il file dall'interfaccia di ZimaOS: cambia **tutte** le
+# righe che contengono il nome dell'immagine. Oppure lascia fare allo script:
+#
+#     sudo sh aggiorna.sh docker-compose.yml 1.1.1
+#
+# Il pannello segnala comunque un disallineamento fra i servizi, in fondo alla
+# colonna di sinistra.
+#
+# Versione in esecuzione. Finché l'ancora sopravvive, i quattro servizi
+# dell'applicazione la riusano e basta cambiarla qui.
 #
 #   :latest   sempre l'ultima build del ramo principale
 #   :v1.2.3   una versione precisa, che non cambia sotto i piedi

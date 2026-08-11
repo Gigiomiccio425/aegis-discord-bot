@@ -71,6 +71,28 @@ export function Layout({ me }: { me: Me }) {
         </nav>
 
         <div className="border-t border-[var(--color-border)] p-3">
+          {version && !version.aligned && (
+            /*
+             * Il disallineamento va detto prima dell'aggiornamento disponibile.
+             * È il guasto che non assomiglia a un guasto: il pannello mostra la
+             * versione nuova, un altro container gira ancora quella vecchia, e
+             * la conclusione naturale è che la correzione non funzioni.
+             */
+            <div className="mb-2 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 px-2 py-1.5 text-xs text-[#f2a3ad]">
+              <span className="font-medium">Versioni non allineate</span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-neutral-400">
+                {version.stale
+                  .map(
+                    (service) =>
+                      `${service}: ${version.services[service as 'bot'] ?? 'non risponde'}`,
+                  )
+                  .join(' · ')}
+                <br />
+                Attesa {version.running}. Ricrea i container rimasti indietro.
+              </span>
+            </div>
+          )}
+
           {version && (
             <div className="mb-2 text-xs">
               {version.updateAvailable ? (

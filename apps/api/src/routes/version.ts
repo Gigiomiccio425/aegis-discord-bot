@@ -16,6 +16,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSessionUser } from '../auth.js';
 import { getRedis } from '../redis.js';
+import { readServiceVersions, runningVersion } from '@angel/shared';
 import { logger } from '../logger.js';
 
 const REPO = 'Gigiomiccio425/aegis-discord-bot';
@@ -28,10 +29,6 @@ interface Release {
   publishedAt: string | null;
   url: string;
   notes: string | null;
-}
-
-export function runningVersion(): string {
-  return process.env.ANGEL_VERSION ?? 'sviluppo';
 }
 
 /**
@@ -100,10 +97,20 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     if (!session) return reply.code(401).send({ error: 'non autenticato' });
 
     const running = runningVersion();
-    const latest = await fetchLatestRelease();
+    const [latest, services] = await Promise.all([
+      fetchLatestRelease(),
+      readServiceVersions(getRedis(), running),
+    ]);
 
     return {
       running,
+      // Versione di ciascun processo. Un aggiornamento può ricrearne tre su
+      // quattro: da fuori sembra riuscito, mentre un pezzo continua a girare
+      // con il codice di prima e la correzione appena installata sembra non
+      // funzionare.
+      services: services.services,
+      aligned: services.aligned,
+      stale: services.stale,
       latest: latest?.tag ?? null,
       publishedAt: latest?.publishedAt ?? null,
       url: latest?.url ?? `https://github.com/${REPO}/releases`,

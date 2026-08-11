@@ -60,6 +60,10 @@ export interface Me {
 
 export interface VersionInfo {
   running: string;
+  /** Versione dichiarata da ciascun processo. `null` = non risponde. */
+  services: Record<'bot' | 'worker' | 'api', string | null>;
+  aligned: boolean;
+  stale: string[];
   latest: string | null;
   publishedAt: string | null;
   url: string;

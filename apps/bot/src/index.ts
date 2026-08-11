@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
-import { RedisKeys } from '@angel/shared';
+import { announceVersion, RedisKeys, runningVersion } from '@angel/shared';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
-import { closeRedis, getSubscriber } from './core/redis.js';
+import { closeRedis, getRedis, getSubscriber } from './core/redis.js';
 import { subscribeConfigInvalidation } from './core/config.js';
 import { registerAllEvents } from './events/index.js';
 import { flushBatches } from './logging/auditLogger.js';
@@ -29,7 +29,12 @@ async function main(): Promise<void> {
 
   const prisma = getPrisma();
   await prisma.$queryRaw`SELECT 1`;
-  logger.info('database raggiungibile');
+  logger.info({ versione: runningVersion() }, 'database raggiungibile');
+
+  // Dichiarata prima di collegarsi a Discord: se il gateway rifiuta la
+  // connessione, la versione di questo container si vede lo stesso dal
+  // pannello — ed è proprio il caso in cui serve saperla.
+  announceVersion(getRedis(), 'bot');
 
   subscribeConfigInvalidation();
 

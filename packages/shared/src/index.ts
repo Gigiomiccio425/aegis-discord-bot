@@ -3,6 +3,8 @@ export * from './types/events.js';
 export * from './types/decision.js';
 export * from './types/customCommands.js';
 export * from './util/text.js';
+// In fondo alle altre: importa RedisKeys, definito più sotto in questo file.
+export * from './version.js';
 export * from './env.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
@@ -34,7 +36,25 @@ export const RedisKeys = {
     `cd:${guildId}:${commandName}:${userId}`,
 
   lastSeen: (guildId: string, userId: string) => `seen:${guildId}:${userId}`,
+
+  /**
+   * Versione dichiarata da ciascun processo, con scadenza.
+   *
+   * Serve a rendere visibile un disallineamento che altrimenti non si vede:
+   * i quattro servizi usano la stessa immagine ma sono container distinti, e
+   * un aggiornamento può ricrearne tre su quattro. Da fuori tutto sembra a
+   * posto, mentre un pezzo continua a girare con il codice di prima.
+   *
+   * La chiave scade: un servizio spento smette di comparire da solo, invece
+   * di restare per sempre nell'elenco come se fosse ancora vivo.
+   */
+  serviceVersion: (service: string) => `version:${service}`,
 } as const;
+
+/** Ogni quanto ciascun processo riafferma la propria versione, in secondi. */
+export const VERSION_HEARTBEAT_SEC = 60;
+/** Dopo quanto un servizio che tace sparisce dall'elenco. */
+export const VERSION_TTL_SEC = 180;
 
 /** Nomi delle code BullMQ. */
 export const Queues = {

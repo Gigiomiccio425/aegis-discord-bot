@@ -9,6 +9,7 @@ import websocket from '@fastify/websocket';
 import { disconnectPrisma, getPrisma } from '@angel/db';
 import { logger, loggerOptions } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
+import { announceVersion, runningVersion } from '@angel/shared';
 import { authRoutes } from './routes/auth.js';
 import { configRoutes } from './routes/config.js';
 import { logRoutes } from './routes/logs.js';
@@ -20,7 +21,7 @@ import { archiveRoutes } from './routes/archive.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { accessRoutes } from './routes/access.js';
 import { webhookRoutes } from './routes/webhooks.js';
-import { versionRoutes, runningVersion } from './routes/version.js';
+import { versionRoutes } from './routes/version.js';
 import { registerLiveFeed } from './ws.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -125,6 +126,7 @@ async function main(): Promise<void> {
 
   const port = Number(process.env.API_PORT ?? 8080);
   await app.listen({ port, host: '0.0.0.0' });
+  announceVersion(getRedis(), 'api');
   logger.info(
     { port, publicUrl: process.env.PUBLIC_URL, versione: runningVersion() },
     'API avviata',
