@@ -36,8 +36,13 @@ FROM base AS runner
 # Versione dell'immagine, passata dalla CI (`v1.2.3` dal tag git). Serve al
 # pannello per dire quale versione sta girando e se ne esiste una più recente:
 # senza, l'unico modo di saperlo sarebbe confrontare a mano i digest.
-ARG AEGIS_VERSION=sviluppo
-ENV AEGIS_VERSION=$AEGIS_VERSION
+#
+# Il nome deve combaciare con quello passato in `build-args` dal workflow: se
+# non combacia la build riesce lo stesso e la variabile resta vuota, quindi
+# ogni immagine si dichiara «sviluppo» e il confronto fra versioni non ha più
+# nulla da confrontare.
+ARG ANGEL_VERSION=sviluppo
+ENV ANGEL_VERSION=$ANGEL_VERSION
 ENV NODE_ENV=production
 # I dati persistenti (allegati archiviati, snapshot, cache OCR) vivono qui.
 RUN mkdir -p /data/storage && chown -R node:node /data
@@ -45,5 +50,11 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/apps ./apps
+COPY --chown=node:node docker/avvio.mjs ./docker/avvio.mjs
 USER node
-CMD ["node", "apps/bot/dist/index.js"]
+
+# Un solo container fa partire tutto: migrazione, bot, worker e pannello.
+# Con quattro container che condividono la stessa immagine basta che uno resti
+# indietro durante un aggiornamento perché il sistema diventi incomprensibile.
+# Chi preferisce separarli lo può ancora fare indicando `command:` nel compose.
+CMD ["node", "docker/avvio.mjs"]

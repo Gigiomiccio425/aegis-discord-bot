@@ -341,44 +341,57 @@ Oltre a `latest`, ogni tag `vX.Y.Z` produce tre riferimenti:
 
 ## Aggiornare
 
-Nel compose la versione compare **una volta sola**, in cima:
+**Una riga, un riavvio.** Nel compose la versione compare in un punto solo:
 
 ```yaml
-x-image: &image 'ghcr.io/gigiomiccio425/aegis-discord-bot:latest'
+image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.1.2
 ```
 
-Cambiare quella riga cambia tutti e quattro i servizi. `:latest` aggiorna a ogni ricreazione;
-un tag preciso — `:1.4.0` — resta fermo finché non lo cambi tu, ed è la scelta giusta se preferisci
-decidere quando aggiornare invece di scoprirlo dopo un riavvio.
+Cambiala e riavvia l'app. Non c'è altro da toccare.
+
+Un tag preciso resta fermo finché non lo cambi tu, ed è la scelta giusta se preferisci decidere
+quando aggiornare invece di scoprirlo dopo un riavvio. `:latest` aggiorna a ogni ricreazione.
+
+### Perché un container solo
+
+Fino alla 1.1.1 i servizi erano quattro container che condividevano la stessa immagine: bot,
+worker, pannello e migrazione. Sembrava più ordinato ed è stato un errore.
+
+Aggiornare significava aggiornarne quattro, e bastava che uno restasse indietro perché il sistema
+diventasse incomprensibile: il pannello mostrava la versione nuova, il bot faceva quello che faceva
+prima, e la conclusione naturale era che la correzione non funzionasse. Succedeva sul serio, perché
+l'app store di ZimaOS espande le àncore YAML quando installa: nella sua copia le righe `image:`
+erano quattro e distinte, e cambiarne una non cambiava le altre.
+
+Ora è un container solo. Dentro, un supervisore ([`docker/avvio.mjs`](docker/avvio.mjs)) applica le
+migrazioni, avvia i tre processi e li riavvia se cadono, con attesa crescente fra i tentativi. Il
+prezzo è quel file; il guadagno è che una classe intera di guasti non può più capitare.
+
+Chi preferisce separarli lo può ancora fare: basta indicare `command:` nel compose, e l'immagine
+avvia il singolo processo invece del supervisore.
 
 ### I dati restano
 
-Nessun aggiornamento tocca i dati. Vivono nei volumi Docker, che sopravvivono alla ricreazione dei
+Nessun aggiornamento tocca i dati. Vivono nei volumi Docker, che sopravvivono alla ricreazione del
 container: registro eventi, configurazione, snapshot, archivio messaggi, casi, profili di rischio.
 
-Lo schema del database lo allinea il servizio `aegis-migrate`, che riparte a ogni avvio ed esegue
-`prisma migrate deploy`: applica solo le migrazioni mancanti e non fa nulla se sono già tutte
-presenti. Bot, worker e API attendono che abbia finito prima di partire, quindi non esiste il
-momento in cui il codice nuovo parla a uno schema vecchio.
+Lo schema lo allinea il supervisore all'avvio con `prisma migrate deploy`: applica solo le
+migrazioni mancanti, non fa nulla se sono già tutte presenti, e i tre processi partono solo dopo
+che ha finito. Non esiste il momento in cui il codice nuovo parla a uno schema vecchio.
 
-### La procedura
+### Con il backup automatico
 
-Sulla VPS, una volta sola:
+Se vuoi che una copia del database venga fatta **prima** di ogni aggiornamento — e conviene, perché
+una migrazione non si annulla:
 
 ```bash
 curl -O https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/aggiorna.sh
+sudo sh aggiorna.sh docker-compose.yml 1.1.2
 ```
 
-poi, a ogni aggiornamento:
-
-```bash
-sudo sh aggiorna.sh /DATA/aegis/docker-compose.yml
-```
-
-Lo script copia il database **prima** di toccare qualsiasi cosa, scarica l'immagine e ricrea i
-container. La copia finisce in `/DATA/aegis-backup`, ne tiene le ultime dieci, e se il dump risulta
-vuoto si ferma senza aggiornare: una migrazione non si annulla, e senza un dump valido tornare a
-una versione precedente vorrebbe dire ripartire da zero.
+Lo script copia il database, imposta la versione indicata, scarica l'immagine e ricrea tutto. La
+copia finisce in `/DATA/aegis-backup`, ne tiene le ultime dieci, e se il dump risulta vuoto si
+ferma senza aggiornare.
 
 A mano, se preferisci:
 
@@ -396,9 +409,9 @@ cache per sei ore.
 
 ### Tornare indietro
 
-Rimetti la versione precedente in `x-image`, `docker compose up -d`, e se quella versione aveva uno
-schema diverso ripristina il dump corrispondente — il comando esatto lo stampa `aggiorna.sh` alla
-fine di ogni esecuzione.
+Rimetti la versione precedente nella riga `image:`, `docker compose up -d`, e se quella versione
+aveva uno schema diverso ripristina il dump corrispondente — il comando esatto lo stampa
+`aggiorna.sh` alla fine di ogni esecuzione.
 
 ### Note specifiche di ZimaOS
 

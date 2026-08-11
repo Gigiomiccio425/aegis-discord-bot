@@ -1,15 +1,13 @@
 # ─────────────────────────────────────────────────────────────
-#  AEGIS — installazione su ZimaOS
+#  ANGEL — installazione su ZimaOS
 #
 #  App Store → Install a Custom App → incolla questo file.
 #
-#  Non compila nulla: scarica immagini già pronte da GitHub Container Registry.
-#  L'installer di ZimaOS non ha i sorgenti sul disco e non può eseguire una
-#  build, quindi il compose di sviluppo da qui non funzionerebbe.
+#  Non compila nulla: scarica un'immagine già pronta da GitHub Container
+#  Registry. L'installer di ZimaOS non ha i sorgenti sul disco e non potrebbe
+#  eseguire una build.
 #
 #  ⬇ TUTTO CIÒ CHE DEVI MODIFICARE STA NEL BLOCCO QUI SOTTO ⬇
-#  Il resto del file riusa quei valori: non serve toccarlo, e non c'è il
-#  rischio di cambiare una password in un punto e dimenticarla in un altro.
 # ─────────────────────────────────────────────────────────────
 name: aegis
 
@@ -48,46 +46,78 @@ x-database-url: &database-url 'postgresql://aegis:CAMBIA_QUESTA_PASSWORD@aegis-p
 x-session-secret: &session-secret 'PRIMO_openssl_rand_hex_32'
 x-encryption-key: &encryption-key 'SECONDO_openssl_rand_hex_32_DIVERSO_DAL_PRIMO'
 
-# ⚠️ DOPO L'INSTALLAZIONE QUESTA RIGA POTREBBE NON ESSERCI PIÙ.
-#
-# L'app store di ZimaOS espande le àncore YAML quando installa: nella sua copia
-# "x-image" non esiste, e al suo posto trovi quattro righe "image:" identiche.
-# Modificare solo questa non cambierebbe nulla, e l'aggiornamento ricreerebbe
-# qualche container lasciandone indietro altri.
-#
-# Se stai modificando il file dall'interfaccia di ZimaOS: cambia **tutte** le
-# righe che contengono il nome dell'immagine. Oppure lascia fare allo script:
-#
-#     sudo sh aggiorna.sh docker-compose.yml 1.1.1
-#
-# Il pannello segnala comunque un disallineamento fra i servizi, in fondo alla
-# colonna di sinistra.
-#
-# Versione in esecuzione. Finché l'ancora sopravvive, i quattro servizi
-# dell'applicazione la riusano e basta cambiarla qui.
-#
-#   :latest   sempre l'ultima build del ramo principale
-#   :v1.2.3   una versione precisa, che non cambia sotto i piedi
-#   :1.2      l'ultima correzione della serie 1.2
-#
-# I dati non vengono toccati dall'aggiornamento: vivono nei volumi, che
-# sopravvivono alla ricreazione dei container. Le migrazioni del database le
-# applica `aegis-migrate` a ogni avvio.
-x-image: &image 'ghcr.io/gigiomiccio425/aegis-discord-bot:latest'
-
 # ═════════════════════════════════════════════════════════════
 #  2. Da qui in giù non serve modificare nulla
 # ═════════════════════════════════════════════════════════════
 
-x-common-env: &common-env
-  NODE_ENV: production
-  LOG_LEVEL: info
-  DATABASE_URL: *database-url
-  REDIS_URL: redis://aegis-redis:6379
-  ENCRYPTION_KEY: *encryption-key
-  STORAGE_DIR: /data/storage
-
 services:
+  # ─────────────────────────────────────────────────────────
+  #  ANGEL — un solo container per tutto
+  #
+  #  Dentro girano quattro cose: la migrazione del database, il bot, il
+  #  worker e il pannello. Prima erano quattro container separati, ed è
+  #  stato un errore: condividevano la stessa immagine, e bastava che un
+  #  aggiornamento ne ricreasse tre su quattro perché il sistema diventasse
+  #  incomprensibile — il pannello mostrava la versione nuova, il bot si
+  #  comportava come prima, e sembrava che la correzione non funzionasse.
+  #
+  #  Con un container solo c'è una riga da cambiare per aggiornare e una
+  #  cosa da riavviare. Dentro, un supervisore tiene in vita i tre processi
+  #  e li riavvia se cadono, con attesa crescente fra un tentativo e l'altro.
+  # ─────────────────────────────────────────────────────────
+  angel:
+    # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.1.2
+    # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
+    # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
+    pull_policy: always
+    container_name: angel
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      DATABASE_URL: *database-url
+      REDIS_URL: redis://aegis-redis:6379
+      ENCRYPTION_KEY: *encryption-key
+      STORAGE_DIR: /data/storage
+
+      DISCORD_TOKEN: *discord-token
+      DISCORD_CLIENT_ID: *discord-client-id
+      DISCORD_CLIENT_SECRET: *discord-client-secret
+      OWNER_IDS: *owner-ids
+      PUBLIC_URL: *public-url
+      SESSION_SECRET: *session-secret
+      API_PORT: '8080'
+      DEV_GUILD_ID: ''
+
+      # Riserva il pannello agli ID in OWNER_IDS. Con 'false' entra chiunque
+      # abbia MANAGE_GUILD su un server dove il bot è presente: per
+      # un'installazione personale va tenuto acceso.
+      PANEL_OWNERS_ONLY: 'true'
+
+      # Facoltative: senza, lo scanner usa le sole blocklist locali e le
+      # integrazioni Twitch restano spente. Si possono aggiungere dopo.
+      GOOGLE_SAFE_BROWSING_KEY: ''
+      THREAT_FEEDS_ENABLED: 'true'
+      TWITCH_CLIENT_ID: ''
+      TWITCH_CLIENT_SECRET: ''
+      TWITCH_EVENTSUB_SECRET: ''
+    volumes:
+      - /DATA/AppData/aegis/storage:/data/storage
+    # La porta la pubblica direttamente il pannello: su ZimaOS un reverse proxy
+    # in più complicherebbe soltanto, visto che l'interfaccia collega l'app alla
+    # porta dichiarata qui.
+    ports:
+      - target: 8080
+        published: '780'
+        protocol: tcp
+    depends_on:
+      - aegis-postgres
+      - aegis-redis
+
+  # I nomi restano `aegis-*` anche dopo il cambio di nome del progetto:
+  # rinominarli su un'installazione già avviata farebbe creare a Docker
+  # container e volumi nuovi, lasciando orfano il database esistente.
   aegis-postgres:
     # Debian e non Alpine: su alcune installazioni di ZimaOS il bash
     # dell'immagine Alpine non risulta eseguibile e Postgres non parte,
@@ -104,8 +134,8 @@ services:
       - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
     # Nessun healthcheck: su ZimaOS l'exec dentro i container viene rifiutato
     # («exec failed: permission denied») e il controllo fallirebbe per sempre,
-    # bloccando chi attende il servizio «sano». L'attesa sta nel comando di
-    # migrazione, che riprova finché il database non risponde.
+    # bloccando chi attende il servizio «sano». L'attesa sta nel supervisore
+    # dentro ANGEL, che riprova finché il database non risponde.
 
   aegis-redis:
     image: redis:7-alpine
@@ -115,105 +145,11 @@ services:
     volumes:
       - /DATA/AppData/aegis/redis:/data
 
-  # Applica le migrazioni e termina. Gli altri attendono che abbia finito:
-  # partire con uno schema assente significherebbe errori a raffica.
-  aegis-migrate:
-    image: *image
-    # Riscarica l'immagine a ogni avvio: `latest` cambia a ogni correzione, e
-    # senza questa riga Docker riuserebbe per sempre la copia scaricata la
-    # prima volta, facendo sembrare che un bug corretto sia ancora presente.
-    pull_policy: always
-    container_name: aegis-migrate
-    # I `$$` sono voluti: compose li riduce a un `$` prima di passare il comando
-    # alla shell. Con un solo `$`, `$i` verrebbe sostituito da compose stesso
-    # con una stringa vuota e il ciclo perderebbe il contatore.
-    command: ['sh', '-c', 'for i in $$(seq 1 40); do npm run deploy -w @angel/db && exit 0; echo "database non ancora pronto, riprovo fra 3s ($$i/40)"; sleep 3; done; echo "database irraggiungibile dopo due minuti: guarda i log di aegis-postgres"; exit 1']
-    environment:
-      <<: *common-env
-    depends_on:
-      - aegis-postgres
-    restart: 'no'
-
-  aegis-bot:
-    image: *image
-    pull_policy: always
-    container_name: aegis-bot
-    command: ['node', 'apps/bot/dist/index.js']
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      DISCORD_TOKEN: *discord-token
-      DISCORD_CLIENT_ID: *discord-client-id
-      OWNER_IDS: *owner-ids
-      DEV_GUILD_ID: ''
-    volumes:
-      - /DATA/AppData/aegis/storage:/data/storage
-    depends_on:
-      aegis-migrate:
-        condition: service_completed_successfully
-
-  aegis-worker:
-    image: *image
-    pull_policy: always
-    container_name: aegis-worker
-    command: ['node', 'apps/worker/dist/index.js']
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      DISCORD_TOKEN: *discord-token
-      DISCORD_CLIENT_ID: *discord-client-id
-      PUBLIC_URL: *public-url
-      # Facoltative: senza, lo scanner usa le sole blocklist locali e le
-      # integrazioni Twitch restano spente.
-      GOOGLE_SAFE_BROWSING_KEY: ''
-      THREAT_FEEDS_ENABLED: 'true'
-      TWITCH_CLIENT_ID: ''
-      TWITCH_CLIENT_SECRET: ''
-      TWITCH_EVENTSUB_SECRET: ''
-    volumes:
-      - /DATA/AppData/aegis/storage:/data/storage
-    depends_on:
-      aegis-migrate:
-        condition: service_completed_successfully
-
-  aegis-api:
-    image: *image
-    pull_policy: always
-    container_name: aegis-api
-    command: ['node', 'apps/api/dist/index.js']
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      API_PORT: '8080'
-      PUBLIC_URL: *public-url
-      SESSION_SECRET: *session-secret
-      DISCORD_TOKEN: *discord-token
-      DISCORD_CLIENT_ID: *discord-client-id
-      DISCORD_CLIENT_SECRET: *discord-client-secret
-      OWNER_IDS: *owner-ids
-      # Riserva il pannello agli ID in OWNER_IDS. Con 'false' entra chiunque
-      # abbia MANAGE_GUILD su un server dove il bot è presente: per
-      # un'installazione personale va tenuto acceso.
-      PANEL_OWNERS_ONLY: 'true'
-      TWITCH_EVENTSUB_SECRET: ''
-    volumes:
-      - /DATA/AppData/aegis/storage:/data/storage
-    # La porta la pubblica direttamente l'API: su ZimaOS un reverse proxy in
-    # più complicherebbe soltanto, visto che l'interfaccia collega l'app alla
-    # porta dichiarata qui.
-    ports:
-      - target: 8080
-        published: '780'
-        protocol: tcp
-    depends_on:
-      aegis-migrate:
-        condition: service_completed_successfully
-
 x-casaos:
   architectures:
     - amd64
     - arm64
-  main: aegis-api
+  main: angel
   author: Gigiomiccio425
   developer: Gigiomiccio425
   category: Network
@@ -274,6 +210,6 @@ x-casaos:
         modalità prova accesa per qualche giorno prima di far sanzionare.
       en_us: >-
         **Fill in the seven values in the block at the top of the file.** You
-        need a Discord application with a bot token, client ID and secret, the
-        two privileged intents enabled, and two different secrets generated
+        need a Discord application with a bot token, client ID and secret, all
+        three privileged intents enabled, and two different secrets generated
         with `openssl rand -hex 32`.
