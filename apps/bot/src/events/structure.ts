@@ -31,6 +31,11 @@ export function registerStructureEvents(client: Client): void {
       summary: `Canale **${channel.name}** creato`,
       payload: { type: channel.type, parentId: channel.parentId },
     });
+
+    // Un canale creato dopo la predisposizione sarebbe visibile a chi non ha
+    // ancora verificato: il filtro d'ingresso si aprirebbe da solo, in
+    // silenzio, il giorno in cui qualcuno aggiunge un canale.
+    void isolaCanaleNuovo(channel);
   });
 
   client.on(Events.ChannelDelete, (channel) => {
@@ -425,6 +430,34 @@ export function registerStructureEvents(client: Client): void {
  * che precede il nuke — l'attaccante si dà i permessi *prima* di usarli — ed è
  * anche il modo in cui un moderatore ottiene per errore più potere del dovuto.
  */
+/**
+ * Nega il canale appena creato a chi non ha ancora verificato.
+ *
+ * Solo una negazione su un ruolo, come nella predisposizione: non può rendere
+ * visibile nulla, quindi vale anche per i canali che nascono già riservati
+ * allo staff — su quelli non cambia niente, ed è la ragione per cui si può
+ * applicare senza guardare cosa contengono.
+ */
+async function isolaCanaleNuovo(channel: GuildChannel): Promise<void> {
+  const config = await getGuildConfig(channel.guild.id).catch(() => null);
+  if (!config?.security.verification.enabled) return;
+  if (config.security.verification.mode === 'OFF') return;
+
+  const isolante =
+    config.security.verification.quarantineRoleId ?? config.general.quarantineRoleId;
+  if (!isolante || channel.id === config.security.verification.verifyChannelId) return;
+  if (!channel.guild.roles.cache.has(isolante)) return;
+
+  // Un canale figlio senza permessi propri eredita dalla categoria, che è già
+  // stata negata: intervenire gli darebbe permessi propri e lo scollegherebbe
+  // dall'eredità, che è un effetto collaterale, non l'obiettivo.
+  if (channel.parentId !== null && channel.permissionOverwrites.cache.size === 0) return;
+
+  await channel.permissionOverwrites
+    .edit(isolante, { ViewChannel: false }, { reason: 'Isolamento di chi non ha verificato' })
+    .catch(() => undefined);
+}
+
 async function handleRoleUpdate(client: Client, oldRole: Role, newRole: Role): Promise<void> {
   const config = await getGuildConfig(newRole.guild.id);
   const changes: string[] = [];

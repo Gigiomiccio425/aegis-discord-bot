@@ -24,16 +24,22 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
+  EmbedBuilder,
   PermissionFlagsBits,
   type CategoryChannel,
   type Client,
   type Guild,
+  type TextChannel,
 } from 'discord.js';
 import { GuildConfigSchema, type GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
+import { publishTicketPanel } from '../integrations/tickets.js';
 
 const log = childLogger('predisposizione');
 
@@ -140,6 +146,8 @@ export interface ProvisionResult {
   ruoliCreati: string[];
   canaliCreati: string[];
   campiCompilati: number;
+  /** Canali su cui è stata negata la vista a chi non ha verificato. */
+  canaliIsolati: number;
   errori: string[];
 }
 
@@ -160,6 +168,7 @@ export async function provisionGuild(
     ruoliCreati: [],
     canaliCreati: [],
     campiCompilati: 0,
+    canaliIsolati: 0,
     errori: [],
   };
 
@@ -272,6 +281,19 @@ export async function provisionGuild(
     risultato.errori.push('permesso «Gestire i canali» mancante: nessun canale creato');
   }
 
+  /* ── Assistenza, ticket e verifica ─────────────────────────── */
+  if (me.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    await creaAssistenza(client, guild, bozza, modificati, risultato).catch((errore: unknown) => {
+      log.warn({ err: errore, guildId: guild.id }, 'assistenza non predisposta');
+      risultato.errori.push('assistenza');
+    });
+
+    await creaVerifica(client, guild, bozza, modificati, risultato).catch((errore: unknown) => {
+      log.warn({ err: errore, guildId: guild.id }, 'verifica non predisposta');
+      risultato.errori.push('verifica');
+    });
+  }
+
   /* ── Salvataggio ───────────────────────────────────────────── */
   if (modificati.length > 0) {
     await saveGuildConfig(guild.id, bozza, {
@@ -290,12 +312,295 @@ export async function provisionGuild(
       '🪶 **Predisposizione automatica**\n' +
       `Ruoli creati: ${risultato.ruoliCreati.length ? risultato.ruoliCreati.join(', ') : 'nessuno'}\n` +
       `Canali creati: ${risultato.canaliCreati.length ? risultato.canaliCreati.join(', ') : 'nessuno'}\n` +
-      `Campi compilati: ${risultato.campiCompilati}` +
+      `Campi compilati: ${risultato.campiCompilati}\n` +
+      `Canali isolati a chi non ha verificato: ${risultato.canaliIsolati}` +
       (risultato.errori.length ? `\n⚠️ Non riuscito: ${risultato.errori.join(', ')}` : ''),
     payload: { ...risultato },
   });
 
   return risultato;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ASSISTENZA
+
+   Una categoria visibile a tutti con tre cose: una sala d'attesa vocale dove
+   chiunque può entrare, due stanze vocali dove solo lo staff può portare
+   qualcuno, e il canale con il pulsante per aprire un ticket.
+
+   Il flusso è quello che si usa nei server veri: chi ha bisogno entra in
+   attesa, lo staff lo sposta in una stanza riservata. Le stanze negano
+   `Connect` a `@everyone` e lo consentono allo staff — nessuno ci entra da
+   solo, ma chiunque può esservi spostato, perché spostare un membro richiede
+   il permesso di chi sposta, non di chi viene spostato.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function creaAssistenza(
+  client: Client,
+  guild: Guild,
+  config: GuildConfig,
+  modificati: string[],
+  risultato: ProvisionResult,
+): Promise<void> {
+  const staff = config.general.staffRoleIds.filter((id) => guild.roles.cache.has(id));
+  const nomeCategoria = 'Assistenza';
+
+  let categoria = guild.channels.cache.find(
+    (channel) => channel.type === ChannelType.GuildCategory && channel.name === nomeCategoria,
+  ) as CategoryChannel | undefined;
+
+  if (!categoria) {
+    const creata = await guild.channels
+      .create({
+        name: nomeCategoria,
+        type: ChannelType.GuildCategory,
+        reason: 'Predisposizione automatica di ANGEL',
+      })
+      .catch(() => null);
+    if (!creata) {
+      risultato.errori.push('categoria Assistenza');
+      return;
+    }
+    categoria = creata;
+    risultato.canaliCreati.push(nomeCategoria);
+  }
+
+  /* Sala d'attesa: aperta a chiunque. */
+  if (!trovaCanale(guild, 'Sala d\'attesa', categoria.id)) {
+    const attesa = await guild.channels
+      .create({
+        name: 'Sala d\'attesa',
+        type: ChannelType.GuildVoice,
+        parent: categoria.id,
+        reason: 'Predisposizione automatica di ANGEL',
+      })
+      .catch(() => null);
+    if (attesa) risultato.canaliCreati.push('Sala d\'attesa');
+  }
+
+  /* Stanze riservate: si entra solo se ci si viene spostati. */
+  for (const nome of ['Assistenza 1', 'Assistenza 2']) {
+    if (trovaCanale(guild, nome, categoria.id)) continue;
+    const stanza = await guild.channels
+      .create({
+        name: nome,
+        type: ChannelType.GuildVoice,
+        parent: categoria.id,
+        reason: 'Predisposizione automatica di ANGEL',
+        permissionOverwrites: [
+          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.Connect] },
+          ...staff.map((id) => ({
+            id,
+            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.MoveMembers],
+          })),
+        ],
+      })
+      .catch(() => null);
+    if (stanza) risultato.canaliCreati.push(nome);
+  }
+
+  /* Canale dei ticket, con il pannello già pubblicato. */
+  let ticket = trovaCanale(guild, 'apri-un-ticket', categoria.id);
+  if (!ticket) {
+    const creato = await guild.channels
+      .create({
+        name: 'apri-un-ticket',
+        type: ChannelType.GuildText,
+        parent: categoria.id,
+        topic: 'Premi il pulsante per aprire una richiesta privata con lo staff.',
+        reason: 'Predisposizione automatica di ANGEL',
+        permissionOverwrites: [
+          // Si legge ma non si scrive: il canale contiene un pulsante, e i
+          // messaggi degli utenti lo spingerebbero fuori dalla vista.
+          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] },
+        ],
+      })
+      .catch(() => null);
+
+    if (creato) {
+      ticket = creato;
+      risultato.canaliCreati.push('apri-un-ticket');
+      await publishTicketPanel(guild, creato, config).catch(() => undefined);
+    }
+  }
+
+  if (ticket) {
+    if (scrivi(config, 'integrations.tickets.panelChannelId', ticket.id)) {
+      modificati.push('integrations.tickets.panelChannelId');
+      risultato.campiCompilati += 1;
+    }
+    if (scrivi(config, 'integrations.tickets.categoryId', categoria.id)) {
+      modificati.push('integrations.tickets.categoryId');
+      risultato.campiCompilati += 1;
+    }
+  }
+
+  void client;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VERIFICA E ISOLAMENTO
+
+   Il canale della verifica è l'unico che chi non ha ancora verificato può
+   vedere. Tutto il resto gli viene negato.
+
+   **La parte che conta è come viene negato.** Si aggiunge una negazione al
+   ruolo di quarantena, canale per canale — non si tocca `@everyone` e non si
+   concede mai nulla a nessuno. Una negazione non può rendere visibile ciò che
+   era nascosto: qualunque canale già riservato agli amministratori resta
+   esattamente com'era, perché aggiungere un divieto a un ruolo che comunque
+   non lo vedeva non cambia niente.
+
+   È il motivo per cui questa funzione non legge nemmeno i permessi esistenti:
+   non le servono. L'operazione inversa — nascondere tutto a `@everyone` e poi
+   riconcedere ai verificati — avrebbe richiesto di distinguere i canali
+   pubblici da quelli privati, sbagliare una volta, ed esporre un canale
+   riservato. Qui quel rischio non esiste per costruzione.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function creaVerifica(
+  client: Client,
+  guild: Guild,
+  config: GuildConfig,
+  modificati: string[],
+  risultato: ProvisionResult,
+): Promise<void> {
+  const isolante =
+    config.security.verification.quarantineRoleId ?? config.general.quarantineRoleId;
+  if (!isolante || !guild.roles.cache.has(isolante)) return;
+
+  /* Il canale, visibile a chi deve ancora verificare. */
+  let verifica = guild.channels.cache.find(
+    (channel) => channel.name === 'verifica' && channel.type === ChannelType.GuildText,
+  );
+
+  if (!verifica) {
+    const creato = await guild.channels
+      .create({
+        name: 'verifica',
+        type: ChannelType.GuildText,
+        // In cima: è il primo e per un po' l'unico canale che il nuovo
+        // arrivato vede, e cercarlo in fondo all'elenco è già un ostacolo.
+        position: 0,
+        topic: 'Premi il pulsante per accedere al server.',
+        reason: 'Predisposizione automatica di ANGEL',
+        permissionOverwrites: [
+          {
+            id: isolante,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+            deny: [PermissionFlagsBits.SendMessages],
+          },
+        ],
+      })
+      .catch(() => null);
+
+    if (!creato) {
+      risultato.errori.push('canale verifica');
+      return;
+    }
+    verifica = creato;
+    risultato.canaliCreati.push('verifica');
+    await pubblicaVerifica(client, guild, creato, config).catch(() => undefined);
+  }
+
+  if (scrivi(config, 'security.verification.verifyChannelId', verifica.id)) {
+    modificati.push('security.verification.verifyChannelId');
+    risultato.campiCompilati += 1;
+  }
+
+  risultato.canaliIsolati = await isolaNonVerificati(guild, isolante, verifica.id);
+}
+
+/**
+ * Nega la vista al ruolo di quarantena ovunque tranne che nella verifica.
+ *
+ * Solo negazioni: nessun canale può risultare più visibile di prima. Si salta
+ * chi ha già la negazione, così eseguirla a ogni avvio non produce centinaia
+ * di chiamate inutili né voci nel registro di controllo del server.
+ */
+export async function isolaNonVerificati(
+  guild: Guild,
+  roleId: string,
+  eccezioneCanaleId: string,
+): Promise<number> {
+  const canali = await guild.channels.fetch().catch(() => null);
+  let isolati = 0;
+
+  for (const canale of canali?.values() ?? []) {
+    if (!canale || canale.id === eccezioneCanaleId) continue;
+    if (!('permissionOverwrites' in canale)) continue;
+
+    // Un canale dentro una categoria eredita da essa: negare sulla categoria
+    // basta, e negare anche sui figli moltiplicherebbe le chiamate senza
+    // aggiungere nulla. Si agisce quindi sulle categorie e sui canali che non
+    // ne hanno una.
+    //
+    // Con una riserva: un canale figlio che ha già permessi propri non eredita
+    // più dalla categoria, e va trattato singolarmente. È il caso frequente
+    // dei canali riservati allo staff dentro una categoria pubblica.
+    const eredita = canale.parentId !== null && canale.permissionOverwrites.cache.size === 0;
+    if (eredita) continue;
+
+    const attuale = canale.permissionOverwrites.cache.get(roleId);
+    if (attuale?.deny.has(PermissionFlagsBits.ViewChannel)) continue;
+
+    const fatto = await canale.permissionOverwrites
+      .edit(roleId, { ViewChannel: false }, { reason: 'Isolamento di chi non ha verificato' })
+      .then(() => true)
+      .catch(() => false);
+
+    if (fatto) isolati += 1;
+  }
+
+  return isolati;
+}
+
+/** Pubblica il pannello con il pulsante di verifica. */
+async function pubblicaVerifica(
+  client: Client,
+  guild: Guild,
+  channel: TextChannel,
+  config: GuildConfig,
+): Promise<void> {
+  const settings = config.security.verification;
+
+  const embed = new EmbedBuilder()
+    .setTitle(`Benvenuto in ${guild.name}`)
+    .setColor(0xd8b45f)
+    .setDescription(
+      'Premi il pulsante qui sotto per accedere al server.\n\n' +
+        'Finché non lo fai vedi solo questo canale. Serve a fermare gli account ' +
+        'automatici, che premono all\'istante o non premono affatto.',
+    )
+    .setFooter({
+      text:
+        settings.minDelaySec > 0
+          ? `Il pulsante è attivo dopo ${settings.minDelaySec} secondi dal tuo ingresso.`
+          : 'Premi il pulsante per accedere.',
+    });
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('aegis:verify')
+      .setLabel('Verifica')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('✅'),
+  );
+
+  const message = await channel.send({ embeds: [embed], components: [row] });
+
+  await recordEvent(client, {
+    guildId: guild.id,
+    type: 'PANEL_ACTION',
+    actorId: client.user?.id,
+    channelId: channel.id,
+    messageId: message.id,
+    summary: `Pannello di verifica pubblicato in <#${channel.id}>`,
+  });
+}
+
+function trovaCanale(guild: Guild, nome: string, parentId: string) {
+  return guild.channels.cache.find(
+    (channel) => channel.name === nome && channel.parentId === parentId,
+  );
 }
 
 /**
