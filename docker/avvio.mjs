@@ -21,7 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { spawn } from 'node:child_process';
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, readFileSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -177,22 +177,53 @@ process.on('SIGINT', () => chiudi('SIGINT'));
    Controllarlo qui costa millisecondi e trasforma quel ciclo in una riga che
    dice cosa manca.
    ═══════════════════════════════════════════════════════════════════════ */
-const RICHIESTI = [
-  'apps/bot/dist/index.js',
-  'apps/worker/dist/index.js',
-  'apps/api/dist/index.js',
-  'apps/web/dist/index.html',
-  'packages/db/dist/index.js',
-  'packages/shared/dist/index.js',
-  'packages/scanner/dist/index.js',
-];
+const PACCHETTI = ['db', 'shared', 'scanner'];
+
+/**
+ * I file che devono esistere, ricavati e non scritti a mano.
+ *
+ * La prima versione elencava percorsi fissi e ne sbagliava uno: `@angel/db`
+ * compila in `dist/src/index.js` e non in `dist/index.js`, perché il suo
+ * tsconfig comprende anche il client Prisma generato e TypeScript conserva la
+ * struttura delle cartelle. Il risultato è stato un controllo che bloccava
+ * un'immagine perfettamente valida — un guasto peggiore di quello che doveva
+ * prevenire.
+ *
+ * Ora i percorsi arrivano da dove sono già dichiarati: i comandi dei servizi
+ * qui sotto, e il campo `main` di ciascun pacchetto. Se un giorno cambia
+ * l'output di una build, cambia anche il controllo, da solo.
+ */
+function fileRichiesti() {
+  const richiesti = SERVIZI.map((servizio) => servizio.comando[1]);
+
+  for (const nome of PACCHETTI) {
+    const manifesto = path.join('packages', nome, 'package.json');
+    if (!existsSync(manifesto)) {
+      richiesti.push(manifesto);
+      continue;
+    }
+    try {
+      const { main } = JSON.parse(readFileSync(manifesto, 'utf8'));
+      if (main) richiesti.push(path.join('packages', nome, main));
+    } catch {
+      richiesti.push(manifesto);
+    }
+  }
+
+  // Il pannello non è un modulo: è servito come file statico dall'API.
+  richiesti.push('apps/web/dist/index.html');
+  return richiesti;
+}
 
 function verificaFile() {
-  const mancanti = RICHIESTI.filter((file) => !existsSync(file));
+  const richiesti = fileRichiesti();
+  const mancanti = richiesti.filter((file) => !existsSync(file));
+
   if (mancanti.length === 0) {
-    log(`verifica file: ${RICHIESTI.length} presenti`);
+    log(`verifica file: ${richiesti.length} presenti`);
     return true;
   }
+
   console.error(
     `[avvio] IMMAGINE INCOMPLETA — mancano ${mancanti.length} file:\n` +
       mancanti.map((file) => `  ${file}`).join('\n') +
