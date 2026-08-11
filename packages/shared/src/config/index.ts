@@ -134,6 +134,59 @@ export const OwnerRoleConfig = z
   .default({});
 export type OwnerRoleConfig = z.infer<typeof OwnerRoleConfig>;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   IDENTITÀ DEL BOT
+
+   Ciò che Discord consente di cambiare via API, e nient'altro.
+
+   **Nome e immagine sono globali**, non per server: il bot ha un solo nome e
+   un solo avatar ovunque sia presente. Ciò che invece è per server è il
+   soprannome, che si imposta separatamente.
+
+   Discord accetta al massimo **due cambi di nome ogni ora** per le
+   applicazioni. Superato il limite risponde con un errore che non spiega la
+   causa, quindi il bot applica il nome solo quando è davvero diverso da
+   quello attuale, e non a ogni riavvio.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const BotIdentityConfig = z
+  .object({
+    /**
+     * Nome globale del bot. Vuoto = non lo tocca.
+     *
+     * Attenzione: cambiandolo cambia in **tutti** i server dove il bot è
+     * presente, non solo in questo.
+     */
+    username: z.string().max(32).default(''),
+
+    /** Indirizzo https di un'immagine per l'avatar. Vuoto = non lo tocca. */
+    avatarUrl: z.string().max(500).default(''),
+
+    /** Banner del profilo. Richiede che l'applicazione lo supporti. */
+    bannerUrl: z.string().max(500).default(''),
+
+    /** Soprannome in questo server soltanto. Vuoto = usa il nome globale. */
+    nickname: z.string().max(32).default(''),
+
+    /** Pallino accanto al nome. */
+    status: z.enum(['online', 'idle', 'dnd', 'invisible']).default('online'),
+
+    /**
+     * Come viene presentata l'attività.
+     *
+     * `CUSTOM` mostra solo il testo, senza verbo davanti — è l'unica che
+     * permette una frase libera. Le altre antepongono «Sta giocando a»,
+     * «Sta guardando», «Sta ascoltando», «In competizione in».
+     */
+    activityType: z
+      .enum(['CUSTOM', 'PLAYING', 'WATCHING', 'LISTENING', 'COMPETING'])
+      .default('WATCHING'),
+
+    /** Testo dell'attività. Variabili: {server} {membri} */
+    activityText: z.string().max(128).default('veglio su questo server'),
+  })
+  .default({});
+export type BotIdentityConfig = z.infer<typeof BotIdentityConfig>;
+
 export const GeneralConfig = z
   .object({
     /**
@@ -168,6 +221,22 @@ export const GeneralConfig = z
 
     /** Ruolo mantenuto dal bot per chi è elencato in OWNER_IDS. */
     ownerRole: OwnerRoleConfig,
+
+    /**
+     * Crea da solo ruoli e canali di servizio, e ne compila gli ID qui.
+     *
+     * Senza, un bot appena installato non protegge nulla — non per un difetto,
+     * ma perché la quarantena ha bisogno di un ruolo che isoli e il registro di
+     * un canale dove scrivere, e sono una dozzina di campi da riempire a mano.
+     *
+     * All'ingresso in un server nuovo crea tutto; agli avvii successivi riempie
+     * solo i campi rimasti vuoti, senza ricreare ciò che è stato eliminato di
+     * proposito.
+     */
+    autoProvision: z.boolean().default(true),
+
+    /** Nome, immagine, stato e attività del bot. */
+    identity: BotIdentityConfig,
 
     /**
      * Parola d'ordine dello staff, verificabile con `/verifica-staff`.

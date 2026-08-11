@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ActionKind, ActionLadder, ModuleBase } from './common.js';
+import { ActionKind, ActionLadder, ActiveModuleBase } from './common.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONTENT SCANNER  —  minacce A2, A3, A4, C1, C2, C5, C6
@@ -153,7 +153,7 @@ export const ClickFixConfig = z
   .default({});
 export type ClickFixConfig = z.infer<typeof ClickFixConfig>;
 
-export const ScannerConfig = ModuleBase.extend({
+export const ScannerConfig = ActiveModuleBase.extend({
   url: UrlScanConfig,
   image: ImageScanConfig,
   file: FileScanConfig,

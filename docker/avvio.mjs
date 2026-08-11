@@ -21,6 +21,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { spawn } from 'node:child_process';
+import { existsSync, promises as fs } from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
 
 /** I tre processi di lunga durata. La migrazione è a parte: finisce e basta. */
@@ -161,13 +163,95 @@ function chiudi(segnale) {
 process.on('SIGTERM', () => chiudi('SIGTERM'));
 process.on('SIGINT', () => chiudi('SIGINT'));
 
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTROLLO DI INTEGRITÀ
+
+   Dopo un aggiornamento si verifica che l'immagine contenga davvero ciò che
+   deve eseguire. Sembra superfluo — l'immagine o c'è o non c'è — e invece
+   copre il caso in cui la build è riuscita a metà: `tsc` fallisce su un
+   pacchetto, la CI pubblica lo stesso perché i job sono indipendenti, e il
+   container parte con un `dist` incompleto. Il sintomo è un processo che
+   muore subito con «Cannot find module», ripetuto all'infinito dal riavvio
+   automatico.
+
+   Controllarlo qui costa millisecondi e trasforma quel ciclo in una riga che
+   dice cosa manca.
+   ═══════════════════════════════════════════════════════════════════════ */
+const RICHIESTI = [
+  'apps/bot/dist/index.js',
+  'apps/worker/dist/index.js',
+  'apps/api/dist/index.js',
+  'apps/web/dist/index.html',
+  'packages/db/dist/index.js',
+  'packages/shared/dist/index.js',
+  'packages/scanner/dist/index.js',
+];
+
+function verificaFile() {
+  const mancanti = RICHIESTI.filter((file) => !existsSync(file));
+  if (mancanti.length === 0) {
+    log(`verifica file: ${RICHIESTI.length} presenti`);
+    return true;
+  }
+  console.error(
+    `[avvio] IMMAGINE INCOMPLETA — mancano ${mancanti.length} file:\n` +
+      mancanti.map((file) => `  ${file}`).join('\n') +
+      '\n[avvio] La build è riuscita a metà. Torna alla versione precedente ' +
+      'cambiando la riga image: nel compose.',
+  );
+  return false;
+}
+
+/**
+ * Segna la versione con cui i dati sono stati usati l'ultima volta.
+ *
+ * Serve a due cose: riconoscere che è appena avvenuto un aggiornamento, e
+ * lasciare accanto ai dati una traccia di quale codice li ha scritti. Senza,
+ * chi ritrova una cartella di backup fra un anno non ha modo di sapere quali
+ * migrazioni erano state applicate.
+ */
+async function registraVersione() {
+  const cartella = process.env.BACKUP_DIR ?? '/backup';
+  const segnale = path.join(cartella, 'VERSIONE');
+  const attuale = process.env.ANGEL_VERSION ?? 'sviluppo';
+
+  try {
+    await fs.mkdir(cartella, { recursive: true });
+    const precedente = await fs.readFile(segnale, 'utf8').catch(() => null);
+    await fs.writeFile(segnale, `${attuale}\n${new Date().toISOString()}\n`, 'utf8');
+
+    const prima = precedente?.split('\n')[0]?.trim();
+    if (prima && prima !== attuale) {
+      log(`aggiornamento rilevato: ${prima} → ${attuale}`);
+      return true;
+    }
+  } catch (errore) {
+    // La cartella di backup non è montata: non è un motivo per non partire.
+    log(`cartella di backup non disponibile (${errore.code ?? errore.message})`);
+  }
+  return false;
+}
+
 log(`ANGEL ${process.env.ANGEL_VERSION ?? 'sviluppo'} — avvio`);
+
+if (!verificaFile()) process.exit(1);
+
+const aggiornato = await registraVersione();
 
 try {
   await migra();
 } catch (errore) {
   console.error(`[avvio] ${errore.message}`);
   process.exit(1);
+}
+
+if (aggiornato) {
+  // La copia si chiede **dopo** le migrazioni e non prima: prima il database
+  // sarebbe ancora quello vecchio e la copia non rifletterebbe lo schema con
+  // cui verrà riletta. Il rollback vero si fa con il dump di aggiorna.sh, che
+  // gira sull'host prima che l'immagine cambi.
+  log('richiedo una copia di sicurezza dei dati');
+  process.env.BACKUP_ON_START = '1';
 }
 
 for (const servizio of SERVIZI) {

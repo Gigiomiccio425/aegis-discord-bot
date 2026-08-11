@@ -103,6 +103,49 @@ const BY_PATH: Record<string, FieldDoc> = {
     help: 'Secondi dopo i quali il cartellino sparisce. 0 = resta. Serve a non riempire la cronologia.',
   },
 
+  'general.autoProvision': {
+    label: 'Prepara il server da solo',
+    help:
+      'Crea i ruoli e i canali che servono alle funzioni, e ne compila gli ID qui. ' +
+      'Entrando in un server nuovo crea tutto; agli avvii successivi riempie solo i campi ' +
+      'rimasti vuoti, senza ricreare ciò che hai eliminato di proposito.',
+  },
+
+  'general.identity.username': {
+    label: 'Nome del bot',
+    help:
+      'Cambia il nome in **tutti** i server dove il bot è presente, non solo in questo: Discord ' +
+      'non permette un nome per server. Vuoto = non lo tocca. Massimo due cambi all\'ora.',
+  },
+  'general.identity.avatarUrl': {
+    label: 'Immagine del profilo',
+    help: 'Indirizzo https di un\'immagine. Anche questa è globale. Vuoto = non la tocca.',
+  },
+  'general.identity.bannerUrl': {
+    label: 'Banner del profilo',
+    help: 'Richiede che l\'applicazione supporti il banner. Vuoto = non lo tocca.',
+  },
+  'general.identity.nickname': {
+    label: 'Soprannome in questo server',
+    help:
+      'L\'unica parte dell\'identità che vale solo qui: se vuoi che il bot si chiami diversamente ' +
+      'da un server all\'altro, è questo il campo. Vuoto = usa il nome globale.',
+  },
+  'general.identity.status': {
+    label: 'Stato',
+    help: 'Il pallino accanto al nome: online, assente, non disturbare, invisibile.',
+  },
+  'general.identity.activityType': {
+    label: 'Tipo di attività',
+    help:
+      'CUSTOM mostra solo il testo. Le altre antepongono «Sta giocando a», «Sta guardando», ' +
+      '«Sta ascoltando», «In competizione in».',
+  },
+  'general.identity.activityText': {
+    label: 'Testo dell\'attività',
+    help: 'Cosa compare sotto il nome. Variabili: {server} e {membri}.',
+  },
+
   'general.ownerRole.enabled': {
     label: 'Ruolo del proprietario',
     help:

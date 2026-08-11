@@ -12,6 +12,7 @@ import { twitchProcessor } from './jobs/twitch.js';
 import { integrationsProcessor } from './jobs/integrations.js';
 import { securityAuditProcessor } from './jobs/securityAudit.js';
 import { socialProcessor } from './jobs/social.js';
+import { runSelfBackup } from './jobs/selfBackup.js';
 import { terminateOcr } from '@angel/scanner';
 
 /**
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
     new Worker(Queues.integrations, integrationsProcessor, { connection, concurrency: 1 }),
     new Worker(Queues.securityAudit, securityAuditProcessor, { connection, concurrency: 1 }),
     new Worker(Queues.social, socialProcessor, { connection, concurrency: 2 }),
+    new Worker(Queues.selfBackup, async () => runSelfBackup(), { connection, concurrency: 1 }),
   ];
 
   for (const worker of workers) {
@@ -58,6 +60,15 @@ async function main(): Promise<void> {
   }
 
   await scheduleRecurringJobs();
+
+  // Il supervisore accende questa variabile quando si accorge che la versione
+  // è cambiata: una copia subito dopo un aggiornamento è quella che serve di
+  // più, perché è il momento in cui qualcosa può essere andato storto.
+  if (process.env.BACKUP_ON_START === '1') {
+    void runSelfBackup().catch((error) =>
+      logger.warn({ err: error }, 'copia di sicurezza post-aggiornamento fallita'),
+    );
+  }
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'spegnimento worker');
@@ -94,6 +105,13 @@ async function scheduleRecurringJobs(): Promise<void> {
     'aggiorna-blocklist',
     { every: 3_600_000 }, // ogni ora
     { name: 'sync', opts: { removeOnComplete: 10 } },
+  );
+
+  const backup = new Queue(Queues.selfBackup, { connection });
+  await backup.upsertJobScheduler(
+    'copia-di-sicurezza',
+    { pattern: '15 4 * * *' }, // ogni notte, dopo lo snapshot
+    { name: 'periodico', opts: { removeOnComplete: 10 } },
   );
 
   const retention = new Queue(Queues.retention, { connection });

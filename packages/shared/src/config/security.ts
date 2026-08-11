@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   ActionKind,
   ActionLadder,
-  ModuleBase,
+  ActiveModuleBase,
   RateThreshold,
   Seconds,
   Snowflake,
@@ -14,7 +14,7 @@ import {
    Le reti di self-bot generano migliaia di account in pochi minuti e i primi
    30 secondi decidono l'esito: il rilevamento deve essere su finestra breve.
    ═══════════════════════════════════════════════════════════════════════ */
-export const AntiRaidConfig = ModuleBase.extend({
+export const AntiRaidConfig = ActiveModuleBase.extend({
   /** Trigger primario: troppi join in poco tempo. */
   joinBurst: RateThreshold.default({ count: 10, windowSec: 30 }),
 
@@ -111,7 +111,7 @@ const NukeRule = z.object({
   action: ActionKind.default('STRIP_ROLES'),
 });
 
-export const AntiNukeConfig = ModuleBase.extend({
+export const AntiNukeConfig = ActiveModuleBase.extend({
   /**
    * Whitelist esplicita. Senza questa lista un bot legittimo che riorganizza i
    * canali verrebbe punito. Gli owner del bot e il proprietario del server sono
@@ -175,7 +175,7 @@ export type AntiNukeConfig = z.infer<typeof AntiNukeConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    ANTI-SPAM
    ═══════════════════════════════════════════════════════════════════════ */
-export const AntiSpamConfig = ModuleBase.extend({
+export const AntiSpamConfig = ActiveModuleBase.extend({
   messageRate: RateThreshold.default({ count: 6, windowSec: 5 }),
   /** Stesso testo ripetuto, anche in canali diversi. */
   duplicateMessages: RateThreshold.default({ count: 3, windowSec: 30 }),
@@ -213,7 +213,7 @@ export type AntiSpamConfig = z.infer<typeof AntiSpamConfig>;
    L'ondata "MrBeast" non arriva da account nuovi ma da account *veri e noti*
    che di colpo cambiano comportamento. Serve una baseline per utente.
    ═══════════════════════════════════════════════════════════════════════ */
-export const CompromiseConfig = ModuleBase.extend({
+export const CompromiseConfig = ActiveModuleBase.extend({
   /** Utente inattivo da N giorni che riprende a scrivere con link/immagini. */
   dormantDays: z.number().int().min(1).max(365).default(30),
   /** Peso dei singoli segnali nel punteggio finale (0-100). */
@@ -267,7 +267,7 @@ export type CompromiseConfig = z.infer<typeof CompromiseConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    ACCOUNT GUARD  —  minaccia D4 + profilazione account sospetti
    ═══════════════════════════════════════════════════════════════════════ */
-export const AccountGuardConfig = ModuleBase.extend({
+export const AccountGuardConfig = ActiveModuleBase.extend({
   /** Punti assegnati a ciascun segnale di rischio al join. */
   weights: z
     .object({
@@ -311,7 +311,7 @@ export type AccountGuardConfig = z.infer<typeof AccountGuardConfig>;
    normalizzandoli in minuscolo: i link "storici" pubblicati altrove possono
    finire su un server ostile.
    ═══════════════════════════════════════════════════════════════════════ */
-export const InviteGuardConfig = ModuleBase.extend({
+export const InviteGuardConfig = ActiveModuleBase.extend({
   /** Risolve ogni invito postato e mostra allo staff nome, età e dimensione del server. */
   resolvePostedInvites: z.boolean().default(true),
   /** Blocca gli inviti verso server non presenti in allowlist. */
@@ -334,7 +334,7 @@ export type InviteGuardConfig = z.infer<typeof InviteGuardConfig>;
    I webhook Discord sono usati come canale C2 anche da pacchetti npm/PyPI
    compromessi, e permettono messaggi dall'aspetto ufficiale.
    ═══════════════════════════════════════════════════════════════════════ */
-export const WebhookGuardConfig = ModuleBase.extend({
+export const WebhookGuardConfig = ActiveModuleBase.extend({
   /** Elenco dei webhook approvati (quelli delle personas sono aggiunti in automatico). */
   allowedWebhookIds: SnowflakeList,
   /** Elimina i webhook non in allowlist appena vengono creati. */
@@ -351,7 +351,7 @@ export type WebhookGuardConfig = z.infer<typeof WebhookGuardConfig>;
    Un bot con Administrator equivale al server compromesso; il vettore può
    essere una dipendenza avvelenata o l'account dello sviluppatore rubato.
    ═══════════════════════════════════════════════════════════════════════ */
-export const BotGuardConfig = ModuleBase.extend({
+export const BotGuardConfig = ActiveModuleBase.extend({
   /** Avvisa quando un bot entra nel server. */
   alertOnBotJoin: z.boolean().default(true),
   /** Rimuove subito Administrator da qualunque bot che non sia in allowlist. */
@@ -371,7 +371,7 @@ export type BotGuardConfig = z.infer<typeof BotGuardConfig>;
    Tutela dei minori e link che raccolgono IP. Il bot non vede i DM: qui si
    agisce sui canali e si offre un percorso di segnalazione rapido.
    ═══════════════════════════════════════════════════════════════════════ */
-export const SafetyConfig = ModuleBase.extend({
+export const SafetyConfig = ActiveModuleBase.extend({
   /** Rilevamento pattern di adescamento nei canali pubblici. */
   groomingPatterns: z.boolean().default(true),
   /** Canale privato dove finiscono le segnalazioni con le prove congelate. */
@@ -402,7 +402,7 @@ export type SafetyConfig = z.infer<typeof SafetyConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    VERIFICATION  —  gate d'ingresso
    ═══════════════════════════════════════════════════════════════════════ */
-export const VerificationConfig = ModuleBase.extend({
+export const VerificationConfig = ActiveModuleBase.extend({
   mode: z.enum(['OFF', 'BUTTON', 'CAPTCHA', 'PANEL']).default('BUTTON'),
   /** Ruolo concesso dopo la verifica. */
   verifiedRoleId: Snowflake.nullable().default(null),
@@ -428,7 +428,7 @@ export type VerificationConfig = z.infer<typeof VerificationConfig>;
    restituire `ManageRoles` a chi rientra sarebbe una scalata di privilegi
    gratuita per chiunque riesca a farsi assegnare quel ruolo una volta sola.
    ═══════════════════════════════════════════════════════════════════════ */
-export const StickyRolesConfig = ModuleBase.extend({
+export const StickyRolesConfig = ActiveModuleBase.extend({
   /** Ruoli da non riassegnare mai (oltre a quelli con permessi pericolosi). */
   excludedRoleIds: SnowflakeList,
   /**
@@ -446,7 +446,7 @@ export type StickyRolesConfig = z.infer<typeof StickyRolesConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    AUTOMOD SYNC  —  regole native Discord pilotate dal pannello
    ═══════════════════════════════════════════════════════════════════════ */
-export const AutoModSyncConfig = ModuleBase.extend({
+export const AutoModSyncConfig = ActiveModuleBase.extend({
   /** Mantiene allineate le regole AutoMod native con le blocklist di ANGEL. */
   syncBlockedTerms: z.boolean().default(true),
   /**

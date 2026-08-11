@@ -76,6 +76,22 @@ export const ModuleBase = z.object({
 });
 
 /**
+ * Come `ModuleBase`, ma acceso di partenza.
+ *
+ * Lo usano le difese e il registro. La ragione è che un bot di sicurezza che
+ * arriva spento protegge esattamente da nulla, e il momento più esposto di un
+ * server è proprio quello subito dopo l'installazione — quando chi lo ha
+ * aggiunto sta ancora leggendo la documentazione.
+ *
+ * Le integrazioni restano spente perché non potrebbero funzionare comunque:
+ * senza le chiavi di Twitch o un canale dove pubblicare, accenderle
+ * produrrebbe solo errori nei log.
+ */
+export const ActiveModuleBase = ModuleBase.extend({
+  enabled: z.boolean().default(true),
+});
+
+/**
  * Soglia "N eventi in T secondi". Usata da anti-raid, anti-nuke, anti-spam:
  * stessa forma ovunque, così il pannello genera un solo componente per tutte.
  */

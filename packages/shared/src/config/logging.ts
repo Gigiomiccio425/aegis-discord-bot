@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ModuleBase, Snowflake, SnowflakeList } from './common.js';
+import { ActiveModuleBase, Snowflake, SnowflakeList } from './common.js';
 import { LogCategory } from '../types/events.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -74,7 +74,7 @@ export const FileSinkConfig = z
   .default({});
 export type FileSinkConfig = z.infer<typeof FileSinkConfig>;
 
-export const LoggingConfig = ModuleBase.extend({
+export const LoggingConfig = ActiveModuleBase.extend({
   /** Copia di ogni evento su file di testo, sul disco della macchina. */
   fileSink: FileSinkConfig,
 

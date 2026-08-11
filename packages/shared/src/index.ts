@@ -70,4 +70,6 @@ export const Queues = {
   securityAudit: 'security-audit',
   /** Fonti esterne: YouTube e feed RSS. */
   social: 'social',
+  /** Copia dei propri dati fuori dal volume dell'applicazione. */
+  selfBackup: 'self-backup',
 } as const;
