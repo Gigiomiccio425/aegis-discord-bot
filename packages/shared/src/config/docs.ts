@@ -389,6 +389,61 @@ const BY_KEY: Record<string, FieldDoc> = {
     help: 'Al ban di un raider elimina anche quanto ha scritto negli ultimi N giorni. Massimo 7.',
   },
 
+  usePresetProfanity: {
+    label: 'Parolacce (elenco Discord)',
+    help:
+      'Usa l\'elenco multilingue mantenuto da Discord. Vale piu di qualunque elenco proprio ' +
+      'per una ragione sola: blocca il messaggio prima che venga pubblicato, mentre un bot lo ' +
+      'vede solo dopo — e nel frattempo qualcuno lo ha gia letto.',
+  },
+  usePresetSlurs: {
+    label: 'Insulti discriminatori (elenco Discord)',
+    help: 'Elenco separato dalle parolacce comuni: copre gli insulti rivolti a categorie di persone.',
+  },
+  usePresetSexual: {
+    label: 'Contenuti sessuali (elenco Discord)',
+    help: 'Spento di default: su molti server produce falsi positivi in conversazioni normali.',
+  },
+  terms: {
+    label: 'Elenco proprio',
+    help:
+      'Le tue parole, ciascuna con la sua gravita. Vengono riconosciute anche scritte in forma ' +
+      'elusiva: c4zz0, c-a-z-z-o, cazzooooo, lettere spaziate.',
+  },
+  allowlist: {
+    label: 'Parole sempre ammesse',
+    help:
+      'Parole legittime che ne contengono un\'altra: «cazzuola» contiene «cazzo». Vincono sempre, ' +
+      'sia sull\'elenco proprio sia su quello di Discord. Un filtro che blocca chi parla di ' +
+      'edilizia insegna in un pomeriggio che il bot va ignorato.',
+  },
+  targetedBonus: {
+    label: 'Supplemento se rivolto a qualcuno',
+    help:
+      'Punti in piu quando il messaggio menziona una persona o risponde a lei. E la differenza fra ' +
+      'imprecare e aggredire: senza, chi si e dato una martellata sul dito viene trattato come chi ' +
+      'sta insultando un altro membro.',
+  },
+  exemptChannelIds: {
+    label: 'Canali esclusi',
+    help: 'Il filtro non interviene qui. Utile per un canale di sfogo fra adulti consenzienti.',
+  },
+  weights: {
+    label: 'Peso delle gravita',
+    help: 'Quanti punti vale ciascun livello. La somma decide quale gradino della scala scatta.',
+  },
+  LIEVE: { label: 'Lieve', help: 'Imprecazioni comuni, non rivolte a nessuno.' },
+  MEDIA: { label: 'Media', help: 'Insulti veri e propri.' },
+  GRAVE: { label: 'Grave', help: 'Insulti discriminatori e incitazioni all\'autolesionismo.' },
+  severity: { label: 'Gravita', help: 'Quanto pesa questa voce nel punteggio del messaggio.' },
+  substring: {
+    label: 'Cerca dentro le parole',
+    help:
+      'Da usare con parsimonia: e l\'opzione che produce i falsi positivi. Serve solo per sequenze ' +
+      'che non compaiono in nessuna parola legittima.',
+  },
+  term: { label: 'Parola', help: 'La voce da riconoscere. Gli accenti e le maiuscole non contano.' },
+
   /* Anti-nuke */
   botIds: { label: 'Bot in lista bianca', help: 'Bot le cui azioni non fanno mai scattare le soglie.' },
   dangerousPermissions: {
@@ -857,6 +912,15 @@ export const SECTION_DOCS: Record<string, SectionDoc> = {
       'Un bot con Administrator equivale al server compromesso, e il vettore può essere una ' +
       'dipendenza avvelenata o l\'account dello sviluppatore rubato — nessuna delle due cose è ' +
       'colpa vostra e nessuna delle due si vede in anticipo. Si sorveglia cosa possono fare.',
+  },
+  'security.language': {
+    summary: 'Parolacce e insulti, con due difese sovrapposte.',
+    detail:
+      'La prima e AutoMod di Discord con i suoi elenchi predefiniti: agisce **prima che il ' +
+      'messaggio esista**, e multilingue e la mantiene Discord. Nessun bot puo fare altrettanto, ' +
+      'perche un bot il messaggio lo vede solo dopo la pubblicazione. La seconda e il tuo elenco, ' +
+      'che vede cio che AutoMod lascia passare — le forme elusive, le espressioni locali, gli ' +
+      'insulti che non sono parolacce — e distingue lo sfogo dall\'aggressione rivolta a qualcuno.',
   },
   'security.safety': {
     summary: 'Tutela delle persone: adescamento e raccolta di IP.',

@@ -19,6 +19,7 @@ export * from './clickfix.js';
 export * from './image.js';
 export * from './ocr.js';
 export * from './files.js';
+export * from './language.js';
 export * from './reputation.js';
 
 export interface ScanInput {

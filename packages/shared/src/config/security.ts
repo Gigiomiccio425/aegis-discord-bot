@@ -444,6 +444,103 @@ export const StickyRolesConfig = ActiveModuleBase.extend({
 export type StickyRolesConfig = z.infer<typeof StickyRolesConfig>;
 
 /* ═══════════════════════════════════════════════════════════════════════
+   LINGUAGGIO  —  parolacce e insulti
+
+   Due difese sovrapposte, che agiscono in momenti diversi.
+
+   La prima è AutoMod di Discord, con i suoi elenchi predefiniti: agisce
+   **prima che il messaggio esista**, è multilingue e la mantiene Discord.
+   Nessun bot può fare altrettanto, perché un bot il messaggio lo vede solo
+   dopo la pubblicazione.
+
+   La seconda è l'elenco proprio, che vede ciò che AutoMod lascia passare —
+   le forme elusive, le espressioni locali, gli insulti che non sono
+   parolacce. Arriva dopo, ma può graduare la risposta e distinguere lo sfogo
+   dall'aggressione rivolta a qualcuno.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const LanguageTerm = z.object({
+  term: z.string().min(2).max(60),
+  severity: z.enum(['LIEVE', 'MEDIA', 'GRAVE']).default('MEDIA'),
+  /**
+   * Cerca anche dentro altre parole. Da usare con parsimonia: è l'opzione che
+   * produce i falsi positivi, e un filtro che blocca chi parla di edilizia
+   * insegna in un pomeriggio che il bot va ignorato.
+   */
+  substring: z.boolean().default(false),
+});
+export type LanguageTerm = z.infer<typeof LanguageTerm>;
+
+export const LanguageConfig = ActiveModuleBase.extend({
+  /** Filtri predefiniti di Discord: agiscono prima della pubblicazione. */
+  usePresetProfanity: z.boolean().default(true),
+  usePresetSlurs: z.boolean().default(true),
+  usePresetSexual: z.boolean().default(false),
+
+  /**
+   * Elenco proprio. I valori predefiniti coprono l'italiano corrente, divisi
+   * per gravità: le imprecazioni comuni pesano poco, gli insulti rivolti a
+   * una persona pesano di più, le incitazioni all'autolesionismo pesano
+   * quanto basta a far scattare la risposta più alta da sole.
+   */
+  terms: z.array(LanguageTerm).max(500).default([
+    { term: 'cazzo', severity: 'LIEVE', substring: false },
+    { term: 'merda', severity: 'LIEVE', substring: false },
+    { term: 'stronzata', severity: 'LIEVE', substring: false },
+    { term: 'vaffanculo', severity: 'MEDIA', substring: false },
+    { term: 'stronzo', severity: 'MEDIA', substring: false },
+    { term: 'coglione', severity: 'MEDIA', substring: false },
+    { term: 'idiota', severity: 'MEDIA', substring: false },
+    { term: 'imbecille', severity: 'MEDIA', substring: false },
+    { term: 'deficiente', severity: 'MEDIA', substring: false },
+    { term: 'ritardato', severity: 'GRAVE', substring: false },
+    { term: 'handicappato', severity: 'GRAVE', substring: false },
+    { term: 'ammazzati', severity: 'GRAVE', substring: false },
+    { term: 'uccidersi', severity: 'GRAVE', substring: false },
+    { term: 'kys', severity: 'GRAVE', substring: false },
+  ]),
+
+  /**
+   * Parole legittime che contengono una voce dell'elenco. Vincono sempre.
+   *
+   * È l'errore chiamato «Scunthorpe», dal comune inglese che per anni non
+   * poté registrarsi online. In italiano capita con gli attrezzi da muratore
+   * e con qualche nome di città.
+   */
+  allowlist: z
+    .array(z.string().min(2).max(60))
+    .max(500)
+    .default(['cazzuola', 'scazzottata', 'arsenale', 'Cagliari', 'merletto', 'incazzatura']),
+
+  /** Punti per gravità, sommati fino al punteggio del messaggio. */
+  weights: z
+    .object({
+      LIEVE: z.number().int().min(0).max(100).default(15),
+      MEDIA: z.number().int().min(0).max(100).default(40),
+      GRAVE: z.number().int().min(0).max(100).default(75),
+    })
+    .default({}),
+
+  /**
+   * Punti aggiuntivi se il messaggio menziona qualcuno o risponde a qualcuno.
+   *
+   * È la differenza fra imprecare e aggredire, e senza questa distinzione il
+   * filtro tratta allo stesso modo chi si è dato una martellata sul dito e
+   * chi sta insultando un altro membro.
+   */
+  targetedBonus: z.number().int().min(0).max(100).default(25),
+
+  /** Canali dove il filtro non interviene. */
+  exemptChannelIds: SnowflakeList,
+
+  ladder: ActionLadder.default([
+    { atScore: 30, action: 'DELETE_MESSAGE', durationSec: 0 },
+    { atScore: 55, action: 'WARN', durationSec: 0 },
+    { atScore: 80, action: 'TIMEOUT', durationSec: 600 },
+  ]),
+}).default({});
+export type LanguageConfig = z.infer<typeof LanguageConfig>;
+
+/* ═══════════════════════════════════════════════════════════════════════
    AUTOMOD SYNC  —  regole native Discord pilotate dal pannello
    ═══════════════════════════════════════════════════════════════════════ */
 export const AutoModSyncConfig = ActiveModuleBase.extend({

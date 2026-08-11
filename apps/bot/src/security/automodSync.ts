@@ -2,6 +2,7 @@ import {
   AutoModerationActionType,
   AutoModerationRuleEventType,
   AutoModerationRuleTriggerType,
+  AutoModerationRuleKeywordPresetType as KeywordPresetType,
   PermissionFlagsBits,
   type AutoModerationRule,
   type Client,
@@ -39,6 +40,7 @@ const RULE_TERMS = `${PREFIX} Termini vietati`;
 const RULE_SPAM = `${PREFIX} Spam`;
 const RULE_MENTIONS = `${PREFIX} Menzioni di massa`;
 const RULE_PROFILE = `${PREFIX} Profili vietati`;
+const RULE_PRESET = `${PREFIX} Linguaggio`;
 
 /** Limiti dell'API, non scelte nostre: superarli fa fallire l'intera regola. */
 const MAX_KEYWORDS = 1000;
@@ -166,6 +168,39 @@ export async function syncAutoModRules(
         },
       });
     }
+  }
+
+  /* ── Elenchi predefiniti: parolacce, insulti, contenuti sessuali ─────
+     Sono gli elenchi mantenuti da Discord, multilingue e aggiornati da loro.
+     Valgono più di qualunque elenco proprio per una ragione sola: agiscono
+     **prima che il messaggio esista**, mentre un bot lo vede solo dopo la
+     pubblicazione — e nell'intervallo qualcuno lo ha già letto. */
+  const presets: number[] = [];
+  if (config.security.language.enabled) {
+    if (config.security.language.usePresetProfanity) presets.push(KeywordPresetType.Profanity);
+    if (config.security.language.usePresetSlurs) presets.push(KeywordPresetType.Slurs);
+    if (config.security.language.usePresetSexual) presets.push(KeywordPresetType.SexualContent);
+  }
+
+  if (presets.length > 0) {
+    desired.push({
+      name: RULE_PRESET,
+      enabled: true,
+      payload: {
+        eventType: AutoModerationRuleEventType.MessageSend,
+        triggerType: AutoModerationRuleTriggerType.KeywordPreset,
+        triggerMetadata: {
+          presets,
+          // Le eccezioni dell'elenco proprio valgono anche qui: senza,
+          // Discord bloccherebbe «cazzuola» e il filtro locale la lascerebbe
+          // passare — due difese che si contraddicono sono peggio di una.
+          allowList: config.security.language.allowlist.slice(0, 100),
+        },
+        actions: blockActions('Linguaggio non consentito in questo server.'),
+        exemptRoles,
+        exemptChannels: config.security.language.exemptChannelIds.slice(0, 50),
+      },
+    });
   }
 
   /* ── Filtro spam nativo ─────────────────────────────────────────────── */

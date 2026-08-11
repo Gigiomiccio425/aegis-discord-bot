@@ -18,6 +18,7 @@ import { evaluateSpam } from '../security/antiSpam.js';
 import { evaluateContent } from '../security/contentGuard.js';
 import { evaluateInvites } from '../security/inviteGuard.js';
 import { evaluateSafety } from '../security/safety.js';
+import { evaluateLanguage } from '../security/languageGuard.js';
 import { evaluateCompromise, trackActivity } from '../security/compromise.js';
 
 const log = childLogger('events:messages');
@@ -143,7 +144,7 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
 
   const activity = await trackActivity(message);
 
-  const [spam, content, invites, safety] = await Promise.all([
+  const [spam, content, invites, safety, language] = await Promise.all([
     evaluateSpam(message, config).catch(() => null),
     evaluateContent(client, message, config).catch((error) => {
       log.debug({ err: error }, 'scanner contenuti fallito');
@@ -151,6 +152,7 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
     }),
     evaluateInvites(client, message, config).catch(() => null),
     evaluateSafety(client, message, config).catch(() => null),
+    evaluateLanguage(message, config).catch(() => null),
   ]);
 
   // Il rilevatore di account compromessi ha bisogno dell'esito dello scanner:
@@ -164,7 +166,7 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
     crossChannelCount: activity.crossChannelCount,
   }).catch(() => null);
 
-  const decisions = [spam, content, invites, safety, compromise].filter(
+  const decisions = [spam, content, invites, safety, language, compromise].filter(
     (decision): decision is Decision => decision !== null && decision.triggered,
   );
   if (decisions.length === 0) {
