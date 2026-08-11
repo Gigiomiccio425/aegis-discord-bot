@@ -53,7 +53,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       target: runner
-    command: ["npm", "run", "deploy", "-w", "@aegis/db"]
+    command: ["npm", "run", "deploy", "-w", "@angel/db"]
     environment:
       <<: *common-env
     depends_on:

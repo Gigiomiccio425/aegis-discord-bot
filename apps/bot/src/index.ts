@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { getPrisma, disconnectPrisma } from '@aegis/db';
-import { RedisKeys } from '@aegis/shared';
+import { getPrisma, disconnectPrisma } from '@angel/db';
+import { RedisKeys } from '@angel/shared';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
 import { closeRedis, getSubscriber } from './core/redis.js';

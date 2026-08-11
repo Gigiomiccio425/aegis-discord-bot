@@ -5,8 +5,8 @@ import {
   type Guild,
   type GuildAuditLogsEntry,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { RedisKeys, type GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { RedisKeys, type GuildConfig } from '@angel/shared';
 import { slidingWindowCount } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { isNukeWhitelisted } from '../core/permissions.js';

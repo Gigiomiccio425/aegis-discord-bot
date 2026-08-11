@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { requireGuild } from '../guard.js';
 
 const NewSignature = z.object({

@@ -16,7 +16,7 @@
    verità, Redis è solo la copia da leggere in fretta.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { getRedis } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 

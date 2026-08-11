@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, type Client, type Guild, type Webhook } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import type { GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import type { GuildConfig } from '@angel/shared';
 import { recordEvent } from '../logging/auditLogger.js';
 import { childLogger } from '../core/logger.js';
 
@@ -43,7 +43,7 @@ export async function auditWebhooks(
   const prisma = getPrisma();
   let unauthorized = 0;
 
-  // I webhook gestiti da Aegis per le personas sono legittimi per definizione.
+  // I webhook gestiti da ANGEL per le personas sono legittimi per definizione.
   const managed = await prisma.webhookRecord.findMany({
     where: { guildId: guild.id, managed: true },
     select: { id: true },
@@ -144,7 +144,7 @@ async function handleUnauthorized(
 
   if (settings.autoDeleteUnknown && !config.general.dryRun) {
     await webhook
-      .delete('Webhook non presente nella allowlist di Aegis')
+      .delete('Webhook non presente nella allowlist di ANGEL')
       .catch((error) => log.warn({ err: error }, 'eliminazione webhook fallita'));
 
     const prisma = getPrisma();
@@ -157,7 +157,7 @@ async function handleUnauthorized(
   }
 }
 
-/** Registra un webhook creato da Aegis per una persona: va in allowlist. */
+/** Registra un webhook creato da ANGEL per una persona: va in allowlist. */
 export async function registerManagedWebhook(
   guildId: string,
   webhook: Webhook,

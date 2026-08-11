@@ -1,7 +1,7 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { FileSinkConfig, LogCategory, LogEventType } from '@aegis/shared';
+import type { FileSinkConfig, LogCategory, LogEventType } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 
 const log = childLogger('fileSink');

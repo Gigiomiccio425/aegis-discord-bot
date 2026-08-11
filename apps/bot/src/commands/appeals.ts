@@ -4,7 +4,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import type { Command } from './types.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { liftQuarantine } from '../core/enforcer.js';

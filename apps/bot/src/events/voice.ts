@@ -1,8 +1,8 @@
 import { Events, type Client, type VoiceState } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { recordEvent } from '../logging/auditLogger.js';
 import { humanDuration } from '../core/i18n.js';
-import type { LogEventType } from '@aegis/shared';
+import type { LogEventType } from '@angel/shared';
 
 /**
  * Attività vocale.

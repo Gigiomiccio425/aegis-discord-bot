@@ -4,8 +4,8 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { scanContent } from '@aegis/scanner';
+import { getPrisma } from '@angel/db';
+import { scanContent } from '@angel/scanner';
 import type { Command } from './types.js';
 import {
   disableLockdown,

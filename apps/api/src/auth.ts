@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { getPrisma, type PanelRole } from '@aegis/db';
+import { getPrisma, type PanelRole } from '@angel/db';
 import { encrypt } from './crypto.js';
 import { logger } from './logger.js';
 

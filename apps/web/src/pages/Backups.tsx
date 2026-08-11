@@ -68,7 +68,7 @@ export function Backups() {
         </p>
         <p className="mt-3 text-sm leading-relaxed text-[var(--color-warning)]">
           Discord non consente di ripristinare la cronologia dei messaggi. Dopo un nuke tornano
-          struttura e permessi; i messaggi restano consultabili solo nel registro di Aegis, come
+          struttura e permessi; i messaggi restano consultabili solo nel registro di ANGEL, come
           archivio, e non tornano nei canali.
         </p>
       </Card>

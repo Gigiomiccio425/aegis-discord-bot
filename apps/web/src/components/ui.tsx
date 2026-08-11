@@ -69,7 +69,9 @@ export function Button({
 }) {
   const variants = {
     default: 'bg-[var(--color-surface-2)] hover:bg-[#262b36] border-[var(--color-border)]',
-    primary: 'bg-[var(--color-accent)] hover:bg-[#4752c4] border-transparent text-white',
+    // Testo scuro sull'oro: bianco su oro chiaro scende sotto il rapporto di
+    // contrasto leggibile, ed è il pulsante che si preme di corsa.
+    primary: 'bg-[var(--color-accent)] hover:bg-[#c2a052] border-transparent text-[#14161e] font-medium',
     danger: 'bg-[var(--color-danger)] hover:bg-[#c73538] border-transparent text-white',
     ghost: 'bg-transparent hover:bg-[var(--color-surface-2)] border-transparent',
   }[variant];
@@ -98,7 +100,7 @@ export function Badge({
     danger: 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]',
     warning: 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]',
     success: 'bg-[var(--color-success)]/15 text-[var(--color-success)]',
-    accent: 'bg-[var(--color-accent)]/15 text-[#a5adff]',
+    accent: 'bg-[var(--color-accent)]/15 text-[var(--color-accent-soft)]',
   }[tone];
 
   return (
@@ -124,7 +126,7 @@ export function Loading() {
 
 export function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#ffb3b5]">
+    <div className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
       {message}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { COMMAND_DOCS, type CommandDoc } from '@aegis/shared/docs';
+import { COMMAND_DOCS, type CommandDoc } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, Empty, ErrorBox, formatDate } from '../components/ui.js';
@@ -69,7 +69,7 @@ function SayAsBot() {
     >
       {error && <ErrorBox message={error} />}
       {done && (
-        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8ee0a8]">
+        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
           Inviato al bot. Compare nel canale entro un istante.
         </div>
       )}
@@ -301,7 +301,7 @@ function CommandReference() {
             onClick={() => setGroup(name)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               group === name
-                ? 'bg-[var(--color-accent)]/15 text-[#a5adff]'
+                ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-soft)]'
                 : 'text-neutral-400 hover:bg-[var(--color-surface-2)]'
             }`}
           >
@@ -317,7 +317,7 @@ function CommandReference() {
             className="border-b border-[var(--color-border)]/50 pb-3 last:border-0"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <code className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-sm text-[#a5adff]">
+              <code className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-sm text-[var(--color-accent-soft)]">
                 {command.name}
               </code>
               <Badge tone="neutral">{command.permission}</Badge>

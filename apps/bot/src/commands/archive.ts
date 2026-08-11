@@ -7,7 +7,7 @@ import {
   SlashCommandBuilder,
   type TextChannel,
 } from 'discord.js';
-import { buildTranscript, getPrisma } from '@aegis/db';
+import { buildTranscript, getPrisma } from '@angel/db';
 import type { Command } from './types.js';
 import { restoreChannelMessages } from '../archive/restore.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -17,7 +17,7 @@ import { recordEvent } from '../logging/auditLogger.js';
 
    Discord non consente di ripristinare i messaggi eliminati: non esiste alcun
    endpoint per farlo, e nessun bot può aggirarlo. Ciò che si può fare è quello
-   che fa Aegis — tenere una copia mentre i messaggi passano, e poi:
+   che fa ANGEL — tenere una copia mentre i messaggi passano, e poi:
 
      • esportarla come trascrizione HTML consultabile (prova, indagine, archivio)
      • ripubblicarla in un canale come *ricostruzione*, dichiarata come tale

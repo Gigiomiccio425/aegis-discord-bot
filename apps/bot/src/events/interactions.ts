@@ -12,7 +12,7 @@ import {
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { getGuildConfig } from '../core/config.js';
 import { childLogger } from '../core/logger.js';
 import { handleCommand } from '../commands/index.js';

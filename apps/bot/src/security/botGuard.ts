@@ -6,8 +6,8 @@ import {
   type Guild,
   type GuildMember,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import type { GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import type { GuildConfig } from '@angel/shared';
 import { recordEvent } from '../logging/auditLogger.js';
 import { childLogger } from '../core/logger.js';
 

@@ -6,14 +6,14 @@ import {
   type Guild,
   type TextChannel,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   CRITICAL_EVENTS,
   EVENT_CATEGORY,
   RedisKeys,
   type GuildConfig,
   type LogEventType,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { getGuildConfig } from '../core/config.js';
 import { getPublisher } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';

@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
-import { getPrisma } from '@aegis/db';
-import { defaultFeeds, fetchFeed } from '@aegis/scanner';
+import { getPrisma } from '@angel/db';
+import { defaultFeeds, fetchFeed } from '@angel/scanner';
 import { childLogger } from '../logger.js';
 
 const log = childLogger('threatFeeds');

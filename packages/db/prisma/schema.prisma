@@ -33,7 +33,7 @@ model Guild {
   joinedAt    DateTime @default(now())
   active      Boolean  @default(true) // false quando il bot viene rimosso
 
-  /// Configurazione completa, validata dagli schemi Zod di @aegis/shared.
+  /// Configurazione completa, validata dagli schemi Zod di @angel/shared.
   /// Sta in un unico JSONB perché i moduli cambiano spesso: una colonna per
   /// impostazione avrebbe significato una migrazione a ogni nuova opzione.
   config        Json     @default("{}")
@@ -93,7 +93,7 @@ model AuditEvent {
   id        BigInt   @id @default(autoincrement())
   guildId   String
   guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  type      String // LogEventType di @aegis/shared
+  type      String // LogEventType di @angel/shared
   category  String // LogCategory
   createdAt DateTime @default(now())
 
@@ -470,7 +470,7 @@ model WebhookRecord {
   channelId String
   name      String
   creatorId String?
-  /// true per i webhook creati da Aegis per le personas.
+  /// true per i webhook creati da ANGEL per le personas.
   managed   Boolean  @default(false)
   approved  Boolean  @default(false)
   firstSeenAt DateTime @default(now())
@@ -560,7 +560,7 @@ model CustomCommand {
   deniedRoleIds     String[] @default([])
   allowedChannelIds String[] @default([])
 
-  /// Argomenti e passi validati dagli schemi Zod di @aegis/shared.
+  /// Argomenti e passi validati dagli schemi Zod di @angel/shared.
   args  Json @default("[]")
   steps Json @default("[]")
 

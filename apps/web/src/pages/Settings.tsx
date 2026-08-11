@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { describeField, SECTION_DOCS } from '@aegis/shared/docs';
+import { describeField, SECTION_DOCS } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, ErrorBox, Loading, formatDate } from '../components/ui.js';
@@ -86,7 +86,7 @@ export function Settings() {
 
       {error && <ErrorBox message={error} />}
       {saved && (
-        <div className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8ee0a8]">
+        <div className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
           {saved}
         </div>
       )}
@@ -113,7 +113,7 @@ export function Settings() {
                 onClick={() => setSelected(section.key)}
                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                   selected === section.key
-                    ? 'bg-[var(--color-accent)]/15 text-[#a5adff]'
+                    ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-soft)]'
                     : 'text-neutral-300 hover:bg-[var(--color-surface-2)]'
                 }`}
               >

@@ -104,7 +104,7 @@ export function Security() {
                     </div>
                   </div>
                   <Badge tone={webhook.managed ? 'accent' : webhook.approved ? 'success' : 'danger'}>
-                    {webhook.managed ? 'Aegis' : webhook.approved ? 'approvato' : 'non approvato'}
+                    {webhook.managed ? 'ANGEL' : webhook.approved ? 'approvato' : 'non approvato'}
                   </Badge>
                 </li>
               ))}
@@ -175,7 +175,7 @@ export function Security() {
                     <td className="py-2 pr-3">
                       <Link
                         to={`/g/${guildId}/utente/${user.userId}`}
-                        className="text-neutral-200 hover:text-[#a5adff] hover:underline"
+                        className="text-neutral-200 hover:text-[var(--color-accent-soft)] hover:underline"
                       >
                         {user.displayName ?? user.username ?? '—'}
                       </Link>

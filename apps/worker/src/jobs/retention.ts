@@ -1,8 +1,8 @@
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Job } from 'bullmq';
-import { getPrisma } from '@aegis/db';
-import { GuildConfigSchema, RedisKeys, type LogCategory } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { GuildConfigSchema, RedisKeys, type LogCategory } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import { recordWorkerEvent, timeoutMember, unbanMember } from '../discord.js';

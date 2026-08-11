@@ -113,7 +113,7 @@ services:
     # I `$$` sono voluti: compose li riduce a un `$` prima di passare il comando
     # alla shell. Con un solo `$`, `$i` verrebbe sostituito da compose stesso
     # con una stringa vuota e il ciclo perderebbe il contatore.
-    command: ['sh', '-c', 'for i in $$(seq 1 40); do npm run deploy -w @aegis/db && exit 0; echo "database non ancora pronto, riprovo fra 3s ($$i/40)"; sleep 3; done; echo "database irraggiungibile dopo due minuti: guarda i log di aegis-postgres"; exit 1']
+    command: ['sh', '-c', 'for i in $$(seq 1 40); do npm run deploy -w @angel/db && exit 0; echo "database non ancora pronto, riprovo fra 3s ($$i/40)"; sleep 3; done; echo "database irraggiungibile dopo due minuti: guarda i log di aegis-postgres"; exit 1']
     environment:
       <<: *common-env
     depends_on:
@@ -205,11 +205,11 @@ x-casaos:
   category: Network
   icon: https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docs/icon.svg
   title:
-    en_us: Aegis
-    it_it: Aegis
+    en_us: ANGEL
+    it_it: ANGEL
   tagline:
-    en_us: Discord security bot with web control panel
-    it_it: Bot Discord di sicurezza con pannello web
+    en_us: ANGEL — the guardian of your Discord server
+    it_it: ANGEL — il custode del tuo server Discord
   description:
     en_us: >-
       Self-hosted Discord moderation and security bot. Anti-raid, anti-nuke,

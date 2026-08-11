@@ -167,7 +167,7 @@ export async function buildTranscript(options: TranscriptOptions): Promise<Trans
   </div>
   ${rows || '<p class="meta">Nessun messaggio archiviato per questo canale nel periodo richiesto.</p>'}
   <footer>
-    Generata da Aegis a partire dal proprio archivio. Contiene solo i messaggi che il bot aveva
+    Generata da ANGEL a partire dal proprio archivio. Contiene solo i messaggi che il bot aveva
     già registrato: quelli precedenti alla sua installazione, o esclusi dalla configurazione della
     privacy, non compaiono. Gli allegati sono conservati separatamente sul server che ospita il bot.
   </footer>

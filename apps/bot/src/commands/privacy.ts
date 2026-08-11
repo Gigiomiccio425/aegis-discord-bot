@@ -1,5 +1,5 @@
 import { EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import type { Command } from './types.js';
 import { t } from '../core/i18n.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -37,7 +37,7 @@ const privacy: Command = {
       .setTitle('Trattamento dei dati')
       .setColor(0x5865f2)
       .setDescription(
-        'Questo server usa **Aegis** per moderazione e sicurezza. ' +
+        'Questo server usa **ANGEL** per moderazione e sicurezza. ' +
           'Ecco cosa viene registrato.',
       )
       .addFields(

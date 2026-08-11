@@ -6,7 +6,7 @@ import {
   SlashCommandBuilder,
   type GuildMember,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import type { Command } from './types.js';
 import { createCase } from '../core/cases.js';
 import { canActOn } from '../core/permissions.js';

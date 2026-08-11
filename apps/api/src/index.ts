@@ -6,7 +6,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import staticPlugin from '@fastify/static';
 import websocket from '@fastify/websocket';
-import { disconnectPrisma, getPrisma } from '@aegis/db';
+import { disconnectPrisma, getPrisma } from '@angel/db';
 import { logger, loggerOptions } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
 import { authRoutes } from './routes/auth.js';

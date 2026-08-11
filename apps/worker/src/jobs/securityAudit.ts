@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
-import { getPrisma } from '@aegis/db';
-import { GuildConfigSchema, RedisKeys } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { GuildConfigSchema, RedisKeys } from '@angel/shared';
 import { getRedis } from '../redis.js';
 import { childLogger } from '../logger.js';
 

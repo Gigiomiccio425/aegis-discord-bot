@@ -67,7 +67,7 @@ jobs:
           # La versione entra nell'immagine: il pannello la mostra e la
           # confronta con l'ultima release pubblicata su GitHub.
           build-args: |
-            AEGIS_VERSION=${{ steps.meta.outputs.version }}
+            ANGEL_VERSION=${{ steps.meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

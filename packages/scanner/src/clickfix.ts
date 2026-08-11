@@ -1,4 +1,4 @@
-import { normalize } from '@aegis/shared';
+import { normalize } from '@angel/shared';
 import type { Finding } from './types.js';
 
 /* ═══════════════════════════════════════════════════════════════════════

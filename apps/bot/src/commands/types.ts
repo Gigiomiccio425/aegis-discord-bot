@@ -6,7 +6,7 @@ import type {
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
-import type { GuildConfig } from '@aegis/shared';
+import type { GuildConfig } from '@angel/shared';
 
 export interface CommandContext {
   client: Client;

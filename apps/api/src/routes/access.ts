@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getPrisma, type PanelRole } from '@aegis/db';
+import { getPrisma, type PanelRole } from '@angel/db';
 import { requireGuild } from '../guard.js';
 
 /* ═══════════════════════════════════════════════════════════════════════

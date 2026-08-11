@@ -14,20 +14,26 @@ export function Login() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
-        <h1 className="text-2xl font-semibold">Aegis</h1>
-        <p className="mt-2 text-sm text-neutral-400">
-          Pannello di controllo per la sicurezza e la moderazione del tuo server Discord.
+        <h1 className="text-2xl font-semibold tracking-wide text-[var(--color-accent-soft)]">
+          ANGEL
+        </h1>
+        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-neutral-500">
+          custode del server
+        </p>
+        <p className="mt-3 text-sm text-neutral-400">
+          Veglia, riconosce e interviene. Pannello di controllo per la sicurezza e la moderazione
+          del tuo server Discord.
         </p>
 
         {error && (
-          <div className="mt-5 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#ffb3b5]">
+          <div className="mt-5 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
             {messages[error] ?? 'Accesso non riuscito.'}
           </div>
         )}
 
         <a
           href="/api/auth/login"
-          className="mt-6 block rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-[#4752c4]"
+          className="mt-6 block rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-center text-sm font-medium text-[#14161e] transition-colors hover:bg-[#c2a052]"
         >
           Accedi con Discord
         </a>

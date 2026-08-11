@@ -6,7 +6,7 @@ import {
   type GuildMember,
   type TextChannel,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import type { Command } from './types.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import {
@@ -365,7 +365,29 @@ const giveaway: Command = {
     });
 
     const channel = interaction.channel as TextChannel;
-    const message = await channel.send(await buildGiveawayMessage(record.id));
+
+    // Ruolo e testo di accompagnamento sono una scelta del server, non della
+    // singola estrazione: si configurano una volta con `/annunci giveaway` o
+    // dal pannello, e valgono per tutti i giveaway successivi.
+    const intro = [
+      settings.mentionRoleId ? `<@&${settings.mentionRoleId}>` : '',
+      settings.announceTemplate
+        .replace(/\{premio\}/g, record.prize)
+        .replace(/\{vincitori\}/g, String(winnerCount))
+        .replace(/\{fine\}/g, `<t:${Math.floor(record.endsAt.getTime() / 1000)}:R>`),
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const message = await channel.send({
+      ...(await buildGiveawayMessage(record.id)),
+      ...(intro
+        ? {
+            content: intro,
+            allowedMentions: settings.mentionRoleId ? { roles: [settings.mentionRoleId] } : { parse: [] },
+          }
+        : {}),
+    });
     await prisma.giveaway.update({ where: { id: record.id }, data: { messageId: message.id } });
 
     await recordEvent(client, {

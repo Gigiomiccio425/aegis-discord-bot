@@ -16,7 +16,7 @@ export const LogEventType = z.enum([
   'MESSAGE_PINNED',
   'MESSAGE_UNPINNED',
   'ATTACHMENT_POSTED',
-  /** Voto in un sondaggio nativo di Discord, distinto da quelli di Aegis. */
+  /** Voto in un sondaggio nativo di Discord, distinto da quelli di ANGEL. */
   'MESSAGE_POLL_VOTED',
 
   // ── Reazioni ────────────────────────────────────────────────

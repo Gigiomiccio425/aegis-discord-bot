@@ -1,5 +1,5 @@
 import type { Client, Message } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   decide,
   noDecision,
@@ -8,7 +8,7 @@ import {
   type Decision,
   type GuildConfig,
   type Reason,
-} from '@aegis/shared';
+} from '@angel/shared';
 import {
   expandUrl,
   matchPhash,
@@ -16,12 +16,12 @@ import {
   scanContent,
   type ScanResult,
   type ScannerDeps,
-} from '@aegis/scanner';
+} from '@angel/scanner';
 import { Queue } from 'bullmq';
 import { getRedis } from '../core/redis.js';
 import { isExempt } from '../core/permissions.js';
 import { childLogger } from '../core/logger.js';
-import type { LogEventType } from '@aegis/shared';
+import type { LogEventType } from '@angel/shared';
 
 const log = childLogger('contentGuard');
 

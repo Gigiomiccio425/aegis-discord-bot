@@ -143,6 +143,17 @@ export type EventsConfig = z.infer<typeof EventsConfig>;
    ═══════════════════════════════════════════════════════════════════════ */
 export const GiveawaysConfig = ModuleBase.extend({
   hostRoleIds: SnowflakeList,
+
+  /**
+   * Ruolo avvisato a ogni nuovo giveaway, e testo che accompagna il riquadro.
+   *
+   * Stanno qui e non nel singolo giveaway perché sono una scelta del server,
+   * non dell'estrazione: chi indice un giveaway non deve ricordarsi ogni volta
+   * quale ruolo si avvisa e con che tono.
+   */
+  mentionRoleId: Snowflake.nullable().default(null),
+  /** Variabili: {premio} {vincitori} {fine} */
+  announceTemplate: z.string().max(1000).default(''),
   /** Requisiti predefiniti applicati a ogni nuovo giveaway. */
   defaultRequirements: z
     .object({

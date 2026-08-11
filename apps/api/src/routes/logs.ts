@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getPrisma, serializeBigInt } from '@aegis/db';
+import { getPrisma, serializeBigInt } from '@angel/db';
 import { z } from 'zod';
 import { requireGuild } from '../guard.js';
 

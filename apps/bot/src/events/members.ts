@@ -7,7 +7,7 @@ import {
   type PartialUser,
   type User,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { getGuildConfig } from '../core/config.js';
 import { applyDecision } from '../core/enforcer.js';
 import { childLogger } from '../core/logger.js';

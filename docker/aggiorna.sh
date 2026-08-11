@@ -1,6 +1,6 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────
-#  Aggiornamento di Aegis.
+#  Aggiornamento di ANGEL.
 #
 #      sudo sh aggiorna.sh [percorso-del-compose]
 #
@@ -79,7 +79,7 @@ docker compose -f "$COMPOSE" up -d
 
 API="$(docker ps --format '{{.Names}}' | grep -i 'aegis.*api' | head -1)"
 if [ -n "$API" ]; then
-	VERSIONE="$(docker inspect "$API" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^AEGIS_VERSION=//p')"
+	VERSIONE="$(docker inspect "$API" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^ANGEL_VERSION=//p')"
 	echo
 	echo "Versione in esecuzione: ${VERSIONE:-sconosciuta}"
 fi

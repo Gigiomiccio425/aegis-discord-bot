@@ -13,7 +13,7 @@ import { registerAuditLogEvents } from './auditLog.js';
 import { registerInviteEvents, primeInviteCache } from './invites.js';
 import { registerInteractionEvents } from './interactions.js';
 import { deployGuildCommands } from '../scripts/deployCommands.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 
 const log = childLogger('events');
 
@@ -100,8 +100,10 @@ async function onReady(client: Client<true>): Promise<void> {
     }
   }
 
+  // «Watching» e non «Playing»: dice cosa fa davvero il bot, e chi lo legge
+  // capisce in tre parole che c'è qualcosa che guarda.
   client.user.setPresence({
-    activities: [{ name: 'la sicurezza del server', type: 3 }], // 3 = Watching
+    activities: [{ name: 'veglio su questo server', type: 3 }], // 3 = Watching
     status: 'online',
   });
 }

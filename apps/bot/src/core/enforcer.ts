@@ -10,14 +10,14 @@ import {
   type Message,
   type Client,
 } from 'discord.js';
-import { getPrisma, type CaseType } from '@aegis/db';
+import { getPrisma, type CaseType } from '@angel/db';
 import {
   RedisKeys,
   type Decision,
   type DecisionAction,
   type GuildConfig,
   type LogEventType,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { childLogger } from './logger.js';
 import { getRedis } from './redis.js';
 import { canActOn, dangerousRoles } from './permissions.js';
@@ -741,7 +741,7 @@ async function openCase(
     targetId,
     targetTag: ctx.member?.user.tag ?? ctx.message?.author.tag ?? null,
     actorId: ctx.client.user?.id ?? 'system',
-    actorTag: ctx.client.user?.tag ?? 'Aegis',
+    actorTag: ctx.client.user?.tag ?? 'ANGEL',
     reason: reason.slice(0, 1000),
     automated: true,
     module: ctx.module,

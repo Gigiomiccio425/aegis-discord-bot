@@ -11,8 +11,8 @@ import {
   type GuildMember,
   type TextChannel,
 } from 'discord.js';
-import { buildTranscript, getPrisma } from '@aegis/db';
-import type { GuildConfig } from '@aegis/shared';
+import { buildTranscript, getPrisma } from '@angel/db';
+import type { GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { getRedis } from '../core/redis.js';

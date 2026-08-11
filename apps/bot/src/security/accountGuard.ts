@@ -1,6 +1,6 @@
 import type { Client, Guild, GuildMember, User } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { computePhash, phashDistance } from '@aegis/scanner';
+import { getPrisma } from '@angel/db';
+import { computePhash, phashDistance } from '@angel/scanner';
 import {
   decide,
   generatedNameScore,
@@ -10,7 +10,7 @@ import {
   type Decision,
   type GuildConfig,
   type Reason,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { isExempt } from '../core/permissions.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { childLogger } from '../core/logger.js';

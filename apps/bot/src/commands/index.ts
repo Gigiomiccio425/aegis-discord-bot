@@ -16,6 +16,7 @@ import { archiveCommands } from './archive.js';
 import { appealCommands } from './appeals.js';
 import { eventCommands } from './events.js';
 import { voiceCommands } from './voice.js';
+import { announceCommands } from './announce.js';
 
 const log = childLogger('commands');
 
@@ -30,6 +31,7 @@ export const commands: Command[] = [
   ...appealCommands,
   ...eventCommands,
   ...voiceCommands,
+  ...announceCommands,
 ];
 
 export const commandMap = new Map(commands.map((command) => [command.data.name, command]));
@@ -48,7 +50,7 @@ export async function handleCommand(
 ): Promise<void> {
   if (!interaction.guildId) {
     await interaction.reply({
-      content: 'I comandi di Aegis funzionano solo dentro un server.',
+      content: 'I comandi di ANGEL funzionano solo dentro un server.',
       flags: MessageFlags.Ephemeral,
     });
     return;

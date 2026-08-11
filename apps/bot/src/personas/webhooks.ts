@@ -5,8 +5,8 @@ import {
   type TextChannel,
   type Webhook,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { FORBIDDEN_PERSONA_PATTERNS, nameSimilarity, type GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { FORBIDDEN_PERSONA_PATTERNS, nameSimilarity, type GuildConfig } from '@angel/shared';
 import { registerManagedWebhook } from '../security/webhookGuard.js';
 import { childLogger } from '../core/logger.js';
 
@@ -30,7 +30,7 @@ const log = childLogger('personas');
        lanciato il comando. Una persona non è mai anonimato.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const WEBHOOK_NAME = 'Aegis Personas';
+const WEBHOOK_NAME = 'ANGEL Personas';
 
 /** Cache dei webhook per canale: evita una chiamata API a ogni messaggio. */
 const webhookCache = new Map<string, Webhook>();
@@ -65,7 +65,7 @@ export async function getPersonaWebhook(
   const created = await (channel as TextChannel)
     .createWebhook({
       name: WEBHOOK_NAME,
-      reason: 'Webhook per i comandi personalizzati di Aegis',
+      reason: 'Webhook per i comandi personalizzati di ANGEL',
     })
     .catch((error) => {
       log.warn({ err: error, channelId }, 'creazione webhook fallita');

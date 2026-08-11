@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
-import { disconnectPrisma, getPrisma } from '@aegis/db';
-import { Queues } from '@aegis/shared';
+import { disconnectPrisma, getPrisma } from '@angel/db';
+import { Queues } from '@angel/shared';
 import { logger } from './logger.js';
 import { getRedis, closeRedis } from './redis.js';
 import { deepScanProcessor } from './jobs/deepScan.js';
@@ -12,7 +12,7 @@ import { twitchProcessor } from './jobs/twitch.js';
 import { integrationsProcessor } from './jobs/integrations.js';
 import { securityAuditProcessor } from './jobs/securityAudit.js';
 import { socialProcessor } from './jobs/social.js';
-import { terminateOcr } from '@aegis/scanner';
+import { terminateOcr } from '@angel/scanner';
 
 /**
  * Worker.

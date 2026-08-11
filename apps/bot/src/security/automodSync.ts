@@ -7,8 +7,8 @@ import {
   type Client,
   type Guild,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import type { GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import type { GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
 
@@ -17,7 +17,7 @@ const log = childLogger('automodSync');
 /* ═══════════════════════════════════════════════════════════════════════
    SINCRONIZZAZIONE CON L'AUTOMOD NATIVO
 
-   AutoMod non sostituisce i moduli di Aegis: fa una cosa che loro non possono
+   AutoMod non sostituisce i moduli di ANGEL: fa una cosa che loro non possono
    fare, cioè bloccare il messaggio **prima che venga pubblicato**. Un bot vede
    il messaggio solo dopo che esiste; AutoMod lo intercetta durante l'invio.
    Per il contenuto testuale noto in anticipo — domini di phishing, termini
@@ -29,11 +29,11 @@ const log = childLogger('automodSync');
    nickname vietato prima ancora che possa scrivere o entrare in vocale.
    Nessun bot può arrivare così presto.
 
-   Aegis gestisce solo le regole che ha creato lui, riconoscibili dal prefisso
+   ANGEL gestisce solo le regole che ha creato lui, riconoscibili dal prefisso
    del nome: le regole scritte a mano dallo staff non vengono mai toccate.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const PREFIX = '[Aegis]';
+const PREFIX = '[ANGEL]';
 const RULE_DOMAINS = `${PREFIX} Domini bloccati`;
 const RULE_TERMS = `${PREFIX} Termini vietati`;
 const RULE_SPAM = `${PREFIX} Spam`;
@@ -237,7 +237,7 @@ export async function syncAutoModRules(
         await guild.autoModerationRules.create({
           name: rule.name,
           enabled: rule.enabled,
-          reason: 'Sincronizzazione AutoMod di Aegis',
+          reason: 'Sincronizzazione AutoMod di ANGEL',
           ...rule.payload,
         } as Parameters<typeof guild.autoModerationRules.create>[0]);
         report.created.push(rule.name);
@@ -253,7 +253,7 @@ export async function syncAutoModRules(
   // bloccare messaggi secondo criteri che nessuno ha più in mente.
   for (const [name, rule] of managed) {
     await rule
-      .delete('Regola non più prevista dalla configurazione di Aegis')
+      .delete('Regola non più prevista dalla configurazione di ANGEL')
       .then(() => report.removed.push(name))
       .catch((error: Error) => report.errors.push(`${name}: ${error.message}`));
   }

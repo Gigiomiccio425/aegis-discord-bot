@@ -173,7 +173,7 @@ export function Logs() {
                           <Link
                             to={`/g/${guildId}/utente/${event.actorId}`}
                             onClick={(clickEvent) => clickEvent.stopPropagation()}
-                            className="hover:text-[#a5adff] hover:underline"
+                            className="hover:text-[var(--color-accent-soft)] hover:underline"
                           >
                             {event.actorTag ?? event.actorId}
                           </Link>

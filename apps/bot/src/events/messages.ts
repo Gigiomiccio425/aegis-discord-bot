@@ -6,8 +6,8 @@ import {
   type PartialPollAnswer,
   type PollAnswer,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { contentFingerprint, mergeDecisions, type Decision } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { contentFingerprint, mergeDecisions, type Decision } from '@angel/shared';
 import { getGuildConfig } from '../core/config.js';
 import { applyDecision } from '../core/enforcer.js';
 import { childLogger } from '../core/logger.js';
@@ -59,7 +59,7 @@ export function registerMessageEvents(client: Client): void {
   /**
    * Sondaggi nativi di Discord.
    *
-   * Sono distinti da quelli di Aegis: chiunque può crearne uno dal client, e
+   * Sono distinti da quelli di ANGEL: chiunque può crearne uno dal client, e
    * senza questi due eventi il registro avrebbe un buco proprio dove si prende
    * una decisione collettiva.
    */

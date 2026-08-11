@@ -1,11 +1,11 @@
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   defaultGuildConfig,
   GuildConfigSchema,
   RedisKeys,
   withMasterSwitch,
   type GuildConfig,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { getRedis, getSubscriber } from './redis.js';
 import { childLogger } from './logger.js';
 

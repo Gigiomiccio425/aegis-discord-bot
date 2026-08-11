@@ -1,5 +1,5 @@
 {
-  "name": "@aegis/api",
+  "name": "@angel/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@aegis/db": "*",
-    "@aegis/shared": "*",
+    "@angel/db": "*",
+    "@angel/shared": "*",
     "@fastify/cookie": "^11.1.2",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.3",

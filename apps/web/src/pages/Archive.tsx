@@ -59,7 +59,7 @@ export function Archive() {
       <Card>
         <p className="text-sm leading-relaxed text-neutral-300">
           Discord <strong>non consente</strong> di ripristinare i messaggi eliminati: nessun
-          endpoint lo permette. Aegis tiene una copia mentre i messaggi passano, e da lì può
+          endpoint lo permette. ANGEL tiene una copia mentre i messaggi passano, e da lì può
           produrre una trascrizione consultabile oppure ripubblicarli come ricostruzione dichiarata
           (<code>/archivio ricostruisci</code>).
         </p>

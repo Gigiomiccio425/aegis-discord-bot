@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis';
-import { RedisKeys } from '@aegis/shared';
+import { RedisKeys } from '@angel/shared';
 import { logger } from './logger.js';
 
 let client: Redis | null = null;

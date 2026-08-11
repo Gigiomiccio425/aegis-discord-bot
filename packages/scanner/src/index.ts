@@ -1,4 +1,4 @@
-import { normalize, type ScannerConfig } from '@aegis/shared';
+import { normalize, type ScannerConfig } from '@angel/shared';
 import { analyzeUrl, containsCryptoAddress, extractUrls, isDiscordRemoteAuth } from './url.js';
 import { clickFixFindings } from './clickfix.js';
 import { analyzeImage, phashDistance } from './image.js';

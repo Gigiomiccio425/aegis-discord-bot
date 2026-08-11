@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { getPrisma } from '@aegis/db';
-import { GuildConfigSchema } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { GuildConfigSchema } from '@angel/shared';
 import { safeEqual } from '../crypto.js';
 import { logger } from '../logger.js';
 import { getRedis } from '../redis.js';

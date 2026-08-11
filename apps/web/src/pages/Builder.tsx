@@ -205,7 +205,7 @@ function PersonaSection({
   onChange: () => void;
   onError: (message: string) => void;
 }) {
-  const [draft, setDraft] = useState({ name: '', avatarUrl: '', color: '#5865f2', description: '' });
+  const [draft, setDraft] = useState({ name: '', avatarUrl: '', color: '#d8b45f', description: '' });
 
   const create = async () => {
     if (!draft.name.trim()) return;
@@ -216,7 +216,7 @@ function PersonaSection({
         color: draft.color,
         description: draft.description,
       });
-      setDraft({ name: '', avatarUrl: '', color: '#5865f2', description: '' });
+      setDraft({ name: '', avatarUrl: '', color: '#d8b45f', description: '' });
       onChange();
     } catch (err) {
       onError((err as Error).message);
@@ -279,7 +279,7 @@ function PersonaSection({
               ) : (
                 <div
                   className="h-9 w-9 rounded-full"
-                  style={{ background: persona.color ?? '#5865f2' }}
+                  style={{ background: persona.color ?? '#d8b45f' }}
                 />
               )}
               <div className="min-w-0 flex-1">

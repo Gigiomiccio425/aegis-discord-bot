@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Message } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { contentFingerprint, type GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { contentFingerprint, type GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 
 const log = childLogger('archiver');

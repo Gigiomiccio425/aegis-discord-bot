@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ChannelType, type Client, type TextChannel } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { buildGiveawayMessage, buildPollMessage } from './render.js';

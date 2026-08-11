@@ -7,8 +7,8 @@ import {
   type PartialMessageReaction,
   type TextChannel,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import type { GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import type { GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
 

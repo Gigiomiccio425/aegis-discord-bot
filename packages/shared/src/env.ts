@@ -15,7 +15,7 @@ const EnvSchema = z.object({
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
   // Nessuna DISCORD_PUBLIC_KEY: serve solo a verificare le firme delle
-  // interazioni ricevute via HTTP. Aegis usa il gateway, dove le interazioni
+  // interazioni ricevute via HTTP. ANGEL usa il gateway, dove le interazioni
   // arrivano già autenticate dalla connessione.
   DEV_GUILD_ID: z.string().optional(),
 

@@ -1,5 +1,5 @@
 import type { Client, Message } from 'discord.js';
-import { normalize, noDecision, type Decision, type GuildConfig, type Reason } from '@aegis/shared';
+import { normalize, noDecision, type Decision, type GuildConfig, type Reason } from '@angel/shared';
 import { isExempt } from '../core/permissions.js';
 import { recordEvent } from '../logging/auditLogger.js';
 

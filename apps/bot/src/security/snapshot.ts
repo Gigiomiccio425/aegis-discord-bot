@@ -4,7 +4,7 @@ import {
   type Guild,
   type NonThreadGuildBasedChannel,
 } from 'discord.js';
-import { getPrisma, type SnapshotKind } from '@aegis/db';
+import { getPrisma, type SnapshotKind } from '@angel/db';
 import { childLogger } from '../core/logger.js';
 
 const log = childLogger('snapshot');

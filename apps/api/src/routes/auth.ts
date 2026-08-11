@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   authorizeUrl,
   canManageGuild,
@@ -150,7 +150,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     // Un proprietario è OWNER ovunque senza bisogno di una riga in PanelAccess:
     // `getPanelRole` gliela riconosce direttamente. Filtrare l'elenco su quella
-    // tabella gli mostrerebbe sempre zero server — cioè «Aegis non è presente
+    // tabella gli mostrerebbe sempre zero server — cioè «ANGEL non è presente
     // in nessuno dei server che amministri» anche a bot invitato e collegato.
     const isOwner = ownerIds().includes(session.id);
 

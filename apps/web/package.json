@@ -1,5 +1,5 @@
 {
-  "name": "@aegis/web",
+  "name": "@angel/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.1.1",
     "recharts": "^3.2.1",
-    "@aegis/shared": "*"
+    "@angel/shared": "*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

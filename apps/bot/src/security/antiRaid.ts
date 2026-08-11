@@ -1,6 +1,6 @@
 import type { Client, Guild, GuildMember } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { nameSimilarity, RedisKeys, type GuildConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { nameSimilarity, RedisKeys, type GuildConfig } from '@angel/shared';
 import { getRedis, slidingWindowCount, slidingWindowMembers } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';

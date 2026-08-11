@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
-import { RedisKeys } from '@aegis/shared';
+import { RedisKeys } from '@angel/shared';
 import { getPanelRole, getSessionUser, hasAtLeast } from './auth.js';
 import { getSubscriber } from './redis.js';
 import { logger } from './logger.js';

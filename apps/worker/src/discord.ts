@@ -1,6 +1,6 @@
 import { REST, Routes } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { EVENT_CATEGORY, RedisKeys, type LogEventType } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { EVENT_CATEGORY, RedisKeys, type LogEventType } from '@angel/shared';
 import { getRedis } from './redis.js';
 import { childLogger } from './logger.js';
 

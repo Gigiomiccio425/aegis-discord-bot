@@ -1,11 +1,16 @@
-# Aegis
+# ANGEL
 
-Bot Discord di sicurezza e moderazione con pannello di controllo web, pensato per essere
-self-hosted su una VPS ZimaOS.
+**Il custode del tuo server.** Bot Discord di sicurezza e moderazione con pannello di controllo
+web, pensato per essere self-hosted su una VPS ZimaOS.
 
 Fa tre cose che i bot generalisti non fanno bene: ferma gli attacchi al server (raid, nuke,
 webhook e bot ostili), riconosce le campagne di truffa che circolano ora (immagini con QR,
 ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo consultabile.
+
+> **Sul nome.** Il progetto si chiamava Aegis. Restano `aegis` il nome del database, dei
+> container, dei volumi e dell'immagine su ghcr: rinominarli significherebbe ricreare il
+> database e perdere tutto ciò che contiene, per un guadagno puramente estetico. Sono nomi
+> che nessuno digita e che nessun utente vede.
 
 ---
 
@@ -59,8 +64,8 @@ Un bot vede un messaggio solo **dopo** che esiste; l'AutoMod di Discord lo inter
 l'invio. Per il contenuto noto in anticipo — domini di phishing, termini vietati — quella manciata
 di millisecondi è la differenza fra «nessuno l'ha visto» e «l'hanno letto in trenta».
 
-Aegis tiene sincronizzate le regole native a partire dalle proprie blocklist (`/audit`, oppure dal
-pannello). Gestisce solo le regole che ha creato lui, riconoscibili dal prefisso `[Aegis]`: quelle
+ANGEL tiene sincronizzate le regole native a partire dalle proprie blocklist (`/audit`, oppure dal
+pannello). Gestisce solo le regole che ha creato lui, riconoscibili dal prefisso `[ANGEL]`: quelle
 scritte a mano dallo staff non vengono mai toccate.
 
 Il caso più interessante è la regola sul **profilo utente** con azione `BlockMemberInteraction`:
@@ -547,7 +552,7 @@ quest'altra risponde, poi al destinatario viene assegnato un ruolo*. La sequenza
 slash vero, utilizzabile solo da chi ha i ruoli indicati.
 
 Il «finto utente» con nome e immagine propri è un **webhook** — è l'unico modo che Discord offre.
-Aegis crea e riusa un webhook per canale, e lo registra automaticamente nella allowlist del modulo
+ANGEL crea e riusa un webhook per canale, e lo registra automaticamente nella allowlist del modulo
 di protezione webhook, così non viene eliminato da sé stesso.
 
 Variabili disponibili nei testi: `{user}`, `{user.name}`, `{arg:nome}`, `{guild}`, `{channel}`,
@@ -669,7 +674,7 @@ sarebbe una scalata di privilegi gratuita.
 ### 3. Messaggi — `/archivio`
 
 Qui va detto chiaramente: **Discord non consente di ripristinare i messaggi eliminati.** Non esiste
-alcun endpoint per farlo e nessun bot può aggirarlo. Quello che Aegis può fare — e fa — è tenere
+alcun endpoint per farlo e nessun bot può aggirarlo. Quello che ANGEL può fare — e fa — è tenere
 una copia mentre i messaggi passano, e poi:
 
 - `/archivio esporta` produce una **trascrizione HTML autonoma**: nessun CSS o immagine remota,
@@ -757,7 +762,7 @@ cambiano di una riga: le code e il database sono già condivisi.
 Il bot tratta dati personali: gli ID Discord sono identificatori univoci, il contenuto dei messaggi
 lo è a maggior ragione. La Developer Policy di Discord richiede una privacy policy a prescindere.
 
-Cosa offre Aegis:
+Cosa offre ANGEL:
 
 - **Modalità di registrazione del contenuto** configurabile: `FULL`, `HASHED` (solo impronta, che
   riconosce i duplicati senza conservare il testo), `METADATA_ONLY`, o nessuna registrazione.

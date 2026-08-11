@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════
    Versione in esecuzione e disponibilità di aggiornamenti.
 
-   L'immagine porta la propria versione in `AEGIS_VERSION`, scritta dalla CI
+   L'immagine porta la propria versione in `ANGEL_VERSION`, scritta dalla CI
    a partire dal tag git. Il confronto con l'ultima release pubblicata su
    GitHub avviene qui e non nel browser: il pannello è raggiungibile solo dal
    tailnet, quindi una chiamata dal browser verso api.github.com funzionerebbe
@@ -31,7 +31,7 @@ interface Release {
 }
 
 export function runningVersion(): string {
-  return process.env.AEGIS_VERSION ?? 'sviluppo';
+  return process.env.ANGEL_VERSION ?? 'sviluppo';
 }
 
 /**

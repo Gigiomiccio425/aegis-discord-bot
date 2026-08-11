@@ -1,5 +1,5 @@
 import { EmbedBuilder, type Client, type TextChannel } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { childLogger } from '../core/logger.js';
 import { getPersonaWebhook } from '../personas/webhooks.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -78,7 +78,7 @@ export async function restoreChannelMessages(
           .setColor(0xfaa61a)
           .setDescription(
             `I messaggi che seguono sono una **ricostruzione** di <#${options.sourceChannelId}> ` +
-              `(#${options.sourceChannelName}), ripubblicata dall'archivio di Aegis.\n\n` +
+              `(#${options.sourceChannelName}), ripubblicata dall'archivio di ANGEL.\n\n` +
               '**Non sono i messaggi originali.** Sono stati inviati da un webhook, le date ' +
               'indicate sono quelle di pubblicazione originale, e gli allegati non sono inclusi.\n\n' +
               `Periodo: <t:${Math.floor(oldest.getTime() / 1000)}:f> → <t:${Math.floor(newest.getTime() / 1000)}:f>\n` +

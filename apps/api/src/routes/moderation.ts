@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getPrisma, serializeBigInt } from '@aegis/db';
+import { getPrisma, serializeBigInt } from '@angel/db';
 import { requireGuild } from '../guard.js';
 import { sendBotCommand } from '../redis.js';
 

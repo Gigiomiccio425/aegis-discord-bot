@@ -1,4 +1,4 @@
-import { normalize, nameSimilarity, hasHomoglyphs } from '@aegis/shared';
+import { normalize, nameSimilarity, hasHomoglyphs } from '@angel/shared';
 import type { ExtractedUrl, Finding } from './types.js';
 
 /* ═══════════════════════════════════════════════════════════════════════

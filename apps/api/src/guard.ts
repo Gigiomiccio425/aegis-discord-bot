@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { PanelRole } from '@aegis/db';
+import type { PanelRole } from '@angel/db';
 import { getPanelRole, getSessionUser, hasAtLeast, type SessionUser } from './auth.js';
 
 export interface GuildContext {

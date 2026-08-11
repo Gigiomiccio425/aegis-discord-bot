@@ -1,5 +1,5 @@
 import { Events, type Client, type Guild } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { recordEvent } from '../logging/auditLogger.js';
 import { syncInvites } from '../security/inviteGuard.js';
 import { childLogger } from '../core/logger.js';

@@ -9,7 +9,7 @@ import {
   type GuildMember,
   type Role,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   CommandStep,
   CustomCommandSchema,
@@ -17,7 +17,7 @@ import {
   type CustomCommand,
   type GuildConfig,
   type Persona,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { getRedis } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';

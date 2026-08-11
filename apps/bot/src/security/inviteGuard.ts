@@ -1,6 +1,6 @@
 import type { Client, Guild, Message } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { noDecision, type Decision, type GuildConfig, type Reason } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { noDecision, type Decision, type GuildConfig, type Reason } from '@angel/shared';
 import { isExempt } from '../core/permissions.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { childLogger } from '../core/logger.js';

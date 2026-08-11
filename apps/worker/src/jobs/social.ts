@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
-import { getPrisma } from '@aegis/db';
-import { GuildConfigSchema, type RssFeedConfig, type YouTubeChannelConfig } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { GuildConfigSchema, type RssFeedConfig, type YouTubeChannelConfig } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import { recordWorkerEvent, sendMessage } from '../discord.js';

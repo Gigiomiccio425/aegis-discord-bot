@@ -1,5 +1,5 @@
 import type { Client, Message } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   contentFingerprint,
   normalize,
@@ -8,7 +8,7 @@ import {
   type Decision,
   type GuildConfig,
   type Reason,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { getRedis } from '../core/redis.js';
 import { isExempt } from '../core/permissions.js';
 import { recordEvent } from '../logging/auditLogger.js';

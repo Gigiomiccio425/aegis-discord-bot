@@ -484,7 +484,7 @@ async function handleWebhooksUpdate(client: Client, channel: GuildChannel): Prom
   const webhooks = await channel.guild.fetchWebhooks().catch(() => null);
   if (!webhooks) return;
 
-  const { getPrisma } = await import('@aegis/db');
+  const { getPrisma } = await import('@angel/db');
   const prisma = getPrisma();
   const known = await prisma.webhookRecord.findMany({
     where: { guildId: channel.guild.id, deletedAt: null },

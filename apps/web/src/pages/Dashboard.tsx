@@ -122,8 +122,8 @@ export function Dashboard() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="ingressi" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5865f2" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#5865f2" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#d8b45f" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#d8b45f" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke="#2a2f3a" vertical={false} />
@@ -140,7 +140,7 @@ export function Dashboard() {
                 <Area
                   type="monotone"
                   dataKey="ingressi"
-                  stroke="#5865f2"
+                  stroke="#d8b45f"
                   fill="url(#ingressi)"
                   strokeWidth={2}
                 />

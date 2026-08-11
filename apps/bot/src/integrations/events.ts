@@ -7,7 +7,7 @@ import {
   type GuildScheduledEvent,
   type TextChannel,
 } from 'discord.js';
-import type { GuildConfig } from '@aegis/shared';
+import type { GuildConfig } from '@angel/shared';
 import { getRedis } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';

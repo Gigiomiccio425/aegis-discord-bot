@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   defaultGuildConfig,
   MODULE_REGISTRY,
   parseGuildConfig,
   RedisKeys,
   type GuildConfig,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { requireGuild } from '../guard.js';
 import { getRedis, sendBotCommand } from '../redis.js';
 import { logger } from '../logger.js';
@@ -34,7 +34,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
    * Salvataggio della configurazione.
    *
    * La validazione usa gli stessi schemi Zod che usa il bot: se passa qui,
-   * funziona lì. È il motivo per cui gli schemi stanno in `@aegis/shared` e non
+   * funziona lì. È il motivo per cui gli schemi stanno in `@angel/shared` e non
    * duplicati nei due progetti — due copie divergono sempre, e la divergenza si
    * scopre quando una difesa non parte.
    */

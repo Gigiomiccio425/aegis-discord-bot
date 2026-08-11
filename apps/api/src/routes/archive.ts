@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { buildTranscript, getPrisma } from '@aegis/db';
+import { buildTranscript, getPrisma } from '@angel/db';
 import { requireGuild } from '../guard.js';
 
 /* ═══════════════════════════════════════════════════════════════════════

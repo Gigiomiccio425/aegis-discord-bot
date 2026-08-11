@@ -1,4 +1,4 @@
-import { getPrisma, type CaseType } from '@aegis/db';
+import { getPrisma, type CaseType } from '@angel/db';
 import { getRedis } from './redis.js';
 
 /**

@@ -9,7 +9,7 @@ import {
   type Decision,
   type GuildConfig,
   type Reason,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { getRedis, slidingWindowCount } from '../core/redis.js';
 import { isExempt } from '../core/permissions.js';
 

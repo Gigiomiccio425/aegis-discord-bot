@@ -6,7 +6,7 @@ import { Snowflake, SnowflakeList } from '../config/common.js';
 
    Il "finto utente" che parla in chat con nome e immagine propri è un webhook:
    Discord permette di sovrascrivere username e avatar per singolo messaggio.
-   Aegis crea (e riusa) un webhook per canale, poi lo pilota con le personas.
+   ANGEL crea (e riusa) un webhook per canale, poi lo pilota con le personas.
 
    Ogni messaggio inviato da una persona resta tracciato in `AuditEvent` con
    l'ID dell'utente umano che ha lanciato il comando: una persona non è mai un

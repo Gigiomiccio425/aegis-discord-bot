@@ -27,7 +27,12 @@ export function Layout({ me }: { me: Me }) {
     <div className="flex min-h-screen">
       <aside className="flex w-60 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="border-b border-[var(--color-border)] p-4">
-          <div className="text-lg font-semibold">Aegis</div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-lg font-semibold tracking-wide text-[var(--color-accent-soft)]">
+              ANGEL
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-neutral-600">custode</span>
+          </div>
           <select
             className="mt-3 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm"
             value={guildId}
@@ -55,7 +60,7 @@ export function Layout({ me }: { me: Me }) {
               className={({ isActive }) =>
                 `block rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive
-                    ? 'bg-[var(--color-accent)]/15 text-[#a5adff]'
+                    ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent-soft)]'
                     : 'text-neutral-300 hover:bg-[var(--color-surface-2)]'
                 }`
               }

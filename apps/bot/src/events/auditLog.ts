@@ -1,5 +1,5 @@
 import { AuditLogEvent, Events, type Client, type GuildAuditLogsEntry } from 'discord.js';
-import type { LogEventType } from '@aegis/shared';
+import type { LogEventType } from '@angel/shared';
 import { getGuildConfig } from '../core/config.js';
 import { childLogger } from '../core/logger.js';
 import { inspectAuditEntry } from '../security/antiNuke.js';

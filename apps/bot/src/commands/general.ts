@@ -5,8 +5,8 @@ import {
   SlashCommandBuilder,
   version as djsVersion,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
-import { MODULE_REGISTRY } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { MODULE_REGISTRY } from '@angel/shared';
 import type { Command } from './types.js';
 import { t } from '../core/i18n.js';
 import { missingBotPermissions } from '../core/permissions.js';
@@ -85,7 +85,7 @@ const config: Command = {
     ]);
 
     const embed = new EmbedBuilder()
-      .setTitle('Stato di Aegis')
+      .setTitle('Stato di ANGEL')
       .setColor(warnings.length > 0 ? 0xff9900 : 0x2ecc71)
       .setDescription(lines.join('\n'))
       .addFields(

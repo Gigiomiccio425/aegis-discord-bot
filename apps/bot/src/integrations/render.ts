@@ -7,7 +7,7 @@ import {
   StringSelectMenuOptionBuilder,
   type BaseMessageOptions,
 } from 'discord.js';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import { absoluteTimestamp, relativeTimestamp } from './duration.js';
 
 /* ═══════════════════════════════════════════════════════════════════════

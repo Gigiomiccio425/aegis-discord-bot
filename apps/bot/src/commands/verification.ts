@@ -126,7 +126,7 @@ const verification: Command = {
     if (verifiedRole && verifiedRole.position >= me.roles.highest.position) {
       await interaction.editReply(
         `⚠️ Il ruolo <@&${verifiedRole.id}> è più in alto del ruolo del bot: non potrei assegnarlo. ` +
-          'Sposta il ruolo di Aegis più in alto nella lista dei ruoli.',
+          'Sposta il ruolo di ANGEL più in alto nella lista dei ruoli.',
       );
       return;
     }

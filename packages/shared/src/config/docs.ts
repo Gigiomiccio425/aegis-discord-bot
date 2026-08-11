@@ -614,6 +614,14 @@ const BY_KEY: Record<string, FieldDoc> = {
   reminderMinutes: { label: 'Promemoria', help: 'Minuti prima dell\'inizio a cui avvisare. Più valori separati da virgola.' },
   rsvpRoleId: { label: 'Ruolo per gli iscritti', help: 'Assegnato temporaneamente a chi conferma la presenza.' },
   hostRoleIds: { label: 'Chi può indire giveaway', help: 'Ruoli abilitati.' },
+  mentionRoleId: {
+    label: 'Ruolo da menzionare',
+    help: 'Avvisato a ogni nuovo annuncio. Se lo si menziona per tutto, smette di funzionare.',
+  },
+  announceTemplate: {
+    label: 'Testo di accompagnamento',
+    help: 'Riga sopra il riquadro. Variabili disponibili: {premio}, {vincitori} e {fine}.',
+  },
   minAccountAgeDays: {
     label: 'Età minima dell\'account',
     help: 'Senza requisiti, ogni giveaway attira account creati per l\'occasione.',

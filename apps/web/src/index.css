@@ -5,15 +5,24 @@
   incidenti, spesso di notte, e un fondo chiaro a schermo intero è la cosa
   sbagliata alle tre del mattino.
 */
+/*
+  Palette: notte e oro.
+
+  L'oro non è decorazione. Il pannello si guarda quasi solo quando qualcosa è
+  andato storto, e in quei momenti l'occhio deve trovare subito la riga che
+  conta: un accento caldo su fondo scuro risalta senza urlare, dove il blu
+  della piattaforma si confonde con ogni altra interfaccia aperta accanto.
+*/
 @theme {
-  --color-base: #0f1116;
-  --color-surface: #171a21;
-  --color-surface-2: #1e222b;
-  --color-border: #2a2f3a;
-  --color-accent: #5865f2;
-  --color-danger: #ed4245;
-  --color-warning: #faa61a;
-  --color-success: #3ba55d;
+  --color-base: #0b0d13;
+  --color-surface: #14161e;
+  --color-surface-2: #1c1f2a;
+  --color-border: #2b2f3d;
+  --color-accent: #d8b45f;
+  --color-accent-soft: #f0dfae;
+  --color-danger: #e05263;
+  --color-warning: #e8a33d;
+  --color-success: #5fbf8b;
 }
 
 html,

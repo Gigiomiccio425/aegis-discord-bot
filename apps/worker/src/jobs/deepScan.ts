@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
-import { getPrisma } from '@aegis/db';
-import { GuildConfigSchema } from '@aegis/shared';
+import { getPrisma } from '@angel/db';
+import { GuildConfigSchema } from '@angel/shared';
 import {
   clickFixFindings,
   computePhash,
@@ -10,8 +10,8 @@ import {
   isDiscordRemoteAuth,
   runOcr,
   type Finding,
-} from '@aegis/scanner';
-import { normalize } from '@aegis/shared';
+} from '@angel/scanner';
+import { normalize } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { deleteMessage, recordWorkerEvent, sendMessage } from '../discord.js';
 
@@ -175,7 +175,7 @@ export async function deepScanProcessor(job: Job<DeepScanPayload>): Promise<void
   const deleted = await deleteMessage(
     channelId,
     messageId,
-    'Aegis: contenuto malevolo rilevato dall\'analisi approfondita',
+    'ANGEL: contenuto malevolo rilevato dall\'analisi approfondita',
   );
 
   const isRemoteAuth = findings.some((finding) => finding.code === 'QR_REMOTE_AUTH');

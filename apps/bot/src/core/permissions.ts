@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, type GuildMember, type PermissionsString } from 'discord.js';
-import type { Exemptions, GuildConfig } from '@aegis/shared';
+import type { Exemptions, GuildConfig } from '@angel/shared';
 
 /** ID dei proprietari del bot, letti una sola volta. */
 const ownerIds = (process.env.OWNER_IDS ?? '')
@@ -89,7 +89,7 @@ export function canActOn(actor: GuildMember, target: GuildMember): boolean {
   return actor.roles.highest.comparePositionTo(target.roles.highest) > 0;
 }
 
-/** Permessi minimi perché Aegis possa svolgere il proprio lavoro. */
+/** Permessi minimi perché ANGEL possa svolgere il proprio lavoro. */
 export const REQUIRED_BOT_PERMISSIONS = [
   PermissionFlagsBits.ViewAuditLog,
   PermissionFlagsBits.ManageRoles,

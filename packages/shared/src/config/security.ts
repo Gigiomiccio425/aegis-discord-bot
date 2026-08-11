@@ -447,7 +447,7 @@ export type StickyRolesConfig = z.infer<typeof StickyRolesConfig>;
    AUTOMOD SYNC  —  regole native Discord pilotate dal pannello
    ═══════════════════════════════════════════════════════════════════════ */
 export const AutoModSyncConfig = ModuleBase.extend({
-  /** Mantiene allineate le regole AutoMod native con le blocklist di Aegis. */
+  /** Mantiene allineate le regole AutoMod native con le blocklist di ANGEL. */
   syncBlockedTerms: z.boolean().default(true),
   /**
    * Regola sul profilo utente con azione QUARANTINE_USER: Discord blocca

@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { getPrisma } from '@aegis/db';
+import { getPrisma } from '@angel/db';
 import {
   CustomCommandSchema,
   FORBIDDEN_PERSONA_PATTERNS,
   PersonaSchema,
   type CustomCommand,
-} from '@aegis/shared';
+} from '@angel/shared';
 import { requireGuild } from '../guard.js';
 import { sendBotCommand } from '../redis.js';
 

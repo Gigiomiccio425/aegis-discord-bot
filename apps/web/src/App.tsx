@@ -69,7 +69,7 @@ function GuildRedirect({ me }: { me: Me }) {
     <div className="mx-auto max-w-lg p-10 text-center">
       <h1 className="text-xl font-semibold">Nessun server disponibile</h1>
       <p className="mt-3 text-sm text-neutral-400">
-        Aegis non è presente in nessuno dei server che amministri.
+        ANGEL non è presente in nessuno dei server che amministri.
       </p>
       {me.pendingInvite.length > 0 && (
         <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left">

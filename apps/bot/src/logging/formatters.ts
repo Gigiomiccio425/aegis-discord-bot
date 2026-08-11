@@ -1,21 +1,30 @@
 import { EmbedBuilder, escapeMarkdown, type APIEmbedField } from 'discord.js';
-import { EVENT_CATEGORY, type LogCategory, type LogEventType } from '@aegis/shared';
+import { EVENT_CATEGORY, type LogCategory, type LogEventType } from '@angel/shared';
 
 /** Colore per categoria: rende il canale di log leggibile a colpo d'occhio. */
+/*
+ * Colori del registro: ottoni e ambre per l'ordinario, rosso solo dove serve.
+ *
+ * Una tavolozza ristretta è una scelta funzionale, non estetica. Con dodici
+ * colori accesi tutti allo stesso modo, nessuno significa più niente e il
+ * canale diventa un arcobaleno in cui l'unica riga urgente è indistinguibile
+ * dalle altre. Qui le categorie ordinarie restano smorzate e il calore cresce
+ * con la gravità.
+ */
 const CATEGORY_COLOR: Record<LogCategory, number> = {
-  MESSAGE: 0x5865f2,
-  REACTION: 0x9b59b6,
-  MEMBER: 0x2ecc71,
-  VOICE: 0x1abc9c,
-  CHANNEL: 0x3498db,
-  ROLE: 0xe67e22,
-  SERVER: 0x95a5a6,
-  INVITE: 0xf1c40f,
-  WEBHOOK: 0xe91e63,
-  MODERATION: 0xe74c3c,
-  SECURITY: 0xff0000,
-  AUTOMOD: 0xff6b35,
-  BOT: 0x7289da,
+  MESSAGE: 0x5c6070,
+  REACTION: 0x6b6478,
+  MEMBER: 0x7d9a86,
+  VOICE: 0x6f8a95,
+  CHANNEL: 0x6d7c94,
+  ROLE: 0xb08a4a,
+  SERVER: 0x8a8578,
+  INVITE: 0xc2a052,
+  WEBHOOK: 0xa87050,
+  MODERATION: 0xd8b45f,
+  SECURITY: 0xe05263,
+  AUTOMOD: 0xe8a33d,
+  BOT: 0x7a8296,
 };
 
 const EVENT_EMOJI: Partial<Record<LogEventType, string>> = {
@@ -193,9 +202,9 @@ export function eventTitle(type: LogEventType): string {
 export function categoryColor(type: LogEventType, severity = 0): number {
   // La gravità sovrascrive il colore di categoria: un evento critico deve
   // saltare all'occhio anche in un canale affollato.
-  if (severity >= 80) return 0xff0000;
-  if (severity >= 50) return 0xff9900;
-  return CATEGORY_COLOR[EVENT_CATEGORY[type]] ?? 0x2f3136;
+  if (severity >= 80) return 0xe05263;
+  if (severity >= 50) return 0xe8a33d;
+  return CATEGORY_COLOR[EVENT_CATEGORY[type]] ?? 0x2b2f3d;
 }
 
 /** Costruisce l'embed per il canale di log Discord. */

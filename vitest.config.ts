@@ -14,7 +14,7 @@ export default defineConfig({
     alias: {
       // `fileURLToPath` e non `.pathname`: su Windows quest'ultimo restituisce
       // un percorso con lo slash iniziale (`/E:/…`) che il resolver non trova.
-      '@aegis/shared': fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)),
+      '@angel/shared': fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)),
     },
   },
 });
