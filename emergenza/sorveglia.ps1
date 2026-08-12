@@ -88,17 +88,49 @@ function Test-Principale {
   return @{ vivo = $false }
 }
 
+# ── Chiamate a Docker ────────────────────────────────────────────────────
+#
+# Passano tutte da qui, e non e' un vezzo. In Windows PowerShell 5.1 un
+# comando nativo che scrive su stderr, con ErrorActionPreference a Stop,
+# solleva NativeCommandError e **termina lo script**: bastava avere Docker
+# installato ma non avviato per far morire il sorvegliante con uno stack
+# trace, invece di dire «avvia Docker Desktop».
+#
+# `2>$null` non risolve — nasconde il testo, non l'eccezione. Serve abbassare
+# la preferenza per la durata della chiamata e unire stderr all'output.
+function Esegui-Docker {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$argomenti)
+
+  if (-not (Test-Docker)) {
+    return @{ ok = $false; codice = -1; testo = 'docker non installato' }
+  }
+
+  $precedente = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $testo = (& docker @argomenti 2>&1 | Out-String)
+    return @{ ok = ($LASTEXITCODE -eq 0); codice = $LASTEXITCODE; testo = $testo }
+  } catch {
+    return @{ ok = $false; codice = -1; testo = $_.Exception.Message }
+  } finally {
+    $ErrorActionPreference = $precedente
+  }
+}
+
 function Test-Docker {
   return $null -ne (Get-Command docker -ErrorAction SilentlyContinue)
 }
 
+# Installato non significa in esecuzione: su Windows il comando c'e' sempre,
+# il demone solo quando Docker Desktop e' avviato.
+function Test-DemoneDocker {
+  return (Esegui-Docker 'version' '--format' '{{.Server.Version}}').ok
+}
+
 function Test-NodoLocale {
-  # Senza Docker il nodo non puo' essere in esecuzione per definizione, e
-  # interrogarlo solleverebbe un errore che fermerebbe l'intero sorvegliante.
-  if (-not (Test-Docker)) { return $false }
-  $nomi = docker ps --format '{{.Names}}' 2>$null
-  if ($null -eq $nomi) { return $false }
-  return ($nomi -contains 'angel-emergenza')
+  $esito = Esegui-Docker 'ps' '--format' '{{.Names}}'
+  if (-not $esito.ok) { return $false }
+  return ($esito.testo -split "`r?`n") -contains 'angel-emergenza'
 }
 
 # ── Accensione e spegnimento ─────────────────────────────────────────────
@@ -106,16 +138,23 @@ function Test-NodoLocale {
 function Avvia-Nodo {
   if (-not (Test-Docker)) {
     Scrivi 'Il principale non risponde, ma Docker non e installato: il nodo non puo partire.' 'Red'
-    Scrivi 'Installa Docker Desktop: https://www.docker.com/products/docker-desktop/' 'Red'
+    Scrivi 'Scarica Docker Desktop: https://www.docker.com/products/docker-desktop/' 'Red'
+    return
+  }
+
+  if (-not (Test-DemoneDocker)) {
+    Scrivi 'Il principale non risponde, ma Docker Desktop non e avviato.' 'Red'
+    Scrivi 'Aprilo dal menu Start e attendi che l icona diventi verde, poi riprova.' 'Red'
     return
   }
 
   Scrivi 'Il principale non risponde: accendo il nodo di emergenza.' 'Yellow'
-  docker compose -f $compose up -d 2>&1 | Out-Null
-  if ($LASTEXITCODE -eq 0) {
+  $esito = Esegui-Docker 'compose' '-f' $compose 'up' '-d'
+  if ($esito.ok) {
     Scrivi 'Nodo di emergenza attivo. Pannello locale: http://localhost:781' 'Green'
   } else {
-    Scrivi 'Avvio del nodo fallito. Controlla che Docker Desktop sia in esecuzione.' 'Red'
+    Scrivi 'Avvio del nodo fallito.' 'Red'
+    Scrivi $esito.testo.Trim() 'DarkGray'
   }
 }
 
@@ -128,7 +167,7 @@ function Ferma-Nodo {
   }
 
   Scrivi 'Spengo il nodo di emergenza: la priorita torna al server.' 'Cyan'
-  docker compose -f $compose stop 2>&1 | Out-Null
+  Esegui-Docker 'compose' '-f' $compose 'stop' | Out-Null
 
   if ($conSincronizzazione) { Sincronizza }
 }
@@ -140,9 +179,9 @@ function Ferma-Nodo {
 function Esporta-Dati {
   # Il worker esporta all'avvio quando la versione cambia; qui si forza il
   # lavoro subito, perché sta per spegnersi e dopo non ci sarebbe più modo.
-  docker exec angel-emergenza node -e "import('/app/apps/worker/dist/jobs/selfBackup.js').then(m => m.runSelfBackup()).then(r => console.log(JSON.stringify(r)))" 2>&1 | Out-Null
+  $esito = Esegui-Docker 'exec' 'angel-emergenza' 'node' '-e' "import('/app/apps/worker/dist/jobs/selfBackup.js').then(m => m.runSelfBackup()).then(r => console.log(JSON.stringify(r)))"
 
-  if ($LASTEXITCODE -ne 0) {
+  if (-not $esito.ok) {
     Scrivi 'Esportazione non riuscita: i dati restano nel database locale, che non viene cancellato.' 'Yellow'
   }
 }

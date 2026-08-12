@@ -49,6 +49,10 @@ davvero partire — senza, il bat te lo dice e prosegue.
 Al primo avvio Docker Desktop chiede di installare WSL2 se manca: accetta e
 riavvia il PC quando lo propone.
 
+**Docker Desktop deve essere in esecuzione**, non solo installato: su Windows
+il comando  esiste sempre, ma senza l'applicazione avviata non c'e'
+nessun demone a rispondere. Il sorvegliante distingue i due casi e lo dice.
+
 **2.** Apri `impostazioni.txt` e metti l'indirizzo del tuo server al posto del
 segnaposto. Deve essere raggiungibile da questo PC: se passa da Tailscale o da
 una VPN, assicurati che siano connessi — altrimenti il sorvegliante
