@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 export function Card({
   title,
@@ -137,4 +137,127 @@ export function formatDate(value: string | Date): string {
     dateStyle: 'short',
     timeStyle: 'medium',
   }).format(new Date(value));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTROLLI CHE NON COMBATTONO CON CHI SCRIVE
+
+   Il problema è sempre lo stesso: il valore mostrato viene ricalcolato dal
+   dato normalizzato a ogni tasto premuto. La virgola appena scritta non
+   sopravvive alla normalizzazione — `'a,'` diventa `['a']` diventa `'a'` — e
+   il secondo valore non si riesce proprio a cominciare. Lo stesso vale per il
+   numero svuotato per riscriverlo, che torna 0 sotto le dita.
+
+   La soluzione è tenere il testo grezzo mentre il campo è in uso e
+   normalizzare solo il dato che esce. Il testo mostrato si riallinea quando il
+   valore cambia da fuori — ripristino di una versione, ricarica — e non mentre
+   si scrive.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Elenco di valori semplici, separati da virgola. */
+export function ListInput({
+  value,
+  numeric = false,
+  className,
+  placeholder = 'valori separati da virgola',
+  onChange,
+}: {
+  value: (string | number)[];
+  numeric?: boolean;
+  className?: string;
+  placeholder?: string;
+  onChange: (value: (string | number)[]) => void;
+}) {
+  const canonico = value.join(', ');
+  const [text, setText] = useState(canonico);
+  const [ultimo, setUltimo] = useState(canonico);
+
+  // Riallineamento solo su cambi che non vengono da qui: si confronta con
+  // l'ultimo valore prodotto da questo campo, non con il testo scritto, che
+  // durante la digitazione è legittimamente diverso dal canonico.
+  if (canonico !== ultimo) {
+    setUltimo(canonico);
+    setText(canonico);
+  }
+
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(event) => {
+        setText(event.target.value);
+        const valori = event.target.value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .map((item) => (numeric ? Number(item) : item))
+          .filter((item) => !(typeof item === 'number' && Number.isNaN(item)));
+        setUltimo(valori.join(', '));
+        onChange(valori);
+      }}
+      className={
+        className ??
+        'w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm'
+      }
+      placeholder={placeholder}
+    />
+  );
+}
+
+/**
+ * Numero.
+ *
+ * Il campo può restare temporaneamente vuoto o contenere solo un meno: sono
+ * stati di passaggio mentre si riscrive, e in quel momento il valore salvato
+ * resta l'ultimo numero valido invece di diventare zero.
+ */
+export function NumberInput({
+  value,
+  step,
+  min,
+  title,
+  className,
+  onChange,
+}: {
+  value: number;
+  step?: number | string;
+  min?: number;
+  title?: string;
+  className?: string;
+  onChange: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const [ultimo, setUltimo] = useState(value);
+
+  if (value !== ultimo) {
+    setUltimo(value);
+    setText(String(value));
+  }
+
+  return (
+    <input
+      type="number"
+      value={text}
+      step={step}
+      min={min}
+      title={title}
+      onChange={(event) => {
+        setText(event.target.value);
+        const numero = Number(event.target.value);
+        if (event.target.value.trim() === '' || Number.isNaN(numero)) return;
+        setUltimo(numero);
+        onChange(numero);
+      }}
+      onBlur={() => {
+        // Uscendo dal campo lo stato di passaggio finisce: si rimette ciò che
+        // è davvero salvato, così non resta a schermo un vuoto che non
+        // corrisponde a niente.
+        if (text.trim() === '' || Number.isNaN(Number(text))) setText(String(ultimo));
+      }}
+      className={
+        className ??
+        'w-32 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm'
+      }
+    />
+  );
 }

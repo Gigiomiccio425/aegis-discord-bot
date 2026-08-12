@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { COMMAND_DOCS, type CommandDoc } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  NumberInput,
+  formatDate,
+} from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    STRUMENTI
@@ -392,11 +400,10 @@ function WatchedUsers() {
           placeholder="Perché lo stai sorvegliando"
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
         />
-        <input
-          type="number"
+        <NumberInput
           value={hours}
           min={0}
-          onChange={(event) => setHours(Number(event.target.value))}
+          onChange={setHours}
           title="Ore. 0 = finché non lo togli"
           className="w-24 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
         />

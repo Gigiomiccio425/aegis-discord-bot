@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api, type CustomCommandRecord, type Persona } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  ListInput,
+  Loading,
+  NumberInput,
+} from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    BUILDER DI COMANDI E PERSONAS
@@ -397,24 +406,19 @@ function CommandEditor({
           <span className="mb-1 block text-xs text-neutral-500">
             ID ruoli abilitati (separati da virgola, vuoto = tutti)
           </span>
-          <input
+          <ListInput
             className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
-            value={draft.allowedRoleIds.join(',')}
-            onChange={(event) =>
-              setDraft({
-                ...draft,
-                allowedRoleIds: event.target.value.split(',').map((id) => id.trim()).filter(Boolean),
-              })
-            }
+            value={draft.allowedRoleIds}
+            placeholder=""
+            onChange={(next) => setDraft({ ...draft, allowedRoleIds: next as string[] })}
           />
         </label>
         <label className="text-sm">
           <span className="mb-1 block text-xs text-neutral-500">Attesa fra due usi (secondi)</span>
-          <input
-            type="number"
+          <NumberInput
             className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
             value={draft.cooldownSec}
-            onChange={(event) => setDraft({ ...draft, cooldownSec: Number(event.target.value) })}
+            onChange={(next) => setDraft({ ...draft, cooldownSec: next })}
           />
         </label>
       </div>
@@ -545,12 +549,11 @@ function CommandEditor({
               )}
 
               {step.kind === 'WAIT' && (
-                <input
-                  type="number"
+                <NumberInput
                   step="0.5"
                   className="w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm"
                   value={Number(step.seconds ?? 3)}
-                  onChange={(event) => updateStep(index, { seconds: Number(event.target.value) })}
+                  onChange={(next) => updateStep(index, { seconds: next })}
                 />
               )}
 
@@ -609,11 +612,10 @@ function CommandEditor({
                   />
                   <label className="flex items-center gap-1 text-xs text-neutral-400">
                     salta
-                    <input
-                      type="number"
+                    <NumberInput
                       className="w-16 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
                       value={Number(step.skipSteps ?? 1)}
-                      onChange={(event) => updateStep(index, { skipSteps: Number(event.target.value) })}
+                      onChange={(next) => updateStep(index, { skipSteps: next })}
                     />
                     passi se falsa
                   </label>

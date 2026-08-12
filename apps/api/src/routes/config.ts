@@ -3,6 +3,8 @@ import { getPrisma } from '@angel/db';
 import {
   defaultGuildConfig,
   MODULE_REGISTRY,
+  objectArrayPaths,
+  objectArrayTemplates,
   parseGuildConfig,
   RedisKeys,
   type GuildConfig,
@@ -24,6 +26,12 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     return {
       config: parsed.ok ? parsed.value : defaultGuildConfig(),
       modules: MODULE_REGISTRY,
+      // Quali elenchi contengono oggetti: il pannello non può dedurlo da un
+      // elenco vuoto, e lo schema qui ce l'ha già in mano.
+      objectArrays: objectArrayPaths(),
+      // Lo scheletro di un elemento, per il pulsante «Aggiungi»: davanti a un
+      // elenco vuoto non si capisce quali campi vadano scritti.
+      objectArrayTemplates: objectArrayTemplates(),
       // Segnalato apertamente: una configurazione non valida nel database
       // significa che il bot sta girando con i valori predefiniti.
       invalid: parsed.ok ? null : parsed.errors,

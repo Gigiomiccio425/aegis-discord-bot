@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { describeField, SECTION_DOCS } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorBox,
+  ListInput,
+  Loading,
+  NumberInput,
+  formatDate,
+} from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONFIGURAZIONE
@@ -21,6 +30,8 @@ type Json = Record<string, unknown>;
 interface ConfigResponse {
   config: Json;
   modules: { key: string; label: string; group: string }[];
+  objectArrays: string[];
+  objectArrayTemplates: Record<string, unknown>;
   invalid: { path: string; message: string }[] | null;
 }
 
@@ -134,6 +145,8 @@ export function Settings() {
             <ObjectEditor
               value={current as Json}
               path={selected}
+              objectArrays={data.objectArrays ?? []}
+              objectTemplates={data.objectArrayTemplates ?? {}}
               onChange={(path, value) => {
                 const next = structuredClone(draft);
                 setPath(next, path, value);
@@ -337,11 +350,15 @@ function labelFor(path: string, key: string): string {
 function ObjectEditor({
   value,
   path,
+  objectArrays,
+  objectTemplates,
   onChange,
   depth = 0,
 }: {
   value: Json;
   path: string;
+  objectArrays: string[];
+  objectTemplates: Record<string, unknown>;
   onChange: (path: string, value: unknown) => void;
   depth?: number;
 }) {
@@ -378,12 +395,7 @@ function ObjectEditor({
             <div key={key} className="py-2">
               <label className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-neutral-300">{label}</span>
-                <input
-                  type="number"
-                  value={entry}
-                  onChange={(event) => onChange(fullPath, Number(event.target.value))}
-                  className="w-32 shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-                />
+                <NumberInput value={entry} onChange={(next) => onChange(fullPath, next)} />
               </label>
               <Help path={fullPath} />
             </div>
@@ -391,27 +403,11 @@ function ObjectEditor({
         }
 
         if (typeof entry === 'string' || entry === null) {
-          const multiline = typeof entry === 'string' && entry.length > 80;
           return (
             <div key={key} className="py-2">
               <label className="block text-sm">
                 <span className="mb-1 block text-neutral-300">{label}</span>
-                {multiline ? (
-                  <textarea
-                    value={entry}
-                    rows={3}
-                    onChange={(event) => onChange(fullPath, event.target.value || null)}
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={entry ?? ''}
-                    placeholder={entry === null ? 'non impostato' : ''}
-                    onChange={(event) => onChange(fullPath, event.target.value || null)}
-                    className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-                  />
-                )}
+                <TextInput value={entry} onChange={(next) => onChange(fullPath, next)} />
               </label>
               <Help path={fullPath} />
             </div>
@@ -419,28 +415,23 @@ function ObjectEditor({
         }
 
         if (Array.isArray(entry)) {
-          const isPrimitive = entry.every(
-            (item) => typeof item === 'string' || typeof item === 'number',
-          );
-          if (isPrimitive) {
+          // La forma la decide lo schema, non il contenuto: un elenco vuoto non
+          // dice se conterrà stringhe od oggetti, e indovinare dal valore
+          // significa mostrare una casella di testo dove serve un editor di
+          // oggetti — con tutto ciò che si scrive lì rifiutato dal salvataggio.
+          const oggetti =
+            objectArrays.includes(fullPath) ||
+            entry.some((item) => typeof item === 'object' && item !== null);
+
+          if (!oggetti) {
             return (
               <div key={key} className="py-2">
                 <label className="block text-sm">
                   <span className="mb-1 block text-neutral-300">{label}</span>
-                  <input
-                    type="text"
-                    value={entry.join(', ')}
-                    onChange={(event) =>
-                      onChange(
-                        fullPath,
-                        event.target.value
-                          .split(',')
-                          .map((item) => item.trim())
-                          .filter(Boolean),
-                      )
-                    }
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-                    placeholder="valori separati da virgola"
+                  <ListInput
+                    value={entry as (string | number)[]}
+                    numeric={entry.every((item) => typeof item === 'number')}
+                    onChange={(next) => onChange(fullPath, next)}
                   />
                 </label>
                 <Help path={fullPath} />
@@ -451,9 +442,21 @@ function ObjectEditor({
           // Le strutture complesse (scale d'azione, elenchi di streamer) si
           // modificano come JSON: fabbricare un editor dedicato per ciascuna
           // costerebbe più di quanto renda, e il server valida comunque tutto.
+          const modello = objectTemplates[fullPath];
           return (
             <div key={key} className="py-2 text-sm">
-              <span className="mb-1 block text-neutral-300">{label}</span>
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span className="text-neutral-300">{label}</span>
+                {modello !== undefined && (
+                  <Button
+                    onClick={() =>
+                      onChange(fullPath, [...entry, structuredClone(modello)])
+                    }
+                  >
+                    Aggiungi
+                  </Button>
+                )}
+              </div>
               <Help path={fullPath} />
               <div className="mt-1">
                 <JsonEditor value={entry} onChange={(next) => onChange(fullPath, next)} />
@@ -473,6 +476,8 @@ function ObjectEditor({
               <ObjectEditor
                 value={entry as Json}
                 path={fullPath}
+                objectArrays={objectArrays}
+                objectTemplates={objectTemplates}
                 onChange={onChange}
                 depth={depth + 1}
               />
@@ -486,9 +491,66 @@ function ObjectEditor({
   );
 }
 
+/**
+ * Testo, su una riga o su tre.
+ *
+ * La scelta fra riga singola e area di testo si fa una volta all'apertura:
+ * deciderla a ogni tasto premuto significava vedere il campo trasformarsi
+ * sotto le dita all'ottantunesimo carattere, perdendo il fuoco e il punto di
+ * inserimento.
+ */
+function TextInput({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  const [multiline] = useState(() => typeof value === 'string' && (value.length > 80 || value.includes('\n')));
+  const [vuotoEraNullo] = useState(value === null);
+
+  // Svuotare un campo che era già vuoto lo lascia nullo; svuotare un campo che
+  // aveva un testo lo lascia vuoto. Trasformare sempre il vuoto in `null`
+  // faceva rifiutare dal salvataggio i campi che una stringa devono averla.
+  const emetti = (testo: string) => onChange(testo === '' && vuotoEraNullo ? null : testo);
+
+  if (multiline) {
+    return (
+      <textarea
+        value={value ?? ''}
+        rows={3}
+        onChange={(event) => emetti(event.target.value)}
+        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={value ?? ''}
+      placeholder={value === null ? 'non impostato' : ''}
+      onChange={(event) => emetti(event.target.value)}
+      className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
+    />
+  );
+}
+
 function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unknown) => void }) {
-  const [text, setText] = useState(() => JSON.stringify(value, null, 2));
+  const canonico = JSON.stringify(value, null, 2);
+  const [text, setText] = useState(canonico);
+  const [ultimo, setUltimo] = useState(canonico);
   const [invalid, setInvalid] = useState(false);
+
+  // Il testo si riallinea solo ai cambi che arrivano da fuori — il pulsante
+  // «Aggiungi», il ripristino di una versione — e non a quelli che questo
+  // stesso campo ha appena prodotto, che riformatterebbero il JSON mentre lo
+  // si scrive.
+  if (canonico !== ultimo) {
+    setUltimo(canonico);
+    setText(canonico);
+    setInvalid(false);
+  }
 
   return (
     <div>
@@ -501,7 +563,9 @@ function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unk
         onChange={(event) => {
           setText(event.target.value);
           try {
-            onChange(JSON.parse(event.target.value));
+            const parsed: unknown = JSON.parse(event.target.value);
+            setUltimo(JSON.stringify(parsed, null, 2));
+            onChange(parsed);
             setInvalid(false);
           } catch {
             setInvalid(true);
