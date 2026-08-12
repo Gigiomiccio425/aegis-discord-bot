@@ -49,6 +49,7 @@ export async function socialProcessor(_job: Job): Promise<void> {
 
     if (config.integrations.youtube.enabled) {
       for (const channel of config.integrations.youtube.channels) {
+        if (!channel.enabled) continue;
         if (!(await due(guild.id, 'youtube', channel.channel, config.integrations.youtube.pollMinutes))) {
           continue;
         }
@@ -60,6 +61,7 @@ export async function socialProcessor(_job: Job): Promise<void> {
 
     if (config.integrations.rss.enabled) {
       for (const feed of config.integrations.rss.feeds) {
+        if (!feed.enabled) continue;
         if (!(await due(guild.id, 'rss', feed.url, config.integrations.rss.pollMinutes))) continue;
         await checkRss(guild.id, feed).catch((error) =>
           log.warn({ err: error, url: feed.url }, 'controllo RSS fallito'),

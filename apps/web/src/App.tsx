@@ -13,6 +13,7 @@ import { Settings } from './pages/Settings.js';
 import { Integrations } from './pages/Integrations.js';
 import { Archive } from './pages/Archive.js';
 import { Tickets } from './pages/Tickets.js';
+import { Annunci } from './pages/Annunci.js';
 import { User } from './pages/User.js';
 import { Access } from './pages/Access.js';
 import { Tools } from './pages/Tools.js';
@@ -51,6 +52,7 @@ export function App() {
         <Route path="backup" element={<Backups />} />
         <Route path="archivio" element={<Archive />} />
         <Route path="ticket" element={<Tickets />} />
+        <Route path="annunci" element={<Annunci />} />
         <Route path="integrazioni" element={<Integrations />} />
         <Route path="comandi" element={<Builder />} />
         <Route path="impostazioni" element={<Settings />} />

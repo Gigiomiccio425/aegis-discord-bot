@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { COMMAND_DOCS, type CommandDoc } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { scordaInventario } from '../components/pickers.js';
+import { ChannelPicker, scordaInventario } from '../components/pickers.js';
+import { MentionInput } from '../components/MentionInput.js';
 import {
   Badge,
   Button,
@@ -256,22 +257,12 @@ function SayAsBot() {
       )}
 
       <div className="space-y-3">
-        <Field label="ID del canale" help="Tasto destro sul canale in Discord → Copia ID.">
-          <input
-            value={channelId}
-            onChange={(event) => setChannelId(event.target.value)}
-            placeholder="123456789012345678"
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm"
-          />
+        <Field label="Canale" help="Scelto dall'elenco: niente ID da copiare a mano.">
+          <ChannelPicker guildId={guildId} value={channelId || null} onChange={(next) => setChannelId(next ?? '')} />
         </Field>
 
-        <Field label="Testo">
-          <textarea
-            value={text}
-            rows={4}
-            onChange={(event) => setText(event.target.value)}
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
-          />
+        <Field label="Testo" help="Scrivi # o @ per inserire un canale o una menzione dall'elenco.">
+          <MentionInput guildId={guildId} value={text} onChange={setText} rows={4} maxLength={1900} />
         </Field>
 
         <Field

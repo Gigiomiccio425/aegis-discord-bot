@@ -8,6 +8,14 @@ import { ModuleBase, Snowflake, SnowflakeList } from './common.js';
    I clip invece richiedono polling, l'API non ha un evento dedicato.
    ═══════════════════════════════════════════════════════════════════════ */
 export const TwitchStreamerConfig = z.object({
+  /**
+   * Sospende questa voce senza cancellarla.
+   *
+   * Serve per la pausa: uno streamer che non trasmette per un mese, un feed
+   * troppo rumoroso in un periodo. Senza, l'unico modo di zittirlo era
+   * eliminarlo e riscrivere tutto da capo quando serviva di nuovo.
+   */
+  enabled: z.boolean().default(true),
   /** Login Twitch (non l'ID numerico: più comodo da inserire nel pannello). */
   login: z.string().min(1).max(64),
   /** ID numerico risolto e memorizzato dal bot. */
@@ -49,6 +57,14 @@ export type TwitchConfig = z.infer<typeof TwitchConfig>;
    normali, quindi vengono riconosciute dal titolo e dalla durata assente.
    ═══════════════════════════════════════════════════════════════════════ */
 export const YouTubeChannelConfig = z.object({
+  /**
+   * Sospende questa voce senza cancellarla.
+   *
+   * Serve per la pausa: uno streamer che non trasmette per un mese, un feed
+   * troppo rumoroso in un periodo. Senza, l'unico modo di zittirlo era
+   * eliminarlo e riscrivere tutto da capo quando serviva di nuovo.
+   */
+  enabled: z.boolean().default(true),
   /** ID del canale (`UC…`), oppure `@handle` o URL: il bot lo risolve. */
   channel: z.string().min(2).max(200),
   /** ID risolto e memorizzato, per non ripetere la risoluzione ogni volta. */
@@ -84,6 +100,14 @@ export type YouTubeConfig = z.infer<typeof YouTubeConfig>;
    pagamento, e un'integrazione che si rompe da sola è peggio della sua assenza.
    ═══════════════════════════════════════════════════════════════════════ */
 export const RssFeedConfig = z.object({
+  /**
+   * Sospende questa voce senza cancellarla.
+   *
+   * Serve per la pausa: uno streamer che non trasmette per un mese, un feed
+   * troppo rumoroso in un periodo. Senza, l'unico modo di zittirlo era
+   * eliminarlo e riscrivere tutto da capo quando serviva di nuovo.
+   */
+  enabled: z.boolean().default(true),
   url: z.string().url(),
   /** Nome mostrato negli annunci. Vuoto = titolo del feed. */
   label: z.string().max(100).default(''),

@@ -499,6 +499,7 @@ Otto sezioni, raggiungibili da `PUBLIC_URL` dopo l'accesso con Discord:
 | **Backup** | Elenco snapshot con anteprima del diff prima del ripristino |
 | **Archivio messaggi** | Quanto è archiviato per canale, download delle trascrizioni HTML |
 | **Ticket e trascrizioni** | Elenco dei ticket con chi li ha presi in carico, chi li ha chiusi e perché; trascrizione completa di ognuno, letta dal file salvato sul server o ricostruita dall'archivio |
+| **Annunci** | Dirette Twitch, video YouTube e feed RSS in un elenco solo: una riga per fonte, con canale, menzione, messaggio, prova d'invio e sospensione |
 | **Integrazioni** | Sondaggi con risultati in tempo reale, giveaway, menu dei ruoli |
 | **Comandi e personas** | Builder delle sequenze e gestione delle personas |
 | **Configurazione** | Tutti i moduli, con editor generato dagli schemi condivisi, **storico delle modifiche con ripristino** e gestione delle proprie sessioni attive |
@@ -521,6 +522,26 @@ accorge il giorno in cui l'avviso non arriva dove doveva.
 Gli elenchi di oggetti — streamer seguiti, canali YouTube, feed, scale d'azione — sono schede, una
 per elemento, con «Aggiungi» che parte da uno scheletro già compilato con i valori predefiniti. Il
 JSON resta disponibile richiuso, per copiare una configurazione da un server all'altro.
+
+Dove si scrive un messaggio — l'annuncio di una diretta, la voce del bot — `#` e `@` aprono
+l'elenco di canali e ruoli, come nel client di Discord: si sceglie il nome e viene inserito l'ID
+nella forma che Discord si aspetta. Accanto, i segnaposto come `{titolo}` si inseriscono da un
+elenco invece di andarli a cercare nella documentazione.
+
+### Annunci
+
+Le fonti stanno in una pagina sola invece che sparse in tre sezioni della configurazione: sono la
+cosa che si tocca più spesso, e la sola che non riguarda la sicurezza — aggiungere uno streamer non
+deve costringere a passare davanti alle impostazioni dell'anti-nuke.
+
+Ogni voce ha il suo canale, il suo messaggio e il suo ruolo da menzionare, più:
+
+- **Prova**, che pubblica il messaggio con valori d'esempio. È l'unico modo di sapere prima se il
+  testo viene come si pensava, se il bot può scrivere in quel canale e se la menzione funziona;
+  scoprirlo alla prima diretta vera significa scoprirlo davanti a tutti.
+- **Sospendi**, che zittisce una voce senza cancellarla — per lo streamer fermo un mese o il feed
+  troppo rumoroso in un certo periodo.
+- Anteprima del messaggio con i segnaposto già sostituiti, mentre lo si scrive.
 
 ---
 

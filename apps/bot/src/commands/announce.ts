@@ -172,6 +172,7 @@ const twitch: Command = {
       existing.liveRoleId = liveRole?.id ?? existing.liveRoleId;
     } else {
       settings.streamers.push({
+        enabled: true,
         login,
         announceChannelId: channel.id,
         mentionRoleId: mention?.id ?? null,

@@ -11,6 +11,7 @@ const NAV = [
   { to: 'backup', label: 'Backup' },
   { to: 'archivio', label: 'Archivio messaggi' },
   { to: 'ticket', label: 'Ticket e trascrizioni' },
+  { to: 'annunci', label: 'Annunci' },
   { to: 'integrazioni', label: 'Integrazioni' },
   { to: 'comandi', label: 'Comandi e personas' },
   { to: 'strumenti', label: 'Strumenti' },

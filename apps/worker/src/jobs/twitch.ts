@@ -35,6 +35,9 @@ export async function twitchProcessor(job: Job): Promise<void> {
     if (!twitch.enabled || twitch.streamers.length === 0) continue;
 
     for (const streamer of twitch.streamers) {
+      // Voce sospesa: resta configurata ma non produce annunci.
+      if (!streamer.enabled) continue;
+
       await syncStreamer(guild.id, streamer).catch((error) =>
         log.warn({ err: error, login: streamer.login }, 'sincronizzazione streamer fallita'),
       );
@@ -83,7 +86,7 @@ async function drainAnnouncements(): Promise<void> {
     const streamer = parsed.data.integrations.twitch.streamers.find(
       (entry) => entry.login.toLowerCase() === payload.login.toLowerCase(),
     );
-    if (!streamer) continue;
+    if (!streamer || !streamer.enabled) continue;
 
     const stream = await getStream(payload.userId);
     await announceLive(payload.guildId, streamer, {
