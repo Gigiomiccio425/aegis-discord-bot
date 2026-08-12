@@ -186,7 +186,7 @@ export async function evaluateCompromise(
     ).catch(() => undefined);
 
     if (settings.purgeHours > 0) {
-      purgeRecent(message.guild, userId, settings.purgeHours);
+      purgeRecent(message.guild, userId, settings.purgeHours * 3600);
     }
 
     if (settings.notifyUser) {

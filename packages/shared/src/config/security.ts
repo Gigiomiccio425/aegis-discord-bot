@@ -182,6 +182,33 @@ export const AntiSpamConfig = ActiveModuleBase.extend({
   duplicateMessages: RateThreshold.default({ count: 3, windowSec: 30 }),
   /** Stesso messaggio in più canali: firma tipica dello scam bot. */
   crossChannelSpam: RateThreshold.default({ count: 3, windowSec: 20 }),
+  /**
+   * Immagini e allegati in sequenza.
+   *
+   * È una forma di spam che il conteggio dei messaggi non intercetta: sei
+   * immagini in dieci secondi sono sei messaggi, sotto la soglia del ritmo,
+   * ma riempiono lo schermo di chiunque stia leggendo e spingono fuori dalla
+   * vista tutto il resto. Nelle campagne di truffa è anche il vettore
+   * principale — l'immagine con il QR o il finto premio.
+   */
+  imageRate: RateThreshold.default({ count: 5, windowSec: 20 }),
+
+  /** Allegati massimi in un singolo messaggio. Discord ne consente dieci. */
+  maxAttachmentsPerMessage: z.number().int().min(1).max(10).default(5),
+
+  /**
+   * Minuti di messaggi da eliminare quando qualcuno viene silenziato.
+   *
+   * Silenziare chi ha inondato il canale ferma il seguito ma lascia in piedi
+   * ciò che ha già scritto: il canale resta illeggibile e chi arriva dopo
+   * trova comunque il muro di messaggi. La pulizia retroattiva è la metà
+   * dell'intervento che di solito manca.
+   *
+   * 0 = non elimina nulla. Discord non consente l'eliminazione in blocco oltre
+   * i 14 giorni, ma qui si parla di minuti.
+   */
+  purgeOnMuteMinutes: z.number().int().min(0).max(1440).default(5),
+
   mentionsPerMessage: z.number().int().min(1).max(50).default(5),
   mentionRate: RateThreshold.default({ count: 10, windowSec: 30 }),
   maxEmojisPerMessage: z.number().int().min(1).max(200).default(20),

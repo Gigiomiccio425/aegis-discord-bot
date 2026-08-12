@@ -286,6 +286,25 @@ const BY_PATH: Record<string, FieldDoc> = {
     help: 'Ore dalla creazione sotto le quali un account entra nel conteggio del gruppo sospetto.',
   },
 
+  'security.antiSpam.maxAttachmentsPerMessage': {
+    label: 'Allegati per messaggio',
+    help: 'Oltre questo numero il messaggio conta come spam. Discord ne consente dieci.',
+  },
+  'security.antiSpam.imageRate.count': {
+    label: 'Allegati consentiti',
+    help:
+      'Quanti allegati puo inviare una persona nella finestra qui sotto. Si contano gli allegati ' +
+      'e non i messaggi: dieci immagini in un messaggio e dieci messaggi da un immagine hanno lo ' +
+      'stesso effetto su chi legge.',
+  },
+  'security.antiSpam.purgeOnMuteMinutes': {
+    label: 'Minuti da ripulire al silenziamento',
+    help:
+      'Quando qualcuno viene silenziato, espulso o bandito per spam, i suoi messaggi degli ultimi ' +
+      'N minuti vengono eliminati. Silenziare ferma il seguito ma lascia in piedi il muro gia ' +
+      'scritto: il canale resta illeggibile e chi arriva dopo lo trova comunque. 0 = non elimina.',
+  },
+
   'security.antiSpam.messageRate.count': {
     label: 'Messaggi consentiti',
     help: 'Quanti messaggi può inviare una persona nella finestra qui sotto prima di essere fermata.',

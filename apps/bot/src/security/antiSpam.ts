@@ -166,6 +166,42 @@ export async function evaluateSpam(
     });
   }
 
+  /* ── Immagini e allegati ────────────────────────────────────────────────
+     Il conteggio dei messaggi non basta a intercettarli: sei immagini in
+     dieci secondi restano sei messaggi, sotto la soglia del ritmo, ma
+     riempiono lo schermo e spingono fuori dalla vista tutto il resto. */
+  if (message.attachments.size > 0) {
+    if (message.attachments.size > settings.maxAttachmentsPerMessage) {
+      reasons.push({
+        code: 'SPAM_ALLEGATI_MESSAGGIO',
+        detail: `${message.attachments.size} allegati in un solo messaggio`,
+        score: 30 * multiplier,
+      });
+    }
+
+    // Si contano gli allegati, non i messaggi che li contengono: dieci
+    // immagini in un messaggio e dieci messaggi da un'immagine hanno lo
+    // stesso effetto su chi legge. Ogni allegato entra nella finestra con una
+    // chiave propria, così il conteggio è quello vero.
+    let immagini = 0;
+    for (let indice = 0; indice < message.attachments.size; indice += 1) {
+      immagini = await slidingWindowCount(
+        RedisKeys.spamImages(guildId, userId),
+        settings.imageRate.windowSec * 1000,
+        `${message.id}:${indice}`,
+      );
+    }
+
+    if (immagini > settings.imageRate.count) {
+      reasons.push({
+        code: 'SPAM_IMMAGINI',
+        detail: `${immagini} allegati in ${settings.imageRate.windowSec}s`,
+        score: Math.min(60, (immagini - settings.imageRate.count) * 15) * multiplier,
+        meta: { immagini },
+      });
+    }
+  }
+
   /* ── Inviti ─────────────────────────────────────────────────────────── */
   if (settings.blockInvites) {
     INVITE_PATTERN.lastIndex = 0;
@@ -181,5 +217,31 @@ export async function evaluateSpam(
   }
 
   if (reasons.length === 0) return noDecision('antiSpam');
-  return decide('antiSpam', reasons, settings.ladder, 'SECURITY_SCAM_BLOCKED');
+
+  const decisione = decide('antiSpam', reasons, settings.ladder, 'SECURITY_SCAM_BLOCKED');
+
+  /*
+   * Chi viene silenziato per spam si porta dietro ciò che ha già scritto.
+   *
+   * Silenziare ferma il seguito ma lascia in piedi il muro di messaggi: il
+   * canale resta illeggibile e chi arriva dopo lo trova comunque. La pulizia
+   * retroattiva è la metà dell'intervento che di solito manca.
+   *
+   * Si aggancia al solo silenziamento e non all'eliminazione del singolo
+   * messaggio: cancellare gli ultimi cinque minuti di una persona per una
+   * ripetizione di troppo sarebbe sproporzionato.
+   */
+  const silenziato = decisione.actions.some(
+    (azione) => azione.kind === 'TIMEOUT' || azione.kind === 'KICK' || azione.kind === 'BAN',
+  );
+
+  if (silenziato && settings.purgeOnMuteMinutes > 0) {
+    decisione.actions.push({
+      kind: 'PURGE_RECENT',
+      durationSec: settings.purgeOnMuteMinutes * 60,
+      reason: `Pulizia dei messaggi degli ultimi ${settings.purgeOnMuteMinutes} minuti`,
+    });
+  }
+
+  return decisione;
 }

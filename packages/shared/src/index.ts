@@ -28,6 +28,7 @@ export const RedisKeys = {
   spamMessages: (guildId: string, userId: string) => `spam:msg:${guildId}:${userId}`,
   spamFingerprints: (guildId: string, userId: string) => `spam:fp:${guildId}:${userId}`,
   spamMentions: (guildId: string, userId: string) => `spam:mention:${guildId}:${userId}`,
+  spamImages: (guildId: string, userId: string) => `spam:img:${guildId}:${userId}`,
 
   urlVerdict: (url: string) => `url:${url}`,
   phashSeen: (guildId: string) => `phash:${guildId}`,

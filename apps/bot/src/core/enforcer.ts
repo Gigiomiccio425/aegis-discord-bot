@@ -122,9 +122,18 @@ async function executeAction(
     case 'DELETE_MESSAGE':
       return deleteMessage(ctx.message ?? null);
 
-    case 'PURGE_RECENT':
-      if (!ctx.member) return false;
-      return purgeRecent(ctx.guild, ctx.member.id, ctx.config.security.compromise.purgeHours) > 0;
+    case 'PURGE_RECENT': {
+      const targetId = ctx.member?.id ?? ctx.message?.author.id;
+      if (!targetId) return false;
+      // `durationSec` dice quanto indietro andare. Senza, ogni pulizia usava
+      // le ore del modulo account compromessi — sei ore anche quando chi
+      // chiamava intendeva cinque minuti.
+      const secondi =
+        action.durationSec && action.durationSec > 0
+          ? action.durationSec
+          : ctx.config.security.compromise.purgeHours * 3600;
+      return purgeRecent(ctx.guild, targetId, secondi) > 0;
+    }
 
     case 'WARN':
       if (!ctx.member) return false;
@@ -386,9 +395,9 @@ export async function stripDangerousRoles(
  * link, fermare l'autore non basta — quanto già pubblicato continua a fare
  * danno finché resta leggibile.
  */
-export function purgeRecent(guild: Guild, userId: string, hours: number): number {
-  if (hours <= 0) return 0;
-  const since = Date.now() - hours * 3600 * 1000;
+export function purgeRecent(guild: Guild, userId: string, seconds: number): number {
+  if (seconds <= 0) return 0;
+  const since = Date.now() - seconds * 1000;
   let deleted = 0;
 
   const channels = guild.channels.cache.filter(
