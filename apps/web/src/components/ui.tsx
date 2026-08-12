@@ -126,7 +126,9 @@ export function Loading() {
 
 export function ErrorBox({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
+    // `whitespace-pre-line`: gli errori di validazione arrivano con un campo
+    // per riga, e schiacciarli su una riga sola li rende di nuovo illeggibili.
+    <div className="whitespace-pre-line rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
       {message}
     </div>
   );

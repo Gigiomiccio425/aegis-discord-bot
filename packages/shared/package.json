@@ -13,6 +13,10 @@
     "./docs": {
       "types": "./dist/config/docs.d.ts",
       "default": "./dist/config/docs.js"
+    },
+    "./json": {
+      "types": "./dist/util/json.d.ts",
+      "default": "./dist/util/json.js"
     }
   },
   "scripts": {

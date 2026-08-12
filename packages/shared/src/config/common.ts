@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 /** ID Discord: snowflake a 17-20 cifre. */
 export const Snowflake = z
-  .string()
+  .string({
+    // Un ID Discord supera 2^53: scritto come numero perde le ultime cifre
+    // prima ancora di arrivare qui. Il messaggio dice cosa fare, perché
+    // «previsto testo, ricevuto numero» lascia a indovinare che servano le
+    // virgolette.
+    invalid_type_error: 'ID Discord: va scritto come testo, fra virgolette',
+  })
   .regex(/^\d{17,20}$/, 'ID Discord non valido');
 
 export const SnowflakeList = z.array(Snowflake).default([]);

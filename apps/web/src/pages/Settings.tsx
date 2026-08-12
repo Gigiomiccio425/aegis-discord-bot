@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { describeField, SECTION_DOCS } from '@angel/shared/docs';
+import { virgoletteSugliId } from '@angel/shared/json';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import {
@@ -75,7 +76,7 @@ export function Settings() {
       setError(null);
       setTimeout(() => setSaved(null), 5000);
     } catch (err) {
-      setError((err as Error).message);
+      setError(spiegaErrore(err));
     } finally {
       setSaving(false);
     }
@@ -163,6 +164,29 @@ export function Settings() {
       <PanelSessions />
     </div>
   );
+}
+
+/**
+ * Il motivo del rifiuto, campo per campo.
+ *
+ * «Configurazione non valida» da solo lascia a cercare quale delle poche
+ * centinaia di opzioni sia quella sbagliata. Il server manda già il percorso e
+ * il motivo di ogni problema: non mostrarli era buttare via l'unica
+ * informazione utile del messaggio.
+ */
+function spiegaErrore(err: unknown): string {
+  const errore = err as { message?: string; details?: unknown };
+  const dettagli = errore.details;
+
+  if (Array.isArray(dettagli) && dettagli.length > 0) {
+    const righe = (dettagli as { path?: string; message?: string }[])
+      .slice(0, 8)
+      .map((problema) => `${problema.path ?? '?'} — ${problema.message ?? 'valore rifiutato'}`);
+    const resto = dettagli.length > righe.length ? `\n…e altri ${dettagli.length - righe.length}` : '';
+    return `${errore.message ?? 'Salvataggio rifiutato'}:\n${righe.join('\n')}${resto}`;
+  }
+
+  return errore.message ?? 'Salvataggio rifiutato';
 }
 
 interface HistoryEntry {
@@ -541,6 +565,7 @@ function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unk
   const [text, setText] = useState(canonico);
   const [ultimo, setUltimo] = useState(canonico);
   const [invalid, setInvalid] = useState(false);
+  const [corretti, setCorretti] = useState(false);
 
   // Il testo si riallinea solo ai cambi che arrivano da fuori — il pulsante
   // «Aggiungi», il ripristino di una versione — e non a quelli che questo
@@ -562,8 +587,10 @@ function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unk
         value={text}
         onChange={(event) => {
           setText(event.target.value);
+          const sistemato = virgoletteSugliId(event.target.value);
+          setCorretti(sistemato !== event.target.value);
           try {
-            const parsed: unknown = JSON.parse(event.target.value);
+            const parsed: unknown = JSON.parse(sistemato);
             setUltimo(JSON.stringify(parsed, null, 2));
             onChange(parsed);
             setInvalid(false);
@@ -571,8 +598,20 @@ function JsonEditor({ value, onChange }: { value: unknown; onChange: (value: unk
             setInvalid(true);
           }
         }}
+        onBlur={() => {
+          // Uscendo dal campo si mostra il JSON come è stato davvero letto:
+          // rientrato, e con gli ID fra virgolette. Vederlo è l'unico modo di
+          // accorgersi della correzione invece di scoprirla al salvataggio.
+          if (!invalid) setText(ultimo);
+        }}
       />
       {invalid && <p className="mt-1 text-xs text-[var(--color-danger)]">JSON non valido</p>}
+      {corretti && !invalid && (
+        <p className="mt-1 text-xs text-[var(--color-warning)]">
+          ID Discord messi fra virgolette: sono più lunghi di quanto un numero JSON possa
+          rappresentare senza perdere cifre.
+        </p>
+      )}
     </div>
   );
 }
