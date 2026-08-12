@@ -694,6 +694,10 @@ const BY_KEY: Record<string, FieldDoc> = {
     label: 'Parole delle campagne',
     help: 'Elenco modificabile. Sono le frasi osservate nelle ondate reali degli ultimi mesi.',
   },
+  deleteAtScore: {
+    label: 'Elimina il messaggio sopra il punteggio',
+    help: 'Sotto questa soglia il messaggio resta e il sospetto viene solo annotato: un segnale isolato non è un verdetto.',
+  },
   quarantineAtScore: { label: 'Isola sopra il punteggio', help: 'Oltre questa soglia scattano quarantena e pulizia.' },
   purgeHours: { label: 'Ore di messaggi da rimuovere', help: 'Quanto indietro ripulire quando un account risulta compromesso.' },
   notifyUser: {

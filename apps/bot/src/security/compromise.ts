@@ -38,6 +38,17 @@ export interface CompromiseContext {
   hasQrCode: boolean;
   /** Numero di canali diversi in cui è comparso lo stesso testo di recente. */
   crossChannelCount: number;
+  /**
+   * La baseline **prima** di questo messaggio.
+   *
+   * Deve arrivare da fuori, e la ragione è che l'aggiornamento della baseline
+   * avviene prima della valutazione: leggendola qui si troverebbe già scritto
+   * «ha appena scritto», e i due segnali che dipendono dal passato — il
+   * silenzio prolungato e il primo messaggio in assoluto — non scatterebbero
+   * mai.
+   */
+  lastMessageAt: Date | null;
+  messageCount: number;
 }
 
 export async function evaluateCompromise(
@@ -59,17 +70,12 @@ export async function evaluateCompromise(
   }
 
   const reasons: Reason[] = [];
-  const prisma = getPrisma();
   const guildId = message.guild.id;
   const userId = message.author.id;
 
-  const profile = await prisma.userProfile.findUnique({
-    where: { guildId_userId: { guildId, userId } },
-  });
-
   /* ── Silenzio prolungato seguito da link ───────────────────────────── */
-  if (profile?.lastMessageAt) {
-    const dormantDays = (Date.now() - profile.lastMessageAt.getTime()) / 86_400_000;
+  if (context.lastMessageAt) {
+    const dormantDays = (Date.now() - context.lastMessageAt.getTime()) / 86_400_000;
     if (dormantDays >= settings.dormantDays && context.hasUrl) {
       reasons.push({
         code: 'CMP_DORMANT_LINK',
@@ -80,7 +86,11 @@ export async function evaluateCompromise(
         meta: { dormantDays: Math.round(dormantDays) },
       });
     }
-  } else if (context.hasUrl && (profile?.messageCount ?? 0) === 0) {
+  } else if (context.hasUrl && context.messageCount === 0) {
+    // Davvero il primo messaggio: nessuna traccia precedente né nel conteggio
+    // né nella data dell'ultimo. Finché la baseline non veniva scritta da
+    // nessuno, questa condizione era vera per chiunque, sempre — ed è il motivo
+    // per cui ogni link e ogni GIF finivano eliminati.
     reasons.push({
       code: 'CMP_FIRST_MESSAGE_LINK',
       detail: 'Il primo messaggio in assoluto dell\'utente contiene un link',
@@ -141,6 +151,20 @@ export async function evaluateCompromise(
     100,
     reasons.reduce((total, reason) => total + reason.score, 0),
   );
+
+  if (score < settings.deleteAtScore) {
+    // Sospetto debole: si annota e basta. Un solo segnale non è un verdetto, e
+    // far sparire il messaggio di chi ha pubblicato una GIF costa più fiducia
+    // di quanta protezione porti.
+    return {
+      module: 'compromise',
+      triggered: true,
+      score,
+      reasons,
+      actions: [{ kind: 'LOG_ONLY', reason: 'Segnale isolato, sotto la soglia di intervento' }],
+      logEvent: 'SECURITY_COMPROMISE_SUSPECTED',
+    };
+  }
 
   if (score < settings.quarantineAtScore) {
     return {
@@ -214,19 +238,42 @@ export async function evaluateCompromise(
  * Aggiorna la baseline dell'utente e conta in quanti canali diversi è comparso
  * lo stesso testo. Va chiamata per ogni messaggio: è ciò che rende possibile il
  * confronto con il comportamento abituale.
+ *
+ * Restituisce la baseline **com'era prima di questo messaggio**, perché è
+ * quella che serve a chi deve giudicare: sapere che l'utente ha scritto un
+ * millisecondo fa non dice niente.
+ *
+ * Il commento che stava qui diceva che il consolidamento su Postgres avveniva
+ * nel worker. Non avveniva da nessuna parte: `lastMessageAt` non veniva scritto
+ * mai, `messageCount` restava a zero per tutti, e il rilevatore concludeva che
+ * ogni messaggio con un link fosse il primo messaggio in assoluto di quella
+ * persona. È il difetto che faceva sparire link e GIF di chiunque.
  */
-export async function trackActivity(
-  message: Message,
-): Promise<{ crossChannelCount: number }> {
-  if (!message.guild || message.author.bot) return { crossChannelCount: 0 };
+export async function trackActivity(message: Message): Promise<{
+  crossChannelCount: number;
+  lastMessageAt: Date | null;
+  messageCount: number;
+}> {
+  const vuoto = { crossChannelCount: 0, lastMessageAt: null, messageCount: 0 };
+  if (!message.guild || message.author.bot) return vuoto;
 
   const guildId = message.guild.id;
   const userId = message.author.id;
   const redis = getRedis();
+  const prisma = getPrisma();
 
-  // Scrittura leggera su Redis a ogni messaggio; il consolidamento su Postgres
-  // avviene nel worker, così il percorso critico resta veloce.
+  // Scrittura leggera su Redis a ogni messaggio: serve agli altri moduli e non
+  // costa nulla.
   await redis.set(RedisKeys.lastSeen(guildId, userId), Date.now().toString(), 'EX', 86400 * 60);
+
+  const profilo = await prisma.userProfile
+    .findUnique({
+      where: { guildId_userId: { guildId, userId } },
+      select: { lastMessageAt: true, messageCount: true },
+    })
+    .catch(() => null);
+
+  await consolidaBaseline(guildId, userId);
 
   let crossChannelCount = 0;
   const content = message.content ?? '';
@@ -237,5 +284,51 @@ export async function trackActivity(
     crossChannelCount = await redis.scard(key);
   }
 
-  return { crossChannelCount };
+  return {
+    crossChannelCount,
+    lastMessageAt: profilo?.lastMessageAt ?? null,
+    messageCount: profilo?.messageCount ?? 0,
+  };
 }
+
+/**
+ * Scrive la baseline su Postgres, non più di una volta al minuto per persona.
+ *
+ * Un `UPDATE` per messaggio sarebbe la via semplice e la più costosa: su un
+ * server attivo significa migliaia di scritture all'ora per un dato che si
+ * consulta in giorni. I messaggi del minuto si contano quindi in Redis e si
+ * riversano in un colpo solo, così il conteggio resta esatto senza pagare una
+ * scrittura per riga.
+ */
+async function consolidaBaseline(guildId: string, userId: string): Promise<void> {
+  const redis = getRedis();
+  const contatore = `cmp:cnt:${guildId}:${userId}`;
+
+  const quanti = await redis.incr(contatore);
+  if (quanti === 1) await redis.expire(contatore, 3600);
+
+  // `NX` fa da serratura: passa uno solo per minuto, e chi passa si porta via
+  // tutto il conteggio accumulato.
+  const passa = await redis.set(`cmp:db:${guildId}:${userId}`, '1', 'EX', 60, 'NX');
+  if (!passa) return;
+
+  const daSommare = await redis.getdel(contatore).catch(() => null);
+  const incremento = Number(daSommare ?? quanti) || 1;
+
+  // `upsert` e non `update`: chi era già nel server prima dell'arrivo del bot
+  // non ha un profilo, e un aggiornamento a vuoto lo lascerebbe per sempre a
+  // zero messaggi — cioè per sempre alla sua prima frase.
+  await getPrisma()
+    .userProfile.upsert({
+      where: { guildId_userId: { guildId, userId } },
+      update: { lastMessageAt: new Date(), messageCount: { increment: incremento } },
+      create: {
+        guildId,
+        userId,
+        lastMessageAt: new Date(),
+        messageCount: incremento,
+      },
+    })
+    .catch(() => undefined);
+}
+

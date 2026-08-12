@@ -284,6 +284,17 @@ export const CompromiseConfig = GuardModuleBase.extend({
       'beta test',
     ]),
 
+  /**
+   * Sotto questa soglia il messaggio resta dov'è e si registra soltanto.
+   *
+   * Prima non esisteva, e un solo segnale bastava a far sparire il messaggio:
+   * chi pubblicava una GIF valeva venticinque punti su sessanta e si vedeva
+   * eliminare il messaggio comunque. Un sospetto non è un verdetto — se il
+   * punteggio non arriva nemmeno a metà strada, la cosa giusta è annotarlo e
+   * lasciar parlare la gente.
+   */
+  deleteAtScore: z.number().int().min(0).max(100).default(45),
+
   /** Sopra questa soglia scatta la quarantena e la pulizia dei messaggi. */
   quarantineAtScore: z.number().int().min(0).max(100).default(60),
   /** Elimina tutti i messaggi dell'utente nelle ultime N ore. */

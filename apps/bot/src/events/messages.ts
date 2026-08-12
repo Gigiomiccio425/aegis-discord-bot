@@ -171,6 +171,11 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
     ),
     hasQrCode: hasFinding(content, (code) => code.startsWith('QR_')),
     crossChannelCount: activity.crossChannelCount,
+    // La baseline com'era prima di questo messaggio: `trackActivity` la legge
+    // subito prima di aggiornarla, ed è l'unico momento in cui è ancora
+    // disponibile.
+    lastMessageAt: activity.lastMessageAt,
+    messageCount: activity.messageCount,
   }).catch(() => null);
 
   // L'anti-flame guarda lo scambio, non il messaggio: riceve il punteggio del
