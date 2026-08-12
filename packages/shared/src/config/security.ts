@@ -398,6 +398,64 @@ export type BotGuardConfig = z.infer<typeof BotGuardConfig>;
    Tutela dei minori e link che raccolgono IP. Il bot non vede i DM: qui si
    agisce sui canali e si offre un percorso di segnalazione rapido.
    ═══════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   DOVE SI POSSONO METTERE LINK E GIF
+
+   Questo modulo non c'entra con la sicurezza: un link malevolo lo ferma lo
+   scanner, e lo ferma ovunque. Qui si decide una cosa diversa e puramente
+   redazionale — in quali canali è ammesso pubblicare link e GIF.
+
+   Nasce da un problema concreto: i canali di annunci e di regolamento che si
+   riempiono di link, e la chat generale che diventa un muro di GIF. Non è una
+   minaccia, è disordine, e trattarlo come una minaccia sarebbe sbagliato: chi
+   incolla un link nel canale sbagliato non è un aggressore.
+
+   Per questo il messaggio viene tolto e basta, con una spiegazione, senza
+   punteggi di rischio né sanzioni che si accumulano.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const LinkPolicyConfig = GuardModuleBase.extend({
+  /**
+   * Spento di partenza, a differenza degli altri moduli.
+   *
+   * Le difese arrivano accese perché un server senza difese è esposto. Questa
+   * invece è una regola di redazione: accenderla da sola cambierebbe le regole
+   * di un server senza che nessuno l'abbia chiesto.
+   */
+  enabled: z.boolean().default(false),
+
+  /** Canali dove i link sono ammessi. Vuoto = ovunque. */
+  linkChannelIds: SnowflakeList,
+  /** Canali dove le GIF sono ammesse. Vuoto = ovunque. */
+  gifChannelIds: SnowflakeList,
+
+  /**
+   * Nei ticket si può sempre.
+   *
+   * Chi apre un ticket sta descrivendo un problema, e la prova del problema è
+   * quasi sempre un link o un'immagine: lo screenshot su un host esterno, il
+   * messaggio segnalato, la clip. Vietarli lì significa impedire di spiegarsi
+   * proprio nel posto nato per farlo.
+   */
+  allowInTickets: z.boolean().default(true),
+
+  /**
+   * Domini ammessi ovunque, anche fuori dai canali consentiti.
+   *
+   * Serve per i link di casa — il proprio sito, il proprio canale, la wiki del
+   * server — che non ha senso confinare.
+   */
+  alwaysAllowedDomains: z.array(z.string().max(120)).max(100).default([]),
+
+  /** Spiegazione pubblicata al posto del messaggio tolto. */
+  notice: z
+    .string()
+    .max(500)
+    .default('{utente} qui non si possono pubblicare {cosa}. Canali dove si può: {canali}'),
+  /** Secondi dopo i quali la spiegazione si cancella da sola. 0 = resta. */
+  noticeSeconds: z.number().int().min(0).max(300).default(20),
+}).default({});
+export type LinkPolicyConfig = z.infer<typeof LinkPolicyConfig>;
+
 export const SafetyConfig = GuardModuleBase.extend({
   /** Rilevamento pattern di adescamento nei canali pubblici. */
   groomingPatterns: z.boolean().default(true),

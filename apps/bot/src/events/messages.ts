@@ -17,6 +17,7 @@ import { archiveMessage, markDeleted } from '../logging/archiver.js';
 import { evaluateSpam } from '../security/antiSpam.js';
 import { evaluateContent } from '../security/contentGuard.js';
 import { evaluateInvites } from '../security/inviteGuard.js';
+import { applyLinkPolicy } from '../security/linkPolicy.js';
 import { evaluateSafety } from '../security/safety.js';
 import { evaluateLanguage } from '../security/languageGuard.js';
 import { trackFlame } from '../security/flameGuard.js';
@@ -142,6 +143,11 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
       },
     });
   }
+
+  // La regola su link e GIF viene prima delle difese: se il messaggio non
+  // poteva stare in quel canale non c'è nulla da analizzare, e continuare
+  // significherebbe rischiare due interventi sullo stesso messaggio.
+  if (await applyLinkPolicy(message, config).catch(() => false)) return;
 
   const activity = await trackActivity(message);
 

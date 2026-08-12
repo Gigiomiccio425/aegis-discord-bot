@@ -84,6 +84,31 @@ export const BY_PATH: Record<string, FieldDoc> = {
       'nessun software distingue un deepfake vocale, una parola concordata in anticipo sì.',
   },
   'general.locale': { label: 'Lingua', help: 'Lingua dei messaggi del bot: italiano o inglese.' },
+  'security.links.linkChannelIds': {
+    label: 'Canali dove i link sono ammessi',
+    help: 'Vuoto = i link si possono mettere ovunque. Indicandone anche uno solo, negli altri vengono tolti.',
+  },
+  'security.links.gifChannelIds': {
+    label: 'Canali dove le GIF sono ammesse',
+    help: 'Vuoto = le GIF si possono mettere ovunque. Vale anche per i link a Tenor e Giphy, che sono GIF a tutti gli effetti.',
+  },
+  'security.links.allowInTickets': {
+    label: 'Sempre consentiti nei ticket',
+    help: 'Chi apre un ticket descrive un problema, e la prova è quasi sempre uno screenshot o un link: vietarli lì impedisce di spiegarsi nel posto nato per farlo.',
+  },
+  'security.links.alwaysAllowedDomains': {
+    label: 'Domini ammessi ovunque',
+    help: 'I link di casa — il proprio sito, il proprio canale, la wiki del server — che non ha senso confinare in un canale.',
+  },
+  'security.links.notice': {
+    label: 'Spiegazione pubblicata',
+    help: "Variabili: {utente}, {cosa} (link o GIF), {canali} con l'elenco di dove si può.",
+  },
+  'security.links.noticeSeconds': {
+    label: 'La spiegazione sparisce dopo (secondi)',
+    help: "Serve a chi ha appena scritto; dopo diventa un'altra riga di rumore nel canale. 0 = resta.",
+  },
+
   'general.actionNotice.enabled': {
     label: 'Avvisa in chat le sanzioni',
     help:
@@ -1161,6 +1186,16 @@ export const SECTION_DOCS: Record<string, SectionDoc> = {
       'aggressive. La prima risposta qui e **rallentare il canale**, non sanzionare — e l unica ' +
       'che non richiede di stabilire chi ha cominciato, cosa che in una discussione degenerata di ' +
       'solito non si puo stabilire affatto.',
+  },
+  'security.links': {
+    summary: 'In quali canali si possono mettere link e GIF.',
+    detail:
+      'Non è una difesa: un link pericoloso lo ferma lo scanner, e lo ferma ovunque. Qui si decide ' +
+      'una cosa redazionale — il canale annunci che non deve riempirsi di link, la chat che non ' +
+      'deve diventare un muro di GIF. Per questo il messaggio viene tolto con una spiegazione e ' +
+      'basta: chi incolla un link nel canale sbagliato non è un aggressore, e non merita un ' +
+      'punteggio di rischio. Lasciando vuoti gli elenchi dei canali non succede nulla, che è il ' +
+      'modo di tenere il modulo acceso senza vietare niente.',
   },
   'security.safety': {
     summary: 'Tutela delle persone: adescamento e raccolta di IP.',

@@ -58,6 +58,32 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 Il resto — anti-spam, controllo account, verifica d'ingresso, ruoli appiccicosi — è configurabile
 modulo per modulo dal pannello.
 
+### Link e GIF: dove sì e dove no
+
+Va detto perché genera confusione: **i link non sono vietati.** Vengono tolti solo quando sono
+pericolosi — dominio in blocklist, phishing riconosciuto, invito verso un server sconosciuto,
+link a un eseguibile sulla CDN di Discord — e quel controllo vale in ogni canale, ticket compresi.
+
+Chi invece vuole decidere *dove* si possono mettere link e GIF ha un modulo apposta,
+**Sicurezza → Link e GIF**, spento di partenza. Serve per il canale annunci che non deve riempirsi
+di link e per la chat che non deve diventare un muro di GIF: si indicano i canali dove sono
+ammessi, e altrove il messaggio viene tolto con una spiegazione che sparisce da sola.
+
+Non è una difesa e non si comporta come tale: nessun punteggio di rischio, nessuna sanzione che si
+accumula. Chi incolla un link nel canale sbagliato non è un aggressore.
+
+Tre cose da sapere:
+
+- **Nei ticket si può sempre**, salvo spegnere l'opzione. Chi apre un ticket sta descrivendo un
+  problema, e la prova è quasi sempre uno screenshot o un link: vietarli lì impedisce di spiegarsi
+  nel posto nato apposta.
+- I link a **Tenor e Giphy** valgono come GIF, non come link — altrimenti finirebbero tolti proprio
+  dal canale delle GIF.
+- I **domini di casa** (il proprio sito, la wiki del server) si mettono fra quelli ammessi ovunque.
+
+Lasciando vuoti entrambi gli elenchi di canali non succede nulla: è il modo di tenere il modulo
+acceso senza vietare niente.
+
 ### AutoMod nativo: l'unica difesa che arriva prima del messaggio
 
 Un bot vede un messaggio solo **dopo** che esiste; l'AutoMod di Discord lo intercetta durante
