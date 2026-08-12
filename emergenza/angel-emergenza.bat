@@ -18,14 +18,17 @@ rem ─────────────────────────�
 
 cd /d "%~dp0"
 
+rem Docker serve solo per accendere il nodo, non per controllare se il server
+rem risponde: si avvisa e si prosegue, invece di bloccare chi sta ancora
+rem preparando la cartella.
 where docker >nul 2>&1
 if errorlevel 1 (
   echo.
-  echo   Docker non risulta installato o non e' nel PATH.
-  echo   Serve Docker Desktop: https://www.docker.com/products/docker-desktop/
+  echo   ATTENZIONE: Docker non risulta installato.
+  echo   Il controllo del server funziona lo stesso, ma il nodo di emergenza
+  echo   non potra' partire finche' non installi Docker Desktop:
+  echo   https://www.docker.com/products/docker-desktop/
   echo.
-  pause
-  exit /b 1
 )
 
 if not exist "docker-compose.emergenza.local.yml" if not exist "docker-compose.emergenza.yml" (

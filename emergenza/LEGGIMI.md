@@ -40,7 +40,14 @@ con il server giù.
 ## Preparazione, una volta sola
 
 **1.** Installa [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-e avvialo. Deve essere in esecuzione perché il nodo possa partire.
+e avvialo.
+
+È l'unica cosa da scaricare: PowerShell è già in Windows, e il controllo del
+server funziona anche senza Docker. Docker serve solo perché il nodo possa
+davvero partire — senza, il bat te lo dice e prosegue.
+
+Al primo avvio Docker Desktop chiede di installare WSL2 se manca: accetta e
+riavvia il PC quando lo propone.
 
 **2.** Apri `impostazioni.txt` e metti l'indirizzo del tuo server al posto del
 segnaposto. Deve essere raggiungibile da questo PC: se passa da Tailscale o da

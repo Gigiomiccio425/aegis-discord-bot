@@ -88,7 +88,14 @@ function Test-Principale {
   return @{ vivo = $false }
 }
 
+function Test-Docker {
+  return $null -ne (Get-Command docker -ErrorAction SilentlyContinue)
+}
+
 function Test-NodoLocale {
+  # Senza Docker il nodo non puo' essere in esecuzione per definizione, e
+  # interrogarlo solleverebbe un errore che fermerebbe l'intero sorvegliante.
+  if (-not (Test-Docker)) { return $false }
   $nomi = docker ps --format '{{.Names}}' 2>$null
   if ($null -eq $nomi) { return $false }
   return ($nomi -contains 'angel-emergenza')
@@ -97,6 +104,12 @@ function Test-NodoLocale {
 # ── Accensione e spegnimento ─────────────────────────────────────────────
 
 function Avvia-Nodo {
+  if (-not (Test-Docker)) {
+    Scrivi 'Il principale non risponde, ma Docker non e installato: il nodo non puo partire.' 'Red'
+    Scrivi 'Installa Docker Desktop: https://www.docker.com/products/docker-desktop/' 'Red'
+    return
+  }
+
   Scrivi 'Il principale non risponde: accendo il nodo di emergenza.' 'Yellow'
   docker compose -f $compose up -d 2>&1 | Out-Null
   if ($LASTEXITCODE -eq 0) {
