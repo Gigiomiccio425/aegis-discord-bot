@@ -18,6 +18,31 @@ import { getPrisma } from './index.js';
    apre il file per indagare.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/**
+ * Dati del ticket, quando la trascrizione ne documenta uno.
+ *
+ * Sono le domande che ci si pone rileggendo il file mesi dopo: chi l'ha
+ * aperto, chi se n'è occupato, chi l'ha chiuso e perché. Senza risposta la
+ * trascrizione è una conversazione senza contesto — si vede cosa è stato
+ * detto e non si capisce come è finita.
+ */
+export interface TicketMeta {
+  number: number;
+  subject: string;
+  openerId: string;
+  openerTag?: string | null;
+  claimedBy?: string | null;
+  claimedByTag?: string | null;
+  claimedAt?: Date | null;
+  closedBy?: string | null;
+  closedByTag?: string | null;
+  closedAt?: Date | null;
+  closeReason?: string | null;
+  createdAt: Date;
+  /** Chi è stato aggiunto al canale oltre a chi lo ha aperto. */
+  invitati?: { id: string; tag?: string | null }[];
+}
+
 export interface TranscriptOptions {
   guildId: string;
   channelId: string;
@@ -29,10 +54,14 @@ export interface TranscriptOptions {
   since?: Date;
   /** Include anche i messaggi eliminati (che sono spesso il motivo dell'export). */
   includeDeleted: boolean;
+  /** Dati del ticket, se la trascrizione ne documenta uno. */
+  ticket?: TicketMeta;
 }
 
 export interface TranscriptResult {
   html: string;
+  /** Chi ha scritto almeno un messaggio, ricavato dall'archivio. */
+  partecipanti: { id: string; tag: string | null; messaggi: number }[];
   messageCount: number;
   deletedCount: number;
   attachmentCount: number;
@@ -78,6 +107,19 @@ export async function buildTranscript(options: TranscriptOptions): Promise<Trans
     take: options.limit,
     include: { attachments: true },
   });
+
+  // Chi ha davvero partecipato, ricavato dai messaggi e non dai permessi del
+  // canale: i permessi dicono chi *poteva* leggere, l'archivio dice chi c'era.
+  const conteggi = new Map<string, { tag: string | null; messaggi: number }>();
+  for (const message of messages) {
+    const voce = conteggi.get(message.authorId) ?? { tag: message.authorTag, messaggi: 0 };
+    voce.messaggi += 1;
+    if (!voce.tag && message.authorTag) voce.tag = message.authorTag;
+    conteggi.set(message.authorId, voce);
+  }
+  const partecipanti = [...conteggi.entries()]
+    .map(([id, voce]) => ({ id, tag: voce.tag, messaggi: voce.messaggi }))
+    .sort((a, b) => b.messaggi - a.messaggi);
 
   const deletedCount = messages.filter((message) => message.deletedAt).length;
   const attachmentCount = messages.reduce(
@@ -130,6 +172,60 @@ export async function buildTranscript(options: TranscriptOptions): Promise<Trans
     timeStyle: 'medium',
   }).format(new Date());
 
+  const quando = (data: Date | null | undefined): string =>
+    data
+      ? new Intl.DateTimeFormat('it-IT', { dateStyle: 'short', timeStyle: 'short' }).format(data)
+      : '—';
+
+  const chi = (id: string | null | undefined, tag: string | null | undefined): string =>
+    id ? `${escapeHtml(tag ?? 'sconosciuto')} <span class="id">${escapeHtml(id)}</span>` : '—';
+
+  const t = options.ticket;
+  const schedaTicket = t
+    ? `
+<section class="scheda">
+  <h2>Ticket #${String(t.number).padStart(4, '0')}</h2>
+  <p class="oggetto">${escapeHtml(t.subject)}</p>
+  <dl>
+    <dt>Aperto da</dt><dd>${chi(t.openerId, t.openerTag)}</dd>
+    <dt>Aperto il</dt><dd>${quando(t.createdAt)}</dd>
+    <dt>Preso in carico da</dt><dd>${chi(t.claimedBy, t.claimedByTag)}</dd>
+    <dt>Preso in carico il</dt><dd>${quando(t.claimedAt)}</dd>
+    <dt>Chiuso da</dt><dd>${chi(t.closedBy, t.closedByTag)}</dd>
+    <dt>Chiuso il</dt><dd>${quando(t.closedAt)}</dd>
+    <dt>Motivo della chiusura</dt><dd>${escapeHtml(t.closeReason ?? '—')}</dd>
+    <dt>Durata</dt><dd>${
+      t.closedAt
+        ? `${Math.max(1, Math.round((t.closedAt.getTime() - t.createdAt.getTime()) / 60000))} minuti`
+        : '—'
+    }</dd>
+    ${
+      t.invitati && t.invitati.length > 0
+        ? `<dt>Invitati nel canale</dt><dd>${t.invitati
+            .map((persona) => chi(persona.id, persona.tag))
+            .join('<br>')}</dd>`
+        : ''
+    }
+  </dl>
+</section>`
+    : '';
+
+  const schedaPartecipanti =
+    partecipanti.length > 0
+      ? `
+<section class="scheda">
+  <h2>Chi ha scritto</h2>
+  <ul class="partecipanti">
+    ${partecipanti
+      .map(
+        (persona) =>
+          `<li>${escapeHtml(persona.tag ?? persona.id)} <span class="id">${escapeHtml(persona.id)}</span> — ${persona.messaggi} messaggi</li>`,
+      )
+      .join('')}
+  </ul>
+</section>`
+      : '';
+
   const html = `<!doctype html>
 <html lang="it">
 <head>
@@ -155,11 +251,21 @@ export async function buildTranscript(options: TranscriptOptions): Promise<Trans
   .att { margin-top:.3rem; font-size:.85rem; color:#9aa3b2; }
   .verdict { color:#ff9b9d; }
   footer { margin-top:2rem; padding-top:1rem; border-top:1px solid #2a2f3a; color:#6b7280; font-size:.75rem; }
+  .scheda { background:#14161e; border:1px solid #2b2f3d; border-radius:10px; padding:1rem 1.2rem; margin-bottom:1.2rem; }
+  .scheda h2 { margin:0 0 .4rem; font-size:1rem; color:#e8d8a0; letter-spacing:.02em; }
+  .scheda .oggetto { margin:0 0 .8rem; color:#c9cdd6; }
+  .scheda dl { display:grid; grid-template-columns:auto 1fr; gap:.35rem 1rem; margin:0; font-size:.85rem; }
+  .scheda dt { color:#8b93a3; }
+  .scheda dd { margin:0; color:#e4e6eb; }
+  .partecipanti { margin:0; padding-left:1.1rem; font-size:.85rem; color:#e4e6eb; }
+  .partecipanti li { margin:.15rem 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>#${escapeHtml(options.channelName)}</h1>
+  ${schedaTicket}
+  ${schedaPartecipanti}
   <div class="summary">
     Server: ${escapeHtml(options.guildName)} · canale <code>${escapeHtml(options.channelId)}</code><br>
     ${messages.length} messaggi archiviati · ${deletedCount} eliminati · ${attachmentCount} allegati<br>
@@ -177,6 +283,7 @@ export async function buildTranscript(options: TranscriptOptions): Promise<Trans
 
   return {
     html,
+    partecipanti,
     messageCount: messages.length,
     deletedCount,
     attachmentCount,

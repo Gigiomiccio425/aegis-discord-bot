@@ -156,6 +156,12 @@ const CANALI: ChannelSpec[] = [
     percorsi: ['general.alertChannelId'],
   },
   {
+    chiave: 'trascrizioni',
+    nome: 'angel-trascrizioni',
+    topic: 'Trascrizione completa di ogni ticket chiuso, con chi lo ha preso in carico e perché è stato chiuso.',
+    percorsi: ['integrations.tickets.transcriptChannelId'],
+  },
+  {
     chiave: 'segnalazioni',
     nome: 'angel-segnalazioni',
     topic: 'Segnalazioni degli utenti, con le prove congelate prima dell\'eliminazione.',

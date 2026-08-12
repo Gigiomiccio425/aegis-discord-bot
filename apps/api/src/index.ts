@@ -18,6 +18,7 @@ import { builderRoutes } from './routes/builder.js';
 import { backupRoutes } from './routes/backups.js';
 import { threatRoutes } from './routes/threats.js';
 import { archiveRoutes } from './routes/archive.js';
+import { ticketRoutes } from './routes/tickets.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { accessRoutes } from './routes/access.js';
 import { webhookRoutes } from './routes/webhooks.js';
@@ -122,6 +123,7 @@ async function main(): Promise<void> {
   await app.register(backupRoutes);
   await app.register(threatRoutes);
   await app.register(archiveRoutes);
+  await app.register(ticketRoutes);
   await app.register(integrationRoutes);
   await app.register(accessRoutes);
   await app.register(webhookRoutes);

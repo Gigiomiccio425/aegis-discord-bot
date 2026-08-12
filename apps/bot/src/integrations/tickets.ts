@@ -5,9 +5,11 @@ import {
   ButtonStyle,
   ChannelType,
   EmbedBuilder,
+  OverwriteType,
   PermissionFlagsBits,
   type Client,
   type Guild,
+  type GuildChannel,
   type GuildMember,
   type TextChannel,
 } from 'discord.js';
@@ -16,8 +18,38 @@ import type { GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { getRedis } from '../core/redis.js';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 const log = childLogger('tickets');
+
+/**
+ * Salva la trascrizione sul disco della macchina e restituisce il percorso
+ * relativo a `STORAGE_DIR`.
+ *
+ * Su disco e non solo su Discord: un allegato vive finché vive il messaggio
+ * che lo porta, e un messaggio si può eliminare — anche per sbaglio, anche da
+ * chi aveva ragione di farlo. La copia sulla VPS è quella che resta, ed è
+ * quella che il pannello serve.
+ *
+ * Il percorso è relativo di proposito: salvarlo assoluto legherebbe il
+ * database alla cartella di questa installazione, e al primo spostamento del
+ * volume nessun file risulterebbe più trovabile.
+ */
+async function salvaTrascrizione(
+  guildId: string,
+  nomeFile: string,
+  html: string,
+): Promise<string> {
+  const radice = process.env.STORAGE_DIR ?? './storage';
+  const relativo = path.posix.join('trascrizioni', guildId);
+  const cartella = path.join(radice, relativo);
+
+  await fs.mkdir(cartella, { recursive: true });
+  await fs.writeFile(path.join(cartella, nomeFile), html, 'utf8');
+
+  return path.posix.join(relativo, nomeFile);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    TICKET
@@ -263,6 +295,13 @@ export async function closeTicket(
   closedBy: string,
   reason: string,
   config: GuildConfig,
+  /**
+   * Il canale, quando non è più nella cache perché è appena stato eliminato.
+   * È l'unico modo di sapere ancora chi era stato aggiunto al ticket: gli
+   * inviti sono permessi per singola persona sul canale, e il canale non c'è
+   * più.
+   */
+  canaleEliminato?: GuildChannel | null,
 ): Promise<boolean> {
   const prisma = getPrisma();
   const ticket = await prisma.ticket.findUnique({
@@ -274,8 +313,32 @@ export async function closeTicket(
   let transcriptFile: AttachmentBuilder | null = null;
   let messageCount = 0;
 
+  let transcriptPath: string | null = null;
+
   if (settings.transcriptOnClose && ticket.channelId) {
-    const channel = guild.channels.cache.get(ticket.channelId);
+    const channel = guild.channels.cache.get(ticket.channelId) ?? canaleEliminato ?? null;
+
+    // Chi è stato aggiunto al canale oltre a chi lo ha aperto: sono permessi
+    // per singola persona, e nel canale di un ticket ce ne sono solo perché
+    // qualcuno ce li ha messi. Il perché di quell'aggiunta è spesso la
+    // domanda che ci si pone rileggendo mesi dopo.
+    const invitati: { id: string; tag?: string | null }[] = [];
+    if (channel && 'permissionOverwrites' in channel) {
+      for (const overwrite of channel.permissionOverwrites.cache.values()) {
+        if (overwrite.type !== OverwriteType.Member) continue;
+        if (overwrite.id === ticket.openerId) continue;
+        if (overwrite.id === client.user?.id) continue;
+        const membro = await guild.members.fetch(overwrite.id).catch(() => null);
+        invitati.push({ id: overwrite.id, tag: membro?.user.tag ?? null });
+      }
+    }
+
+    const [apertoDa, presoDa, chiusoDa] = await Promise.all([
+      client.users.fetch(ticket.openerId).catch(() => null),
+      ticket.claimedBy ? client.users.fetch(ticket.claimedBy).catch(() => null) : null,
+      client.users.fetch(closedBy).catch(() => null),
+    ]);
+
     const result = await buildTranscript({
       guildId: guild.id,
       channelId: ticket.channelId,
@@ -283,13 +346,38 @@ export async function closeTicket(
       guildName: guild.name,
       limit: 5000,
       includeDeleted: true,
+      ticket: {
+        number,
+        subject: ticket.subject,
+        openerId: ticket.openerId,
+        openerTag: apertoDa?.tag ?? null,
+        claimedBy: ticket.claimedBy,
+        claimedByTag: presoDa?.tag ?? null,
+        claimedAt: ticket.claimedAt,
+        closedBy,
+        closedByTag: chiusoDa?.tag ?? null,
+        closedAt: new Date(),
+        closeReason: reason,
+        createdAt: ticket.createdAt,
+        invitati,
+      },
     }).catch(() => null);
 
-    if (result && result.messageCount > 0) {
+    if (result) {
       messageCount = result.messageCount;
-      transcriptFile = new AttachmentBuilder(Buffer.from(result.html, 'utf8'), {
-        name: `ticket-${String(number).padStart(4, '0')}.html`,
-      });
+      const nome = `ticket-${String(number).padStart(4, '0')}.html`;
+
+      transcriptFile = new AttachmentBuilder(Buffer.from(result.html, 'utf8'), { name: nome });
+
+      // Su disco prima ancora che su Discord: un allegato Discord vive finché
+      // vive il messaggio, e un messaggio si può cancellare. Il file sulla VPS
+      // è la copia che resta.
+      transcriptPath = await salvaTrascrizione(guild.id, nome, result.html).catch(
+        (errore: unknown) => {
+          log.warn({ err: errore, ticket: number }, 'trascrizione non salvata su disco');
+          return null;
+        },
+      );
     }
   }
 
@@ -301,6 +389,7 @@ export async function closeTicket(
       closedBy,
       closeReason: reason.slice(0, 500),
       messageCount,
+      transcriptPath,
     },
   });
 
@@ -316,6 +405,39 @@ export async function closeTicket(
         files: [transcriptFile],
       })
       .catch(() => undefined);
+  }
+
+  // Copia nel canale dedicato: è l'archivio che lo staff consulta senza
+  // aprire il pannello, e sopravvive alla persona che ha chiuso il ticket.
+  if (settings.transcriptChannelId && transcriptFile) {
+    const archivio = await client.channels
+      .fetch(settings.transcriptChannelId)
+      .catch(() => null);
+
+    if (archivio?.isTextBased() && 'send' in archivio) {
+      const durata = Math.max(1, Math.round((Date.now() - ticket.createdAt.getTime()) / 60000));
+      await archivio
+        .send({
+          content:
+            `📄 **Ticket #${String(number).padStart(4, '0')}** — ${ticket.subject}
+` +
+            `Aperto da <@${ticket.openerId}> · ` +
+            (ticket.claimedBy ? `preso in carico da <@${ticket.claimedBy}> · ` : 'mai preso in carico · ') +
+            `chiuso da <@${closedBy}>
+` +
+            `Motivo: ${reason.slice(0, 300)}
+` +
+            `-# ${messageCount} messaggi · durata ${durata} minuti` +
+            (transcriptPath ? ` · copia sulla VPS` : ''),
+          files: [new AttachmentBuilder(Buffer.from(transcriptFile.attachment as Buffer), {
+            name: `ticket-${String(number).padStart(4, '0')}.html`,
+          })],
+          allowedMentions: { parse: [] },
+        })
+        .catch((errore: unknown) =>
+          log.warn({ err: errore }, 'trascrizione non pubblicata nel canale dedicato'),
+        );
+    }
   }
 
   await recordEvent(client, {

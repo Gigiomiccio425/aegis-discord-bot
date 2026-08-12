@@ -941,6 +941,13 @@ const BY_KEY: Record<string, FieldDoc> = {
   categoryId: { label: 'Categoria dei ticket', help: 'Dove creare i canali privati.' },
   supportRoleIds: { label: 'Ruoli di supporto', help: 'Chi vede e gestisce i ticket.' },
   panelChannelId: { label: 'Canale del pulsante', help: 'Dove pubblicare il pulsante di apertura.' },
+  transcriptChannelId: {
+    label: 'Canale delle trascrizioni',
+    help:
+      'Dove finisce la trascrizione di ogni ticket chiuso. Va tenuto riservato allo staff: ' +
+      'contiene per intero una conversazione privata fra una persona e i moderatori, spesso su ' +
+      'questioni che quella persona non ha raccontato a nessun altro.',
+  },
   maxOpenPerUser: { label: 'Ticket aperti per persona', help: 'Quanti se ne possono avere contemporaneamente.' },
   transcriptOnClose: { label: 'Salva la trascrizione', help: 'Conserva la conversazione prima di eliminare il canale.' },
   autoCloseHours: {

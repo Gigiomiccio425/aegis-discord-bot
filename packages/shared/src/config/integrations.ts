@@ -230,6 +230,15 @@ export const TicketsConfig = ModuleBase.extend({
   supportRoleIds: SnowflakeList,
   /** Canale dove pubblicare il pulsante di apertura. */
   panelChannelId: Snowflake.nullable().default(null),
+
+  /**
+   * Canale dove finiscono le trascrizioni dei ticket chiusi.
+   *
+   * Riservato allo staff: una trascrizione contiene per intero una
+   * conversazione privata fra una persona e i moderatori, spesso su questioni
+   * che quella persona non ha raccontato a nessun altro.
+   */
+  transcriptChannelId: Snowflake.nullable().default(null),
   /** Quanti ticket aperti può avere la stessa persona. */
   maxOpenPerUser: z.number().int().min(1).max(10).default(1),
   /** Salva la trascrizione alla chiusura ed elimina il canale. */

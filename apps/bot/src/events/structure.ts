@@ -12,6 +12,8 @@ import { unverifiedRoleId } from '@angel/shared';
 import { recordEvent } from '../logging/auditLogger.js';
 import { onWebhookCreated } from '../security/webhookGuard.js';
 import { onEventInterest } from '../integrations/events.js';
+import { closeTicket } from '../integrations/tickets.js';
+import { getPrisma } from '@angel/db';
 
 /**
  * Struttura del server: canali, ruoli, emoji, thread, impostazioni, webhook,
@@ -49,6 +51,12 @@ export function registerStructureEvents(client: Client): void {
       summary: `Canale **${(channel as GuildChannel).name}** eliminato`,
       payload: { type: channel.type },
     });
+
+    // Se il canale eliminato era un ticket ancora aperto, la trascrizione va
+    // prodotta adesso. Chi elimina un canale a mano non pensa al ticket che
+    // conteneva, e senza questo la conversazione sparirebbe senza lasciare
+    // traccia — proprio nei casi in cui qualcuno voleva farla sparire.
+    void chiudiTicketDelCanale(client, channel as GuildChannel);
   });
 
   client.on(Events.ChannelUpdate, (oldChannel, newChannel) => {
@@ -431,6 +439,39 @@ export function registerStructureEvents(client: Client): void {
  * che precede il nuke — l'attaccante si dà i permessi *prima* di usarli — ed è
  * anche il modo in cui un moderatore ottiene per errore più potere del dovuto.
  */
+/**
+ * Chiude il ticket il cui canale è appena stato eliminato.
+ *
+ * La trascrizione si costruisce dall'archivio dei messaggi, non dal canale:
+ * il canale a questo punto non esiste più, ma le righe archiviate sì. È il
+ * motivo per cui l'archiviazione dei messaggi vale la pena anche quando
+ * sembra ridondante.
+ */
+async function chiudiTicketDelCanale(client: Client, channel: GuildChannel): Promise<void> {
+  const prisma = getPrisma();
+  const ticket = await prisma.ticket
+    .findFirst({
+      where: { guildId: channel.guild.id, channelId: channel.id, status: 'OPEN' },
+      select: { number: true },
+    })
+    .catch(() => null);
+
+  if (!ticket) return;
+
+  const config = await getGuildConfig(channel.guild.id).catch(() => null);
+  if (!config) return;
+
+  await closeTicket(
+    client,
+    channel.guild,
+    ticket.number,
+    client.user?.id ?? 'system',
+    'Canale eliminato: chiusura automatica con trascrizione',
+    config,
+    channel,
+  ).catch(() => undefined);
+}
+
 /**
  * Nega il canale appena creato a chi non ha ancora verificato.
  *

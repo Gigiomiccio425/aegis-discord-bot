@@ -498,6 +498,7 @@ Otto sezioni, raggiungibili da `PUBLIC_URL` dopo l'accesso con Discord:
 | **Sicurezza** | Inventario webhook e bot con punteggio di rischio, account a rischio, codici invito dirottabili, gestione delle firme di minaccia |
 | **Backup** | Elenco snapshot con anteprima del diff prima del ripristino |
 | **Archivio messaggi** | Quanto è archiviato per canale, download delle trascrizioni HTML |
+| **Ticket e trascrizioni** | Elenco dei ticket con chi li ha presi in carico, chi li ha chiusi e perché; trascrizione completa di ognuno, letta dal file salvato sul server o ricostruita dall'archivio |
 | **Integrazioni** | Sondaggi con risultati in tempo reale, giveaway, menu dei ruoli |
 | **Comandi e personas** | Builder delle sequenze e gestione delle personas |
 | **Configurazione** | Tutti i moduli, con editor generato dagli schemi condivisi, **storico delle modifiche con ripristino** e gestione delle proprie sessioni attive |
@@ -750,6 +751,30 @@ Alla chiusura viene generata la trascrizione HTML, inviata in privato a chi ha a
 allegata al registro; poi il canale viene eliminato dopo dieci secondi, il tempo di leggere il
 messaggio di chiusura. I ticket senza attività si chiudono da soli: uno dimenticato aperto per
 settimane è rumore che nasconde quelli veri.
+
+### La trascrizione
+
+Contiene la conversazione intera — messaggi, immagini, video, link, allegati eliminati — e in cima
+la scheda del ticket: numero, oggetto, chi lo ha aperto, **chi lo ha preso in carico e quando**,
+**chi lo ha chiuso, quando e con quale motivazione**, la durata, chi è stato invitato nel canale e
+quante righe ha scritto ciascun partecipante.
+
+Va in tre posti, perché ognuno dei tre può sparire da solo:
+
+| Dove | Perché |
+|---|---|
+| In privato a chi ha aperto | È la sua conversazione: senza copia resterebbe con nulla in mano |
+| Nel canale `angel-trascrizioni`, creato con gli altri alla predisposizione | È l'archivio che lo staff consulta senza aprire il pannello |
+| Su disco sulla VPS, sotto `STORAGE_DIR/trascrizioni/<server>/` | Un allegato Discord vive finché vive il messaggio, e un messaggio si può cancellare |
+
+Vale anche quando il canale del ticket viene **eliminato** invece che chiuso: ANGEL se ne accorge,
+chiude il ticket con motivazione automatica e produce comunque la trascrizione. È il caso che conta
+di più — eliminare il canale è esattamente ciò che si fa quando si vuole che una conversazione non
+esista più. La ricostruzione parte dall'archivio dei messaggi, non dal canale, e quindi non dipende
+dal canale essendo ancora lì.
+
+Dal pannello, sezione **Ticket e trascrizioni**, si rilegge tutto: serve il ruolo `MOD`, non i
+permessi Discord.
 
 ---
 
