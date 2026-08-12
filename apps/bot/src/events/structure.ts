@@ -1,6 +1,7 @@
 import {
   Events,
   OverwriteType,
+  PermissionFlagsBits,
   PermissionsBitField,
   type Client,
   type GuildChannel,
@@ -496,6 +497,47 @@ async function isolaCanaleNuovo(channel: GuildChannel): Promise<void> {
 
   await channel.permissionOverwrites
     .edit(isolante, { ViewChannel: false }, { reason: 'Isolamento di chi non ha verificato' })
+    .catch(() => undefined);
+
+  // Se il server è chiuso a `@everyone`, il canale nuovo deve nascere chiuso
+  // come gli altri: creato pubblico resterebbe l'unico visibile a chi non ha
+  // verificato, e basterebbe un canale aggiunto in fretta per aprire una
+  // finestra sul server.
+  const verificato = config.security.verification.verifiedRoleId;
+  if (!verificato || !channel.guild.roles.cache.has(verificato)) return;
+
+  // Solo se il server è davvero chiuso: si guarda un canale già predisposto,
+  // non una configurazione che dice di esserlo. Altrimenti un server che ha il
+  // ruolo ma ha scelto di restare aperto si troverebbe i canali nuovi chiusi.
+  const chiuso = channel.guild.channels.cache.some((altro) =>
+    altro.id !== channel.id && 'permissionOverwrites' in altro
+      ? Boolean(
+          altro.permissionOverwrites.cache
+            .get(channel.guild.id)
+            ?.deny.has(PermissionFlagsBits.ViewChannel),
+        )
+      : false,
+  );
+  if (!chiuso) return;
+
+  // Un canale creato già privato resta privato: `@everyone` non lo vede, e
+  // dargli un permesso esplicito lo aprirebbe a tutti i verificati.
+  if (
+    channel.permissionOverwrites.cache
+      .get(channel.guild.id)
+      ?.deny.has(PermissionFlagsBits.ViewChannel)
+  ) {
+    return;
+  }
+
+  const dato = await channel.permissionOverwrites
+    .edit(verificato, { ViewChannel: true }, { reason: 'Accesso ai verificati' })
+    .then(() => true)
+    .catch(() => false);
+  if (!dato) return;
+
+  await channel.permissionOverwrites
+    .edit(channel.guild.id, { ViewChannel: false }, { reason: 'Visibile solo a chi ha verificato' })
     .catch(() => undefined);
 }
 

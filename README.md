@@ -509,6 +509,27 @@ cosa attivare. L'ordine consigliato:
 7. **Whitelist anti-nuke** — aggiungi i bot legittimi che riorganizzano canali o ruoli, altrimenti
    verranno disarmati al primo lavoro di manutenzione.
 
+### Cosa fa la predisposizione ai permessi
+
+Con la verifica attiva, «Prepara il server» chiude il server a `@everyone`: i canali diventano
+visibili solo a chi ha il ruolo **ANGEL · Verificato**, e chi arriva vede il solo canale `#verifica`
+finché non preme il pulsante. Da lì lo staff affina come crede — questa è la base, non la parola
+finale.
+
+Due cose che vale la pena sapere prima di premere:
+
+- **I membri già presenti diventano verificati.** Senza, chiudere i canali a `@everyone`
+  cancellerebbe il server sotto gli occhi di tutti nello stesso istante: la verifica riguarda chi
+  arriva, non chi c'è da mesi. Sono compresi i bot, che senza il ruolo perderebbero la vista dei
+  canali e smetterebbero di funzionare senza un errore che lo spieghi.
+- **I canali già riservati non vengono toccati.** La regola è una sola: si interviene solo dove
+  `@everyone` vede già. Dove è già escluso non viene scritto nulla — né la negazione, superflua, né
+  il permesso ai verificati, che è precisamente ciò che aprirebbe allo staff allargato un canale
+  riservato agli amministratori.
+
+Vale anche per i canali creati dopo: nascono chiusi come gli altri, altrimenti basterebbe un canale
+aggiunto in fretta per aprire una finestra sul server.
+
 ---
 
 ## Il pannello

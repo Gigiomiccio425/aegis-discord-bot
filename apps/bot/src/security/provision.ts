@@ -534,6 +534,16 @@ async function creaVerifica(
 
   risultato.canaliIsolati = await isolaNonVerificati(guild, isolante, verifica.id);
 
+  // Il filtro vero: chi non ha il ruolo di verificato non vede niente. La
+  // negazione sul ruolo «non verificato» da sola lascia scoperto il caso in cui
+  // quel ruolo non arriva — bot spento nel momento dell'ingresso, permessi
+  // mancanti — e chi entra in quel momento vede tutto il server.
+  const verificato = config.security.verification.verifiedRoleId;
+  if (verificato && guild.roles.cache.has(verificato)) {
+    risultato.canaliIsolati += await chiudiAEveryone(guild, verificato, verifica.id);
+    await verificaMembriPresenti(guild, verificato);
+  }
+
   // Fino alla 1.7 il ruolo d'ingresso e quello di quarantena erano lo stesso,
   // quindi sui server già configurati la quarantena si porta dietro il divieto
   // di *vedere* i canali. Non è ciò che deve fare: chi è in quarantena era già
@@ -609,6 +619,105 @@ export async function isolaNonVerificati(
   }
 
   return isolati;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CHIUDERE IL SERVER A CHI NON HA VERIFICATO
+
+   Qui si fa l'operazione che altrove in questo file viene evitata di
+   proposito: togliere la vista a `@everyone` e restituirla a un ruolo. È il
+   solo modo di ottenere la garanzia vera — chi non ha il ruolo non vede
+   niente — perché la negazione sul ruolo «non verificato» dipende dal fatto
+   che quel ruolo arrivi, e se il bot è spento nel momento dell'ingresso non
+   arriva.
+
+   Il rischio dell'inversione è esporre un canale riservato, e si evita con una
+   regola sola: **si toccano solo i canali che `@everyone` vede già**. Dove
+   `@everyone` è già escluso non si scrive nulla — né la negazione, che
+   sarebbe superflua, né il permesso al ruolo verificato, che è precisamente
+   ciò che aprirebbe un canale riservato allo staff.
+
+   L'ordine delle due chiamate non è indifferente: prima il permesso ai
+   verificati, poi la negazione a `@everyone`. Al contrario, per il tempo che
+   passa fra le due, nessuno vedrebbe il canale.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function chiudiAEveryone(
+  guild: Guild,
+  verificatoRoleId: string,
+  eccezioneCanaleId: string,
+): Promise<number> {
+  const canali = await guild.channels.fetch().catch(() => null);
+  let chiusi = 0;
+
+  for (const canale of canali?.values() ?? []) {
+    if (!canale || canale.id === eccezioneCanaleId) continue;
+    if (!('permissionOverwrites' in canale)) continue;
+
+    // Stessa logica dell'isolamento: si agisce sulle categorie e sui canali
+    // che hanno permessi propri, perché gli altri ereditano già.
+    const eredita = canale.parentId !== null && canale.permissionOverwrites.cache.size === 0;
+    if (eredita) continue;
+
+    const everyone = canale.permissionOverwrites.cache.get(guild.id);
+
+    // Canale già chiuso a tutti: è riservato, e resta esattamente com'è.
+    if (everyone?.deny.has(PermissionFlagsBits.ViewChannel)) continue;
+
+    const gia = canale.permissionOverwrites.cache.get(verificatoRoleId);
+    if (gia?.allow.has(PermissionFlagsBits.ViewChannel) && everyone) continue;
+
+    const dato = await canale.permissionOverwrites
+      .edit(verificatoRoleId, { ViewChannel: true }, { reason: 'Accesso ai verificati' })
+      .then(() => true)
+      .catch(() => false);
+
+    // Se il permesso non è passato, la negazione non si scrive: chiuderebbe il
+    // canale a tutti senza aprirlo a nessuno.
+    if (!dato) continue;
+
+    const chiuso = await canale.permissionOverwrites
+      .edit(guild.id, { ViewChannel: false }, { reason: 'Visibile solo a chi ha verificato' })
+      .then(() => true)
+      .catch(() => false);
+
+    if (chiuso) chiusi += 1;
+  }
+
+  return chiusi;
+}
+
+/**
+ * Dà il ruolo di verificato a chi è già nel server.
+ *
+ * Senza questo passaggio, chiudere i canali a `@everyone` cancellerebbe il
+ * server sotto gli occhi di tutti i membri attuali nello stesso istante: la
+ * verifica riguarda chi arriva, non chi c'è già da mesi.
+ *
+ * I bot sono compresi, e non è una svista: un bot senza il ruolo perderebbe la
+ * vista dei canali esattamente come una persona, e le integrazioni
+ * smetterebbero di funzionare senza un errore che lo spieghi.
+ */
+async function verificaMembriPresenti(guild: Guild, verificatoRoleId: string): Promise<number> {
+  const membri = await guild.members.fetch().catch(() => null);
+  if (!membri) return 0;
+
+  let assegnati = 0;
+
+  for (const membro of membri.values()) {
+    if (membro.roles.cache.has(verificatoRoleId)) continue;
+
+    const fatto = await membro.roles
+      .add(verificatoRoleId, 'Membro già presente alla predisposizione')
+      .then(() => true)
+      .catch(() => false);
+
+    if (fatto) assegnati += 1;
+  }
+
+  if (assegnati > 0) {
+    log.info({ guildId: guild.id, assegnati }, 'ruolo di verificato dato ai membri già presenti');
+  }
+  return assegnati;
 }
 
 /** Pubblica il pannello con il pulsante di verifica. */

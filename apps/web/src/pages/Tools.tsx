@@ -84,7 +84,14 @@ function ServerSetup() {
         <li>• sei ruoli: quarantena, verificato, allerta, staff, in diretta, partecipa</li>
         <li>• categoria ANGEL con registro, allerta e segnalazioni</li>
         <li>• categoria Assistenza con sala d&apos;attesa, stanze riservate e ticket</li>
-        <li>• canale di verifica con il pannello, e isolamento di chi non ha verificato</li>
+        <li>
+          • canale di verifica con il pannello, e server chiuso a <code>@everyone</code>: vede i
+          canali solo chi ha il ruolo di verificato
+        </li>
+        <li>
+          • i membri già presenti diventano verificati automaticamente — la verifica riguarda chi
+          arriva, non chi c&apos;è già
+        </li>
       </ul>
 
       <div className="flex items-center gap-3">
