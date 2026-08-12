@@ -3,6 +3,7 @@ import { describeField, SECTION_DOCS } from '@angel/shared/docs';
 import { virgoletteSugliId } from '@angel/shared/json';
 import { api } from '../api.js';
 import { ChannelPicker, MultiPicker, RolePicker } from '../components/pickers.js';
+import { ParoleEditor, WordlistEditor, type Termine } from '../components/WordlistEditor.js';
 import { useGuildId } from '../App.js';
 import {
   Badge,
@@ -607,6 +608,41 @@ function ObjectEditor({
         }
 
         if (Array.isArray(entry)) {
+          // L'elenco delle parole ha un editor suo: cinquecento voci non stanno
+          // né come schede né come JSON, e la cosa che si fa più spesso —
+          // aggiungere quella appena comparsa in chat — deve costare un campo e
+          // un pulsante, altrimenti non la aggiunge nessuno.
+          if (fullPath === 'security.language.terms') {
+            return (
+              <div key={key} className="py-2 text-sm">
+                <span className="mb-1 block text-neutral-300">{label}</span>
+                <Help path={fullPath} />
+                <div className="mt-2">
+                  <WordlistEditor
+                    value={entry as Termine[]}
+                    onChange={(next) => onChange(fullPath, next)}
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          if (fullPath === 'security.language.allowlist') {
+            return (
+              <div key={key} className="py-2 text-sm">
+                <span className="mb-1 block text-neutral-300">{label}</span>
+                <Help path={fullPath} />
+                <div className="mt-2">
+                  <ParoleEditor
+                    value={entry as string[]}
+                    placeholder="una parola per riga"
+                    onChange={(next) => onChange(fullPath, next)}
+                  />
+                </div>
+              </div>
+            );
+          }
+
           // La forma la decide lo schema, non il contenuto: un elenco vuoto non
           // dice se conterrà stringhe od oggetti, e indovinare dal valore
           // significa mostrare una casella di testo dove serve un editor di

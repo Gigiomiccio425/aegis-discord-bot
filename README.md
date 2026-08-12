@@ -58,6 +58,33 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 Il resto — anti-spam, controllo account, verifica d'ingresso, ruoli appiccicosi — è configurabile
 modulo per modulo dal pannello.
 
+### Il filtro sul linguaggio
+
+Arriva con **561 espressioni** divise in sette categorie — volgarità, insulti, discriminazione,
+minacce, istigazione all'autolesionismo, bestemmie, contenuto sessuale — ognuna con la sua gravità e
+il suo interruttore. Il contenuto sessuale parte spento: su un server di adulti la conversazione può
+essere legittima.
+
+Il confronto è per parola intera e passa da una normalizzazione: `c a z z o`, `c-a-z-z-o` e
+`di0p0rc0` vengono riconosciuti senza doverli elencare. Le **eccezioni** vincono sempre, ed è metà
+del lavoro: un filtro che blocca chi parla di edilizia (`cazzuola`) o nomina una città (`Cagliari`)
+insegna in un pomeriggio che il bot va ignorato.
+
+Restano fuori di proposito parole che senza contesto non si possono giudicare: `muori` (muori dal
+ridere), `crepa` (una crepa nel muro), `sega` (l'attrezzo), `figa` (in mezza Italia significa
+«bello»). Ogni falso positivo costa più di ciò che il blocco guadagna.
+
+**Aggiungerne è la cosa che si fa più spesso**, quindi si fa in due modi:
+
+- da Discord, nel momento in cui la parola compare: `/parole aggiungi parola:tizio, caio
+  categoria:Insulto gravita:media`, e poi `/parole togli`, `/parole consenti` per le eccezioni,
+  `/parole cerca`, `/parole elenco` per il conto per categoria;
+- dal pannello, in *Sicurezza → Linguaggio*: ricerca, filtro per categoria, aggiunta in cima e un
+  campo per incollare venti parole in una volta.
+
+`/prova-filtro` mostra cosa verrebbe riconosciuto in un testo senza sanzionare nessuno — utile
+perché in chat amministratori e proprietari del bot sono esenti, cioè proprio chi vorrebbe provarlo.
+
 ### Link e GIF: dove sì e dove no
 
 Va detto perché genera confusione: **i link non sono vietati.** Vengono tolti solo quando sono

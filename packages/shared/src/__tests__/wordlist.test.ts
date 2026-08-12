@@ -24,10 +24,18 @@ describe('elenco predefinito', () => {
     // supererebbero mai la soglia della risposta e la categoria sarebbe
     // decorativa.
     const gravi = DEFAULT_WORDLIST.filter((voce) =>
-      ['DISCRIMINAZIONE', 'MINACCIA', 'AUTOLESIONISMO', 'BESTEMMIA'].includes(voce.category),
+      ['DISCRIMINAZIONE', 'MINACCIA', 'AUTOLESIONISMO'].includes(voce.category),
     );
     expect(gravi.every((voce) => voce.severity === 'GRAVE')).toBe(true);
     expect(gravi.length).toBeGreaterThan(50);
+
+    // Le bestemmie fanno eccezione, e la differenza è reale: fra «dio santo»
+    // detto per stizza e le formule pesanti c'è la stessa distanza che passa
+    // fra imprecare e insultare. Restano comunque sopra il livello lieve,
+    // altrimenti non supererebbero mai la soglia della risposta.
+    const bestemmie = DEFAULT_WORDLIST.filter((voce) => voce.category === 'BESTEMMIA');
+    expect(bestemmie.every((voce) => voce.severity !== 'LIEVE')).toBe(true);
+    expect(bestemmie.filter((voce) => voce.severity === 'GRAVE').length).toBeGreaterThan(50);
   });
 
   it('copre tutte le categorie', () => {
