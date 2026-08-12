@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGuildConfig, MODULE_REGISTRY } from '../config/index.js';
-import { COMMAND_DOCS, describeField, SECTION_DOCS } from '../config/docs.js';
+import { BY_PATH as FIELD_DOCS, COMMAND_DOCS, describeField, SECTION_DOCS } from '../config/docs.js';
 
 /** Ogni foglia della configurazione, come percorso puntato. */
 function leafPaths(value: unknown, prefix = ''): string[] {
@@ -24,6 +24,30 @@ describe('spiegazioni della configurazione', () => {
     expect(missing).toEqual([]);
   });
 
+  /*
+   * Il controllo opposto: una descrizione che parla di un'opzione non più
+   * esistente. Non rompe niente, e proprio per questo resta lì per sempre — a
+   * documentare un comportamento che il bot non ha, che è peggio di non
+   * documentare affatto.
+   */
+  it('non descrive opzioni che non esistono più', () => {
+    const config = defaultGuildConfig() as unknown as Record<string, unknown>;
+    const esiste = (path: string): boolean =>
+      path.split('.').reduce<unknown>((valore, chiave) => {
+        if (valore === null || typeof valore !== 'object') return undefined;
+        return (valore as Record<string, unknown>)[chiave];
+      }, config) !== undefined;
+
+    // Solo i percorsi completi: il file contiene anche scorciatoie `padre.campo`
+    // che per costruzione non partono dalla radice della configurazione.
+    const radici = ['general', 'security', 'scanner', 'logging', 'integrations'];
+    const orfani = Object.keys(FIELD_DOCS).filter(
+      (path) => radici.includes(path.split('.')[0]!) && path.includes('.') && !esiste(path),
+    );
+
+    expect(orfani).toEqual([]);
+  });
+
   it('spiega cosa cambia, non ripete il nome del campo', () => {
     const doc = describeField('general.dryRun');
     expect(doc).not.toBeNull();
@@ -36,7 +60,7 @@ describe('spiegazioni della configurazione', () => {
   it('risolve le chiavi ripetute in ogni modulo', () => {
     for (const path of [
       'security.antiRaid.enabled',
-      'security.antiNuke.exemptions.roleIds',
+      'security.antiSpam.exemptions.roleIds',
       'integrations.twitch.enabled',
       'logging.retentionDays.MESSAGE',
       'security.antiNuke.rules.channelDelete.threshold.count',

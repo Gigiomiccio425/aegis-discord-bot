@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { describeField, SECTION_DOCS } from '@angel/shared/docs';
 import { virgoletteSugliId } from '@angel/shared/json';
 import { api } from '../api.js';
+import { ChannelPicker, MultiPicker, RolePicker } from '../components/pickers.js';
 import { useGuildId } from '../App.js';
 import {
   Badge,
@@ -371,6 +372,151 @@ function labelFor(path: string, key: string): string {
   return describeField(path)?.label ?? humanize(key);
 }
 
+/**
+ * Cosa contiene un campo, letto dal suo nome.
+ *
+ * Tutto lo schema segue la stessa convenzione — `…ChannelId`, `…RoleIds` — e
+ * appoggiarsi a quella evita di mantenere un elenco a parte di quali campi
+ * sono canali: un elenco che al primo modulo nuovo resta indietro, e il campo
+ * torna silenziosamente a farsi incollare un ID a mano.
+ */
+function tipoDiRiferimento(key: string): 'canale' | 'ruolo' | 'utente' | null {
+  const minuscolo = key.toLowerCase();
+  if (minuscolo.endsWith('channelid') || minuscolo.endsWith('channelids')) return 'canale';
+  if (minuscolo.endsWith('roleid') || minuscolo.endsWith('roleids')) return 'ruolo';
+  if (minuscolo.endsWith('userid') || minuscolo.endsWith('userids')) return 'utente';
+  return null;
+}
+
+/**
+ * Elenco di oggetti: una scheda per elemento.
+ *
+ * Prima era un blocco di JSON. Funzionava per chi sa cos'è il JSON e per
+ * nessun altro: una virgola di troppo rendeva invalido tutto il blocco, e gli
+ * ID Discord vanno fra virgolette per una ragione che non c'entra nulla con
+ * Discord. Ogni elemento è un oggetto come tutti gli altri della
+ * configurazione, quindi si modifica con gli stessi controlli — comprese le
+ * tendine dei canali e dei ruoli.
+ *
+ * Il JSON resta, richiuso: serve per copiare una configurazione da un server
+ * all'altro, che a mano sarebbe un lavoro da mezz'ora.
+ */
+function ObjectListEditor({
+  label,
+  path,
+  items,
+  template,
+  objectArrays,
+  objectTemplates,
+  onChange,
+}: {
+  label: string;
+  path: string;
+  items: unknown[];
+  template: unknown;
+  objectArrays: string[];
+  objectTemplates: Record<string, unknown>;
+  onChange: (path: string, value: unknown) => void;
+}) {
+  const [json, setJson] = useState(false);
+
+  const rimuovi = (indice: number) =>
+    onChange(
+      path,
+      items.filter((_, posizione) => posizione !== indice),
+    );
+
+  return (
+    <div className="py-2 text-sm">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <span className="text-neutral-300">
+          {label}
+          {items.length > 0 && <span className="ml-2 text-xs text-neutral-600">{items.length}</span>}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setJson(!json)}
+            className="text-xs text-neutral-500 underline"
+          >
+            {json ? 'a schede' : 'come JSON'}
+          </button>
+          {template !== undefined && (
+            <Button onClick={() => onChange(path, [...items, structuredClone(template)])}>
+              Aggiungi
+            </Button>
+          )}
+        </div>
+      </div>
+      <Help path={path} />
+
+      {json ? (
+        <div className="mt-1">
+          <JsonEditor value={items} onChange={(next) => onChange(path, next)} />
+        </div>
+      ) : items.length === 0 ? (
+        <p className="mt-2 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-4 text-center text-xs text-neutral-500">
+          Nessun elemento. {template !== undefined && 'Usa «Aggiungi» per crearne uno.'}
+        </p>
+      ) : (
+        <div className="mt-2 space-y-2">
+          {items.map((item, indice) => (
+            <div
+              key={indice}
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)]/60 p-3"
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-xs font-medium text-neutral-500">
+                  {titoloElemento(item, indice)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => rimuovi(indice)}
+                  className="text-xs text-[var(--color-danger)] underline"
+                >
+                  Rimuovi
+                </button>
+              </div>
+              {item && typeof item === 'object' ? (
+                <ObjectEditor
+                  value={item as Json}
+                  path={`${path}.${indice}`}
+                  objectArrays={objectArrays}
+                  objectTemplates={objectTemplates}
+                  onChange={onChange}
+                  depth={1}
+                />
+              ) : (
+                <p className="text-xs text-neutral-500">Elemento non modificabile a schede.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Come si chiama un elemento nell'elenco.
+ *
+ * «Elemento 3» non aiuta a trovare lo streamer da correggere. I campi cercati
+ * sono quelli che nello schema fanno da nome: il login di Twitch, il canale
+ * YouTube, l'indirizzo del feed, il termine del filtro, la soglia di una scala.
+ */
+function titoloElemento(item: unknown, indice: number): string {
+  if (item && typeof item === 'object') {
+    const oggetto = item as Record<string, unknown>;
+    for (const chiave of ['login', 'channel', 'label', 'url', 'term', 'name']) {
+      const valore = oggetto[chiave];
+      if (typeof valore === 'string' && valore.trim() !== '') return valore;
+    }
+    if (typeof oggetto.atScore === 'number') return `da ${oggetto.atScore} punti`;
+    if (typeof oggetto.infrazioni === 'number') return `alla ${oggetto.infrazioni}ª infrazione`;
+  }
+  return `Elemento ${indice + 1}`;
+}
+
 function ObjectEditor({
   value,
   path,
@@ -386,6 +532,8 @@ function ObjectEditor({
   onChange: (path: string, value: unknown) => void;
   depth?: number;
 }) {
+  const guildId = useGuildId();
+
   return (
     <div className={depth > 0 ? 'ml-3 border-l border-[var(--color-border)] pl-3' : ''}>
       {Object.entries(value).map(([key, entry]) => {
@@ -427,11 +575,31 @@ function ObjectEditor({
         }
 
         if (typeof entry === 'string' || entry === null) {
+          // Il nome del campo dice già cosa contiene: la convenzione
+          // `…ChannelId` / `…RoleId` è rispettata in tutto lo schema, e usarla
+          // evita di tenere un elenco a parte che si dimentica di aggiornare.
+          const riferimento = tipoDiRiferimento(key);
+
           return (
             <div key={key} className="py-2">
               <label className="block text-sm">
                 <span className="mb-1 block text-neutral-300">{label}</span>
-                <TextInput value={entry} onChange={(next) => onChange(fullPath, next)} />
+                {riferimento === 'canale' ? (
+                  <ChannelPicker
+                    guildId={guildId}
+                    value={entry}
+                    soloTestuali={!key.toLowerCase().includes('voice')}
+                    onChange={(next) => onChange(fullPath, next)}
+                  />
+                ) : riferimento === 'ruolo' ? (
+                  <RolePicker
+                    guildId={guildId}
+                    value={entry}
+                    onChange={(next) => onChange(fullPath, next)}
+                  />
+                ) : (
+                  <TextInput value={entry} onChange={(next) => onChange(fullPath, next)} />
+                )}
               </label>
               <Help path={fullPath} />
             </div>
@@ -448,44 +616,43 @@ function ObjectEditor({
             entry.some((item) => typeof item === 'object' && item !== null);
 
           if (!oggetti) {
+            const riferimento = tipoDiRiferimento(key);
+
             return (
               <div key={key} className="py-2">
                 <label className="block text-sm">
                   <span className="mb-1 block text-neutral-300">{label}</span>
-                  <ListInput
-                    value={entry as (string | number)[]}
-                    numeric={entry.every((item) => typeof item === 'number')}
-                    onChange={(next) => onChange(fullPath, next)}
-                  />
+                  {riferimento === 'canale' || riferimento === 'ruolo' ? (
+                    <MultiPicker
+                      guildId={guildId}
+                      value={entry as string[]}
+                      cosa={riferimento === 'ruolo' ? 'ruoli' : 'canali'}
+                      onChange={(next) => onChange(fullPath, next)}
+                    />
+                  ) : (
+                    <ListInput
+                      value={entry as (string | number)[]}
+                      numeric={entry.every((item) => typeof item === 'number')}
+                      onChange={(next) => onChange(fullPath, next)}
+                    />
+                  )}
                 </label>
                 <Help path={fullPath} />
               </div>
             );
           }
 
-          // Le strutture complesse (scale d'azione, elenchi di streamer) si
-          // modificano come JSON: fabbricare un editor dedicato per ciascuna
-          // costerebbe più di quanto renda, e il server valida comunque tutto.
-          const modello = objectTemplates[fullPath];
           return (
-            <div key={key} className="py-2 text-sm">
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <span className="text-neutral-300">{label}</span>
-                {modello !== undefined && (
-                  <Button
-                    onClick={() =>
-                      onChange(fullPath, [...entry, structuredClone(modello)])
-                    }
-                  >
-                    Aggiungi
-                  </Button>
-                )}
-              </div>
-              <Help path={fullPath} />
-              <div className="mt-1">
-                <JsonEditor value={entry} onChange={(next) => onChange(fullPath, next)} />
-              </div>
-            </div>
+            <ObjectListEditor
+              key={key}
+              label={label}
+              path={fullPath}
+              items={entry}
+              template={objectTemplates[fullPath]}
+              objectArrays={objectArrays}
+              objectTemplates={objectTemplates}
+              onChange={onChange}
+            />
           );
         }
 

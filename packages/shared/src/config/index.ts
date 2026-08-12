@@ -204,7 +204,6 @@ export const GeneralConfig = z
     masterEnabled: z.boolean().default(true),
 
     locale: z.enum(['it', 'en']).default('it'),
-    timezone: z.string().default('Europe/Rome'),
     /** Ruoli considerati staff: esenti dai moduli e destinatari degli alert. */
     staffRoleIds: SnowflakeList,
     /** Ruolo di quarantena creato/gestito dal bot. */

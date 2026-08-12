@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { COMMAND_DOCS, type CommandDoc } from '@angel/shared/docs';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
+import { scordaInventario } from '../components/pickers.js';
 import {
   Badge,
   Button,
@@ -53,6 +54,10 @@ function ServerSetup() {
     setError(null);
     try {
       await api.post(`/api/guilds/${guildId}/actions/setup`);
+      // La predisposizione crea canali e ruoli: l'elenco che il pannello ha in
+      // mano è appena diventato incompleto, e senza questo le tendine della
+      // configurazione non mostrerebbero i canali appena creati.
+      scordaInventario(guildId);
       setStato('fatto');
       setTimeout(() => setStato('pronto'), 8000);
     } catch (err) {

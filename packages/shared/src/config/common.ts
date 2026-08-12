@@ -87,11 +87,21 @@ export const Exemptions = z
   .default({});
 export type Exemptions = z.infer<typeof Exemptions>;
 
-/** Blocco comune a ogni modulo: on/off, esenzioni, canale di alert dedicato. */
+/**
+ * Blocco comune a ogni modulo: l'interruttore, e basta.
+ *
+ * Conteneva anche le esenzioni e un canale di avviso per modulo. Le esenzioni
+ * le legge solo chi sanziona qualcuno — otto moduli su ventisei — e sugli altri
+ * comparivano lo stesso: si potevano esentare degli utenti dagli annunci di
+ * Twitch, e la spunta non faceva nulla. Il canale di avviso per modulo non lo
+ * leggeva nessuno: gli avvisi vanno tutti su `general.alertChannelId`.
+ *
+ * Un'opzione che non fa niente è peggio di un'opzione assente: viene impostata,
+ * dà per acquisito un comportamento che non esiste, e il tempo perso a
+ * configurarla si scopre solo quando serviva davvero.
+ */
 export const ModuleBase = z.object({
   enabled: z.boolean().default(false),
-  exemptions: Exemptions,
-  alertChannelId: Snowflake.nullable().default(null),
 });
 
 /**
@@ -108,6 +118,17 @@ export const ModuleBase = z.object({
  */
 export const ActiveModuleBase = ModuleBase.extend({
   enabled: z.boolean().default(true),
+});
+
+/**
+ * Base dei moduli che possono sanzionare qualcuno.
+ *
+ * Sono gli unici in cui «chi è immune» significa qualcosa: anti-spam, scanner,
+ * linguaggio, anti-flame, inviti, account compromessi, controllo account e
+ * tutela utenti. Sono anche i soli otto che leggono davvero le esenzioni.
+ */
+export const GuardModuleBase = ActiveModuleBase.extend({
+  exemptions: Exemptions,
 });
 
 /**

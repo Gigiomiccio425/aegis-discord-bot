@@ -4,6 +4,7 @@ import {
   ActionKind,
   ActionLadder,
   ActiveModuleBase,
+  GuardModuleBase,
   RateThreshold,
   Seconds,
   Snowflake,
@@ -176,7 +177,7 @@ export type AntiNukeConfig = z.infer<typeof AntiNukeConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    ANTI-SPAM
    ═══════════════════════════════════════════════════════════════════════ */
-export const AntiSpamConfig = ActiveModuleBase.extend({
+export const AntiSpamConfig = GuardModuleBase.extend({
   messageRate: RateThreshold.default({ count: 6, windowSec: 5 }),
   /** Stesso testo ripetuto, anche in canali diversi. */
   duplicateMessages: RateThreshold.default({ count: 3, windowSec: 30 }),
@@ -241,7 +242,7 @@ export type AntiSpamConfig = z.infer<typeof AntiSpamConfig>;
    L'ondata "MrBeast" non arriva da account nuovi ma da account *veri e noti*
    che di colpo cambiano comportamento. Serve una baseline per utente.
    ═══════════════════════════════════════════════════════════════════════ */
-export const CompromiseConfig = ActiveModuleBase.extend({
+export const CompromiseConfig = GuardModuleBase.extend({
   /** Utente inattivo da N giorni che riprende a scrivere con link/immagini. */
   dormantDays: z.number().int().min(1).max(365).default(30),
   /** Peso dei singoli segnali nel punteggio finale (0-100). */
@@ -295,7 +296,7 @@ export type CompromiseConfig = z.infer<typeof CompromiseConfig>;
 /* ═══════════════════════════════════════════════════════════════════════
    ACCOUNT GUARD  —  minaccia D4 + profilazione account sospetti
    ═══════════════════════════════════════════════════════════════════════ */
-export const AccountGuardConfig = ActiveModuleBase.extend({
+export const AccountGuardConfig = GuardModuleBase.extend({
   /** Punti assegnati a ciascun segnale di rischio al join. */
   weights: z
     .object({
@@ -312,8 +313,6 @@ export const AccountGuardConfig = ActiveModuleBase.extend({
       homoglyphName: z.number().int().min(0).max(100).default(30),
       /** Nessun badge, nessuna attività, profilo completamente vuoto. */
       emptyProfile: z.number().int().min(0).max(100).default(10),
-      /** Account con la stessa impronta di altri entrati nello stesso minuto. */
-      joinCluster: z.number().int().min(0).max(100).default(25),
     })
     .default({}),
 
@@ -339,7 +338,7 @@ export type AccountGuardConfig = z.infer<typeof AccountGuardConfig>;
    normalizzandoli in minuscolo: i link "storici" pubblicati altrove possono
    finire su un server ostile.
    ═══════════════════════════════════════════════════════════════════════ */
-export const InviteGuardConfig = ActiveModuleBase.extend({
+export const InviteGuardConfig = GuardModuleBase.extend({
   /** Risolve ogni invito postato e mostra allo staff nome, età e dimensione del server. */
   resolvePostedInvites: z.boolean().default(true),
   /** Blocca gli inviti verso server non presenti in allowlist. */
@@ -399,7 +398,7 @@ export type BotGuardConfig = z.infer<typeof BotGuardConfig>;
    Tutela dei minori e link che raccolgono IP. Il bot non vede i DM: qui si
    agisce sui canali e si offre un percorso di segnalazione rapido.
    ═══════════════════════════════════════════════════════════════════════ */
-export const SafetyConfig = ActiveModuleBase.extend({
+export const SafetyConfig = GuardModuleBase.extend({
   /** Rilevamento pattern di adescamento nei canali pubblici. */
   groomingPatterns: z.boolean().default(true),
   /** Canale privato dove finiscono le segnalazioni con le prove congelate. */
@@ -535,7 +534,7 @@ export const LanguageTerm = z.object({
 });
 export type LanguageTerm = z.infer<typeof LanguageTerm>;
 
-export const LanguageConfig = ActiveModuleBase.extend({
+export const LanguageConfig = GuardModuleBase.extend({
   /** Filtri predefiniti di Discord: agiscono prima della pubblicazione. */
   usePresetProfanity: z.boolean().default(true),
   usePresetSlurs: z.boolean().default(true),
@@ -679,7 +678,7 @@ export type LanguageConfig = z.infer<typeof LanguageConfig>;
    non impedisce che ricomincino altrove; togliere la rapidità toglie invece
    proprio ciò di cui la spirale si nutre.
    ═══════════════════════════════════════════════════════════════════════ */
-export const FlameConfig = ActiveModuleBase.extend({
+export const FlameConfig = GuardModuleBase.extend({
   /** Quanto deve risultare ostile un messaggio per entrare nel conteggio (0-100). */
   sogliaMessaggio: z.number().int().min(10).max(100).default(30),
 

@@ -35,7 +35,8 @@ export interface FieldDoc {
 /* ── Percorsi esatti ───────────────────────────────────────────────────
    Solo dove la stessa parola significa cose diverse a seconda di dove si
    trova, o dove il campo merita una spiegazione più lunga della media. */
-const BY_PATH: Record<string, FieldDoc> = {
+/** Esportato per il test che tiene le descrizioni allineate ai campi reali. */
+export const BY_PATH: Record<string, FieldDoc> = {
   version: {
     label: 'Versione dello schema',
     help: 'Numero interno usato dalle migrazioni della configurazione. Non modificarlo.',
@@ -83,11 +84,6 @@ const BY_PATH: Record<string, FieldDoc> = {
       'nessun software distingue un deepfake vocale, una parola concordata in anticipo sì.',
   },
   'general.locale': { label: 'Lingua', help: 'Lingua dei messaggi del bot: italiano o inglese.' },
-  'general.timezone': {
-    label: 'Fuso orario',
-    help: 'Usato per gli orari nei log e negli annunci. Formato IANA, es. Europe/Rome.',
-  },
-
   'general.actionNotice.enabled': {
     label: 'Avvisa in chat le sanzioni',
     help:
@@ -894,6 +890,63 @@ const BY_KEY: Record<string, FieldDoc> = {
     label: 'Scrittura su disco ogni (ms)',
     help: 'Accumula prima di scrivere: una syscall per messaggio sarebbe spreco puro.',
   },
+
+  /* Campi delle schede: streamer, canali YouTube, feed, scale d'azione */
+  login: {
+    label: 'Nome utente Twitch',
+    help: 'Quello che compare nell\'indirizzo del canale: twitch.tv/questo. Non il nome mostrato.',
+  },
+  channel: {
+    label: 'Canale YouTube',
+    help: 'ID del canale (inizia per UC…) oppure il suo @handle. Si trova nell\'indirizzo del canale.',
+  },
+  url: { label: 'Indirizzo del feed', help: 'Il link RSS o Atom da controllare.' },
+  label: {
+    label: 'Nome della fonte',
+    help: "Come chiamarla nell'annuncio, al posto del titolo che il feed dichiara di suo.",
+  },
+  clipChannelId: {
+    label: 'Canale dei clip',
+    help: 'Dove pubblicare i clip. Vuoto = nello stesso canale degli annunci.',
+  },
+  template: {
+    label: 'Testo dell\'annuncio',
+    help: 'Le variabili fra graffe vengono sostituite al momento della pubblicazione.',
+  },
+  cooldownMinutes: {
+    label: 'Non riannunciare per (minuti)',
+    help: 'Una diretta che cade e riparte non deve produrre due annunci.',
+  },
+  clipMinViews: {
+    label: 'Pubblica i clip sopra (visualizzazioni)',
+    help: '0 = non pubblicare clip. Sotto questa soglia il clip viene ignorato.',
+  },
+  liveRoleId: {
+    label: 'Ruolo mentre è in diretta',
+    help: 'Assegnato quando la diretta comincia e tolto quando finisce.',
+  },
+  announceLive: {
+    label: 'Annuncia anche le dirette',
+    help: 'Su YouTube le dirette arrivano nello stesso feed dei video.',
+  },
+  includeKeywords: {
+    label: 'Pubblica solo se contiene',
+    help: 'Vuoto = pubblica tutto. Il confronto è sul titolo.',
+  },
+  excludeKeywords: { label: 'Non pubblicare se contiene', help: 'Ha la precedenza sul filtro sopra.' },
+  maxPerCheck: {
+    label: 'Al massimo per controllo',
+    help: 'Limite di pubblicazioni per giro: un feed che ne rilascia venti insieme non deve allagare il canale.',
+  },
+  atScore: {
+    label: 'Da questo punteggio',
+    help: 'Si applica l\'azione della soglia più alta raggiunta, non tutte quelle sotto.',
+  },
+  durationSec: {
+    label: 'Durata (secondi)',
+    help: 'Per silenziamento, quarantena e blocco. 0 = finché non lo togli a mano.',
+  },
+  category: { label: 'Categoria', help: 'A che tipo di espressione appartiene il termine.' },
 
   /* Integrazioni */
   streamers: { label: 'Streamer seguiti', help: 'Canale Twitch, dove annunciare, quale ruolo menzionare e con quale testo.' },

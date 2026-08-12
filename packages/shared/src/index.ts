@@ -12,6 +12,14 @@ export * from './env.js';
 export const RedisKeys = {
   /** Configurazione di un server, in cache. */
   guildConfig: (guildId: string) => `cfg:${guildId}`,
+  /**
+   * Canali e ruoli del server, scritti dal bot e letti dal pannello.
+   *
+   * Il pannello non è connesso a Discord: senza questa copia, configurare un
+   * canale significa incollarne l'ID a mano, che è come si finisce per salvare
+   * l'ID sbagliato senza accorgersene.
+   */
+  guildInventory: (guildId: string) => `inv:${guildId}`,
   /** Canale pub/sub su cui il pannello annuncia i cambi di configurazione. */
   configChannel: 'aegis:config',
   /** Canale pub/sub per i comandi dal pannello al bot (lockdown, panic…). */

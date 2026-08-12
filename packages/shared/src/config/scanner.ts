@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ActionKind, ActionLadder, ActiveModuleBase } from './common.js';
+import { ActionKind, ActionLadder, GuardModuleBase } from './common.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONTENT SCANNER  —  minacce A2, A3, A4, C1, C2, C5, C6
@@ -19,8 +19,6 @@ export const UrlScanConfig = z
     expandShorteners: z.boolean().default(true),
     maxRedirects: z.number().int().min(1).max(10).default(5),
     fetchTimeoutMs: z.number().int().min(500).max(15000).default(4000),
-    /** Rileva punycode e omoglifi: `discοrd.com` con omicron greco. */
-    detectHomoglyphs: z.boolean().default(true),
     /** Domini che imitiamo per il confronto omoglifi. */
     protectedDomains: z
       .array(z.string())
@@ -36,8 +34,6 @@ export const UrlScanConfig = z
       ]),
     /** Google Safe Browsing v4. Richiede GOOGLE_SAFE_BROWSING_KEY. */
     useSafeBrowsing: z.boolean().default(true),
-    /** Blocklist pubbliche sincronizzate in locale (URLhaus, Phishing.Database). */
-    useThreatFeeds: z.boolean().default(true),
     /** Blocklist e allowlist manuali del server. */
     blockedDomains: z.array(z.string()).default([]),
     allowedDomains: z.array(z.string()).default([]),
@@ -109,9 +105,6 @@ export const FileScanConfig = z
         'wsf', 'wsh', 'msi', 'msp', 'hta', 'cpl', 'jar', 'lnk', 'ps1', 'psm1',
         'reg', 'inf', 'apk', 'dll', 'sys',
       ]),
-    /** Ispeziona gli archivi cercando eseguibili al loro interno. */
-    inspectArchives: z.boolean().default(true),
-    maxArchiveEntries: z.number().int().min(1).max(1000).default(100),
   })
   .default({});
 export type FileScanConfig = z.infer<typeof FileScanConfig>;
@@ -153,7 +146,7 @@ export const ClickFixConfig = z
   .default({});
 export type ClickFixConfig = z.infer<typeof ClickFixConfig>;
 
-export const ScannerConfig = ActiveModuleBase.extend({
+export const ScannerConfig = GuardModuleBase.extend({
   url: UrlScanConfig,
   image: ImageScanConfig,
   file: FileScanConfig,

@@ -508,6 +508,20 @@ I permessi del pannello sono **separati** da quelli Discord: `MANAGE_GUILD` è l
 per entrare, ma cosa si può fare dentro lo decide il ruolo assegnato (Owner / Admin / Mod / Viewer).
 Amministrare un server non implica il diritto di scaricare l'archivio di tutte le conversazioni.
 
+### Configurare senza incollare ID
+
+Canali e ruoli si scelgono da una tendina, con il loro nome e la categoria che li contiene. Il
+pannello non è connesso a Discord — una sola connessione al gateway è una scelta, non una mancanza —
+quindi l'elenco lo scrive il bot in Redis e il pannello lo rilegge. Se non c'è ancora, i campi
+tornano a chiedere l'ID a mano invece di bloccare il lavoro.
+
+Non è solo comodità: un ID incollato male **non dà errore**, punta a un altro canale, e ce se ne
+accorge il giorno in cui l'avviso non arriva dove doveva.
+
+Gli elenchi di oggetti — streamer seguiti, canali YouTube, feed, scale d'azione — sono schede, una
+per elemento, con «Aggiungi» che parte da uno scheletro già compilato con i valori predefiniti. Il
+JSON resta disponibile richiuso, per copiare una configurazione da un server all'altro.
+
 ---
 
 ## Comandi
