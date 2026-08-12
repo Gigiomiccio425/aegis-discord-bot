@@ -24,13 +24,28 @@ Per questo il nodo locale:
 
 ---
 
+## Se il bot è tuo e vuoi la cartella già pronta
+
+Questa è la versione generica, con i segnaposto: serve a chiunque prenda il
+progetto per il proprio bot.
+
+Chi mantiene il progetto tiene accanto una copia già compilata — la cartella
+`emergenza-mia/`, esclusa da git — generata da questa sostituendo i segnaposto.
+È una copia derivata di proposito: due cartelle mantenute in parallelo
+divergono sempre, e ci si accorge della differenza nel momento peggiore, cioè
+con il server giù.
+
+---
+
 ## Preparazione, una volta sola
 
 **1.** Installa [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 e avvialo. Deve essere in esecuzione perché il nodo possa partire.
 
-**2.** Assicurati che Tailscale su questo PC sia connesso: è da lì che passa il
-controllo verso la VPS.
+**2.** Apri `impostazioni.txt` e metti l'indirizzo del tuo server al posto del
+segnaposto. Deve essere raggiungibile da questo PC: se passa da Tailscale o da
+una VPN, assicurati che siano connessi — altrimenti il sorvegliante
+concluderebbe che il server è giù ogni volta che il tunnel non è attivo.
 
 **3.** **Copia** `docker-compose.emergenza.yml` in
 `docker-compose.emergenza.local.yml`, e compila i valori in cima **nella

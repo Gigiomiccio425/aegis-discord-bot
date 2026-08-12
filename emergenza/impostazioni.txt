@@ -4,7 +4,7 @@
 # Indirizzo del server principale. Deve essere raggiungibile da questo PC:
 # se usi Tailscale, assicurati che sia connesso, altrimenti il sorvegliante
 # concluderebbe che il server è giù ogni volta che il tunnel non è attivo.
-urlPrincipale = http://zimaos-1.taila0adf7.ts.net:780
+urlPrincipale = http://IP_O_NOME_DELLA_TUA_VPS:780
 
 # Minuti fra un controllo e l'altro quando il principale risponde.
 attesaNormale = 30

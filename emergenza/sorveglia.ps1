@@ -30,7 +30,7 @@ Set-Location -Path $PSScriptRoot
 
 # ── Impostazioni ─────────────────────────────────────────────────────────
 $config = Join-Path $PSScriptRoot 'impostazioni.txt'
-$urlPrincipale = 'http://zimaos-1.taila0adf7.ts.net:780'
+$urlPrincipale = 'http://IP_O_NOME_DELLA_TUA_VPS:780'
 $attesaNormale = 30      # minuti, quando il principale risponde
 $attesaEmergenza = 2     # minuti, quando il nodo locale sta lavorando
 $timeoutSec = 8

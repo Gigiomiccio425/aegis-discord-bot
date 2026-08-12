@@ -33,3 +33,6 @@ Thumbs.db
 # caddy
 caddy_data/
 caddy_config/
+
+# La cartella di emergenza personale: contiene le credenziali vere.
+emergenza-mia/
