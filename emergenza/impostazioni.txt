@@ -1,0 +1,25 @@
+# Impostazioni del nodo di emergenza.
+# Righe `chiave = valore`. Le righe che iniziano con # sono ignorate.
+
+# Indirizzo del server principale. Deve essere raggiungibile da questo PC:
+# se usi Tailscale, assicurati che sia connesso, altrimenti il sorvegliante
+# concluderebbe che il server è giù ogni volta che il tunnel non è attivo.
+urlPrincipale = http://zimaos-1.taila0adf7.ts.net:780
+
+# Minuti fra un controllo e l'altro quando il principale risponde.
+attesaNormale = 30
+
+# Minuti fra un controllo e l'altro mentre il nodo di emergenza sta lavorando.
+#
+# Più fitto di proposito: è il tempo entro cui ci si accorge che il principale
+# è tornato, e quindi la finestra in cui entrambi i nodi potrebbero risultare
+# attivi insieme.
+attesaEmergenza = 2
+
+# Quanti tentativi falliti servono prima di dichiarare giù il server.
+#
+# Un solo tentativo non basta: una richiesta può fallire per un pacchetto
+# perso, per Tailscale che sta riconnettendo, o perché il bot si sta riavviando
+# dopo un aggiornamento. Accendere un secondo bot per una di queste è peggio
+# del disservizio che si voleva coprire.
+tentativi = 3

@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────
+#  ANGEL — nodo di emergenza (Windows, Docker Desktop)
+#
+#  Copia locale e indipendente del bot: database, Redis e applicazione tutti
+#  sul tuo PC. Si accende solo quando il server principale non risponde, e si
+#  spegne appena torna.
+#
+#  Non lo si avvia a mano: lo gestisce `angel-emergenza.bat`, che prima
+#  verifica che il principale sia davvero giù. Due bot con lo stesso token
+#  collegati insieme ricevono gli stessi eventi e agirebbero due volte —
+#  doppie sanzioni, doppi messaggi, doppie righe di registro.
+#
+#  ⚠️ CONTIENE LE STESSE CREDENZIALI DEL SERVER. Resta fuori da git.
+# ─────────────────────────────────────────────────────────────
+name: angel-emergenza
+
+x-discord-token: &discord-token 'METTI_QUI_LO_STESSO_TOKEN_DEL_SERVER'
+x-discord-client-id: &discord-client-id 'METTI_QUI_IL_CLIENT_ID'
+x-discord-client-secret: &discord-client-secret 'METTI_QUI_IL_CLIENT_SECRET'
+x-owner-ids: &owner-ids 'METTI_QUI_IL_TUO_ID'
+
+# Password del database locale. Non deve coincidere con quella della VPS:
+# questo database vive e muore sul tuo PC.
+x-db-password: &db-password 'emergenza-locale-cambiami'
+x-database-url: &database-url 'postgresql://angel:emergenza-locale-cambiami@angel-emg-postgres:5432/angel?schema=public'
+
+# I due segreti **devono** essere gli stessi del server principale.
+# ENCRYPTION_KEY cifra i token salvati nel database: con una chiave diversa i
+# dati esportati dal nodo non sarebbero rileggibili al rientro.
+x-session-secret: &session-secret 'STESSO_SESSION_SECRET_DEL_SERVER'
+x-encryption-key: &encryption-key 'STESSA_ENCRYPTION_KEY_DEL_SERVER'
+
+services:
+  angel-emergenza:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.11.0
+    pull_policy: always
+    container_name: angel-emergenza
+    # `no` e non `unless-stopped`: chi decide se questo nodo deve girare è il
+    # bat, non Docker. Con il riavvio automatico si riaccenderebbe al reboot
+    # del PC anche con il server principale perfettamente funzionante.
+    restart: 'no'
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      DATABASE_URL: *database-url
+      REDIS_URL: redis://angel-emg-redis:6379
+      ENCRYPTION_KEY: *encryption-key
+      STORAGE_DIR: /data/storage
+
+      DISCORD_TOKEN: *discord-token
+      DISCORD_CLIENT_ID: *discord-client-id
+      DISCORD_CLIENT_SECRET: *discord-client-secret
+      OWNER_IDS: *owner-ids
+      SESSION_SECRET: *session-secret
+      API_PORT: '8080'
+      DEV_GUILD_ID: ''
+      PANEL_OWNERS_ONLY: 'true'
+
+      # Il pannello del nodo risponde su localhost: è l'unico indirizzo da cui
+      # lo raggiungerai, ed evita di esporlo sulla rete di casa.
+      PUBLIC_URL: 'http://localhost:781'
+
+      # Dice all'applicazione che è un nodo di emergenza. Compare in /health,
+      # che è come il bat distingue i due nodi, e nel registro: le righe
+      # prodotte qui restano riconoscibili anche dopo il rientro.
+      ANGEL_MODE: emergenza
+
+      # Le integrazioni restano spente: annunci Twitch o YouTube pubblicati da
+      # un nodo temporaneo verrebbero ripubblicati dal principale al rientro.
+      THREAT_FEEDS_ENABLED: 'false'
+      GOOGLE_SAFE_BROWSING_KEY: ''
+      TWITCH_CLIENT_ID: ''
+      TWITCH_CLIENT_SECRET: ''
+      TWITCH_EVENTSUB_SECRET: ''
+
+      BACKUP_DIR: /backup
+      BACKUP_KEEP: '30'
+    volumes:
+      - angel_emg_storage:/data/storage
+      # Cartella vera sul disco: è da qui che il bat prende l'esportazione da
+      # riportare sul server principale.
+      - ./dati:/backup
+    ports:
+      # 781 e non 780: se un giorno avessi anche il principale raggiungibile
+      # da questo PC, le due interfacce non si contenderebbero la porta.
+      - '127.0.0.1:781:8080'
+    depends_on:
+      - angel-emg-postgres
+      - angel-emg-redis
+
+  angel-emg-postgres:
+    image: postgres:17
+    container_name: angel-emg-postgres
+    restart: 'no'
+    environment:
+      POSTGRES_USER: angel
+      POSTGRES_PASSWORD: *db-password
+      POSTGRES_DB: angel
+    volumes:
+      - angel_emg_postgres:/var/lib/postgresql/data
+
+  angel-emg-redis:
+    image: redis:7-alpine
+    container_name: angel-emg-redis
+    restart: 'no'
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - angel_emg_redis:/data
+
+volumes:
+  angel_emg_postgres:
+  angel_emg_redis:
+  angel_emg_storage:

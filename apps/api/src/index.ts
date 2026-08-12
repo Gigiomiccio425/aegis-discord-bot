@@ -22,6 +22,7 @@ import { integrationRoutes } from './routes/integrations.js';
 import { accessRoutes } from './routes/access.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { versionRoutes } from './routes/version.js';
+import { syncRoutes } from './routes/sync.js';
 import { registerLiveFeed } from './ws.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +48,10 @@ async function main(): Promise<void> {
     // Dietro Caddy l'IP reale arriva negli header: senza questo, il rate limit
     // vedrebbe un solo client per tutti.
     trustProxy: true,
-    bodyLimit: 2 * 1024 * 1024,
+    // 32 MB: un rientro dal nodo di emergenza porta con se ore di registro, e
+    // rifiutarlo per dimensione significherebbe perdere proprio i dati che si
+    // stava cercando di salvare.
+    bodyLimit: 32 * 1024 * 1024,
   });
 
   /**
@@ -86,10 +90,28 @@ async function main(): Promise<void> {
 
   await app.register(websocket);
 
+  /*
+   * Stato del nodo.
+   *
+   * Non richiede autenticazione di proposito: è ciò che il nodo di emergenza
+   * interroga per sapere se il server principale è vivo, e un controllo che
+   * ha bisogno di credenziali è un controllo che fallisce anche quando il
+   * server sta benissimo — cioè un falso allarme che accende un secondo bot.
+   *
+   * Non espone nulla di sensibile: se questo risponde, la porta è già
+   * raggiungibile, e chi la raggiunge sta già dentro il tailnet.
+   */
   app.get('/health', async () => {
     await prisma.$queryRaw`SELECT 1`;
     await getRedis().ping();
-    return { ok: true, uptime: process.uptime() };
+    return {
+      ok: true,
+      uptime: process.uptime(),
+      versione: runningVersion(),
+      // `principale` o `emergenza`. Il nodo di emergenza si spegne da solo
+      // quando vede un principale rispondere: la priorità non si negozia.
+      ruolo: process.env.ANGEL_MODE === 'emergenza' ? 'emergenza' : 'principale',
+    };
   });
 
   await app.register(authRoutes);
@@ -104,6 +126,7 @@ async function main(): Promise<void> {
   await app.register(accessRoutes);
   await app.register(webhookRoutes);
   await app.register(versionRoutes);
+  await app.register(syncRoutes);
   await registerLiveFeed(app);
 
   /**

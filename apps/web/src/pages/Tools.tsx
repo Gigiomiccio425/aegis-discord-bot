@@ -17,6 +17,7 @@ export function Tools() {
     <div className="space-y-5">
       <h1 className="text-xl font-semibold">Strumenti</h1>
       <ServerSetup />
+      <RientroEmergenza />
       <SayAsBot />
       <WatchedUsers />
       <CommandReference />
@@ -81,6 +82,111 @@ function ServerSetup() {
           Non duplica ruoli e non ricrea canali.
         </span>
       </div>
+    </Card>
+  );
+}
+
+/* ── Rientro dal nodo di emergenza ────────────────────────────────────── */
+
+interface EsitoImport {
+  inserite: number;
+  dettaglio: { tabella: string; lette: number; inserite: number; errore?: string }[];
+  nota: string;
+}
+
+/**
+ * Riporta sul server i dati raccolti dal nodo di emergenza.
+ *
+ * Non è automatico di proposito: importare significa scrivere nel registro e
+ * nei provvedimenti del server, cioè nella storia di ciò che è successo. Va
+ * fatto da chi sa cosa è accaduto mentre il server era giù, non da uno script
+ * che nel dubbio importa tutto.
+ */
+function RientroEmergenza() {
+  const [esito, setEsito] = useState<EsitoImport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [caricando, setCaricando] = useState(false);
+
+  const carica = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setCaricando(true);
+    setError(null);
+    setEsito(null);
+
+    try {
+      const tabelle: Record<string, unknown[]> = {};
+
+      for (const file of Array.from(files)) {
+        if (!file.name.endsWith('.ndjson')) continue;
+        const tabella = file.name.replace(/\.ndjson$/, '');
+        const testo = await file.text();
+        // NDJSON: una riga per record. Le righe illeggibili si saltano invece
+        // di far fallire l'intero rientro — un file troncato è comunque
+        // meglio di nessun dato.
+        tabelle[tabella] = testo
+          .split('\n')
+          .filter((riga) => riga.trim().length > 0)
+          .map((riga) => {
+            try {
+              return JSON.parse(riga) as unknown;
+            } catch {
+              return null;
+            }
+          })
+          .filter((riga): riga is Record<string, unknown> => riga !== null);
+      }
+
+      if (Object.keys(tabelle).length === 0) {
+        setError('Nessun file .ndjson trovato: seleziona il contenuto della cartella esportata.');
+        return;
+      }
+
+      setEsito(await api.post<EsitoImport>('/api/sync/import', { tabelle }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setCaricando(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Rientro dal nodo di emergenza"
+      subtitle="Riporta qui il registro e i provvedimenti raccolti mentre il server era giù."
+    >
+      {error && <ErrorBox message={error} />}
+
+      <p className="mb-3 text-sm leading-relaxed text-neutral-400">
+        Seleziona i file <code>.ndjson</code> dentro la cartella esportata dal nodo
+        (<code>emergenza\dati\angel-…</code>). Reimportare due volte lo stesso file non crea
+        duplicati.
+      </p>
+
+      <input
+        type="file"
+        multiple
+        accept=".ndjson"
+        disabled={caricando}
+        onChange={(event) => void carica(event.target.files)}
+        className="block w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
+      />
+
+      {caricando && <p className="mt-3 text-sm text-neutral-400">Importazione in corso…</p>}
+
+      {esito && (
+        <div className="mt-4 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm">
+          <p className="font-medium text-[#8fe0b4]">{esito.inserite} righe importate</p>
+          <ul className="mt-2 space-y-0.5 text-xs text-neutral-400">
+            {esito.dettaglio.map((riga) => (
+              <li key={riga.tabella}>
+                {riga.tabella}: {riga.inserite} su {riga.lette}
+                {riga.errore && <span className="text-[#f2a3ad]"> — {riga.errore}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs leading-relaxed text-neutral-500">{esito.nota}</p>
+        </div>
+      )}
     </Card>
   );
 }
