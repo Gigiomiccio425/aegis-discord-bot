@@ -270,6 +270,126 @@ export function MultiPicker({
   );
 }
 
+interface Utente {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+}
+
+/**
+ * Sceglie un membro cercandolo per nome.
+ *
+ * I membri non stanno nell'inventario — in un server grande sono decine di
+ * migliaia — quindi qui si interroga il server mentre si scrive. Un ID
+ * incollato viene accettato così com'è: chi lo ha già copiato da Discord non
+ * deve rimettersi a cercare il nome.
+ */
+export function UserPicker({
+  guildId,
+  value,
+  onChange,
+  placeholder = 'Cerca per nome, o incolla l’ID',
+}: {
+  guildId: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  placeholder?: string;
+}) {
+  const [testo, setTesto] = useState('');
+  const [risultati, setRisultati] = useState<Utente[]>([]);
+  const [scelto, setScelto] = useState<Utente | null>(null);
+
+  // Il nome di chi è già configurato: senza, il campo mostrerebbe un numero di
+  // diciotto cifre e nessuno saprebbe di chi si tratta.
+  useEffect(() => {
+    if (!value) {
+      setScelto(null);
+      return;
+    }
+    let attivo = true;
+    api
+      .get<Utente[]>(`/api/guilds/${guildId}/utenti?q=${value}`)
+      .then((elenco) => {
+        if (attivo) setScelto(elenco[0] ?? { userId: value, username: null, displayName: null });
+      })
+      .catch(() => undefined);
+    return () => {
+      attivo = false;
+    };
+  }, [guildId, value]);
+
+  const cerca = (query: string): void => {
+    setTesto(query);
+    if (query.trim().length < 2) {
+      setRisultati([]);
+      return;
+    }
+    api
+      .get<Utente[]>(`/api/guilds/${guildId}/utenti?q=${encodeURIComponent(query.trim())}`)
+      .then(setRisultati)
+      .catch(() => setRisultati([]));
+  };
+
+  if (value) {
+    return (
+      <div className="flex max-w-md items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm">
+        <span className="text-neutral-300">
+          {scelto?.displayName ?? scelto?.username ?? 'utente'}
+        </span>
+        <code className="text-xs text-neutral-600">{value}</code>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(null);
+            setTesto('');
+          }}
+          className="ml-auto text-xs text-neutral-500 underline"
+        >
+          cambia
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative max-w-md">
+      <input
+        type="text"
+        value={testo}
+        placeholder={placeholder}
+        onChange={(event) => cerca(event.target.value)}
+        className={CAMPO}
+      />
+      {risultati.length > 0 && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl">
+          {risultati.map((utente) => (
+            <button
+              key={utente.userId}
+              type="button"
+              onClick={() => {
+                onChange(utente.userId);
+                setRisultati([]);
+                setTesto('');
+              }}
+              className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-neutral-300 hover:bg-[var(--color-surface-2)]"
+            >
+              <span>{utente.displayName ?? utente.username ?? utente.userId}</span>
+              {utente.username && utente.displayName && (
+                <span className="text-xs text-neutral-600">@{utente.username}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {testo.trim().length >= 2 && risultati.length === 0 && (
+        <p className="mt-1 text-xs text-neutral-600">
+          Nessuno con questo nome fra chi il bot ha già visto. Puoi incollare direttamente l’ID.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Ripiego quando l'inventario non è disponibile. */
 function IdAMano({
   value,

@@ -51,6 +51,11 @@ const twitch: Command = {
         )
         .addRoleOption((option) =>
           option.setName('ruolo-live').setDescription('Ruolo assegnato mentre è in diretta'),
+        )
+        .addUserOption((option) =>
+          option
+            .setName('utente-live')
+            .setDescription('Chi è lo streamer su Discord: senza, il ruolo non va a nessuno'),
         ),
     )
     .addSubcommand((sub) =>
@@ -164,12 +169,14 @@ const twitch: Command = {
     const channel = interaction.options.getChannel('canale', true);
     const mention = interaction.options.getRole('menziona');
     const liveRole = interaction.options.getRole('ruolo-live');
+    const liveUser = interaction.options.getUser('utente-live');
 
     const existing = settings.streamers.find((entry) => entry.login.toLowerCase() === login);
     if (existing) {
       existing.announceChannelId = channel.id;
       existing.mentionRoleId = mention?.id ?? existing.mentionRoleId;
       existing.liveRoleId = liveRole?.id ?? existing.liveRoleId;
+      existing.discordUserId = liveUser?.id ?? existing.discordUserId;
     } else {
       settings.streamers.push({
         enabled: true,
@@ -177,6 +184,7 @@ const twitch: Command = {
         announceChannelId: channel.id,
         mentionRoleId: mention?.id ?? null,
         liveRoleId: liveRole?.id ?? null,
+        discordUserId: liveUser?.id ?? null,
         clipChannelId: null,
         template: '🔴 **{streamer}** è in diretta!\n**{title}**\n{game}\n{url}',
         cooldownMinutes: 60,

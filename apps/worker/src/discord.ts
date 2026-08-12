@@ -55,6 +55,34 @@ export async function sendMessage(
   }
 }
 
+/**
+ * Dà o toglie un ruolo a un membro.
+ *
+ * Le REST bastano: aggiungere un ruolo è una chiamata sola e non richiede la
+ * cache dei membri, che il worker non ha e non deve avere.
+ */
+export async function setMemberRole(
+  guildId: string,
+  userId: string,
+  roleId: string,
+  attivo: boolean,
+  reason: string,
+): Promise<boolean> {
+  try {
+    const route = Routes.guildMemberRole(guildId, userId, roleId);
+    if (attivo) await getRest().put(route, { reason });
+    else await getRest().delete(route, { reason });
+    return true;
+  } catch (error) {
+    // 10007 = membro non nel server, 10011 = ruolo inesistente: sono
+    // configurazioni rimaste indietro, non guasti da segnalare come errori.
+    const code = (error as { code?: number }).code;
+    if (code === 10007 || code === 10011) return false;
+    log.debug({ err: error, guildId, userId, roleId }, 'assegnazione ruolo fallita');
+    return false;
+  }
+}
+
 /** `seconds = 0` rimuove il silenziamento invece di impostarne uno di durata nulla. */
 export async function timeoutMember(
   guildId: string,

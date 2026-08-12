@@ -121,16 +121,44 @@ async function handleNotification(body: TwitchNotification): Promise<void> {
   if (!body.event) return;
   const prisma = getPrisma();
 
+  // Il tipo va filtrato: lo stesso canale Twitch ha una riga per l'inizio della
+  // diretta e una per la fine, e senza filtro un evento di inizio verrebbe
+  // trattato una volta per riga — cioè annunciato due volte.
   const subscriptions = await prisma.twitchSubscription.findMany({
-    where: { twitchUserId: body.event.broadcaster_user_id, enabled: true },
+    where: {
+      twitchUserId: body.event.broadcaster_user_id,
+      eventsubType: body.subscription.type,
+      enabled: true,
+    },
   });
+
+  // Un server può avere due righe per lo stesso canale Twitch — una per
+  // `stream.online` e una per `stream.offline` — e senza questo la fine della
+  // diretta verrebbe messa in coda due volte.
+  const finiti = new Set<string>();
 
   for (const subscription of subscriptions) {
     if (body.subscription.type === 'stream.offline') {
+      if (finiti.has(subscription.guildId)) continue;
+      finiti.add(subscription.guildId);
+
       await prisma.twitchSubscription.update({
         where: { id: subscription.id },
         data: { lastLiveAt: null },
       });
+
+      // Il ruolo «in diretta» lo toglie il worker, che ha il client REST: qui
+      // si accoda soltanto. Senza questo passaggio il ruolo resterebbe addosso
+      // fino al riavvio successivo, cioè per giorni.
+      await getRedis().lpush(
+        'twitch:announce',
+        JSON.stringify({
+          guildId: subscription.guildId,
+          login: subscription.twitchLogin,
+          userId: subscription.twitchUserId,
+          fine: true,
+        }),
+      );
       continue;
     }
 

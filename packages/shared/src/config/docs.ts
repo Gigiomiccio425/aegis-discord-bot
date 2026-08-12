@@ -921,6 +921,10 @@ const BY_KEY: Record<string, FieldDoc> = {
     label: 'Pubblica i clip sopra (visualizzazioni)',
     help: '0 = non pubblicare clip. Sotto questa soglia il clip viene ignorato.',
   },
+  discordUserId: {
+    label: 'Chi è su Discord',
+    help: "L'account Discord dello streamer: senza, il ruolo «in diretta» non ha a chi essere dato.",
+  },
   liveRoleId: {
     label: 'Ruolo mentre è in diretta',
     help: 'Assegnato quando la diretta comincia e tolto quando finisce.',

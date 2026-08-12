@@ -23,6 +23,15 @@ export const TwitchStreamerConfig = z.object({
   announceChannelId: Snowflake.nullable().default(null),
   /** Ruolo assegnato mentre lo streamer è in diretta. */
   liveRoleId: Snowflake.nullable().default(null),
+  /**
+   * L'account Discord dello streamer, a cui dare il ruolo mentre trasmette.
+   *
+   * Twitch e Discord non hanno niente in comune: il bot sa che il canale
+   * Twitch è in diretta, non chi sia quella persona nel server. Senza questo
+   * collegamento il ruolo «in diretta» resta configurato e non viene mai dato
+   * a nessuno.
+   */
+  discordUserId: Snowflake.nullable().default(null),
   /** Ruolo da menzionare nell'annuncio. */
   mentionRoleId: Snowflake.nullable().default(null),
   /** Template del messaggio. Variabili: {streamer} {title} {game} {url} {viewers} */

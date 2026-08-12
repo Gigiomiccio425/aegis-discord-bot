@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { ChannelPicker, RolePicker, useInventario } from '../components/pickers.js';
+import { ChannelPicker, RolePicker, UserPicker, useInventario } from '../components/pickers.js';
 import { MentionInput } from '../components/MentionInput.js';
 import { Badge, Button, Card, ErrorBox, Loading, NumberInput } from '../components/ui.js';
 
@@ -508,6 +508,28 @@ function EditorVoce({
                     Assegnato quando la diretta comincia, tolto quando finisce.
                   </p>
                 </label>
+
+                <label className="block text-sm">
+                  <span className="mb-1 block text-neutral-300">
+                    Chi è questo streamer su Discord
+                  </span>
+                  <UserPicker
+                    guildId={guildId}
+                    value={(bozza.discordUserId as string | null) ?? null}
+                    onChange={(valore) => campo('discordUserId', valore)}
+                  />
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    Twitch e Discord non hanno niente in comune: senza questo collegamento il bot sa
+                    che il canale è in diretta, ma non a chi dare il ruolo.
+                  </p>
+                </label>
+
+                {Boolean(bozza.liveRoleId) && !bozza.discordUserId && (
+                  <p className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
+                    Hai scelto un ruolo «in diretta» ma non la persona a cui darlo: così il ruolo non
+                    verrà assegnato a nessuno.
+                  </p>
+                )}
                 <label className="flex items-center justify-between text-sm">
                   <span className="text-neutral-300">Non riannunciare per (minuti)</span>
                   <NumberInput

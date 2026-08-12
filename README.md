@@ -543,6 +543,12 @@ Ogni voce ha il suo canale, il suo messaggio e il suo ruolo da menzionare, più:
   troppo rumoroso in un certo periodo.
 - Anteprima del messaggio con i segnaposto già sostituiti, mentre lo si scrive.
 
+**Il ruolo «in diretta»** vuole due cose, non una: il ruolo *e* chi è quello streamer su Discord.
+Twitch e Discord non hanno niente in comune — il bot sa che `twitch.tv/tizio` sta trasmettendo, non
+chi sia quella persona nel server. Si cerca per nome fra chi il bot ha già visto, oppure si incolla
+l'ID. Il ruolo arriva all'inizio della diretta e viene tolto alla fine; se il ruolo è impostato e la
+persona no, il pannello lo dice invece di lasciare una funzione che non parte mai.
+
 ---
 
 ## Comandi

@@ -3,7 +3,7 @@ import { getPrisma } from '@angel/db';
 import { GuildConfigSchema } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
-import { recordWorkerEvent, sendMessage } from '../discord.js';
+import { recordWorkerEvent, sendMessage, setMemberRole } from '../discord.js';
 import { getClips, getStream, getUserByLogin, subscribeEventSub } from '../twitchApi.js';
 
 const log = childLogger('twitch');
@@ -70,7 +70,10 @@ async function drainAnnouncements(): Promise<void> {
     const raw = await redis.rpop('twitch:announce');
     if (!raw) break;
 
-    let payload: { guildId: string; login: string; userId: string };
+    // `fine` distingue la fine della diretta dall'inizio: passano dalla stessa
+    // coda perché sono lo stesso streamer nello stesso ordine, e due code
+    // separate potrebbero consegnare il «finita» prima del «cominciata».
+    let payload: { guildId: string; login: string; userId: string; fine?: boolean };
     try {
       payload = JSON.parse(raw) as typeof payload;
     } catch {
@@ -88,6 +91,11 @@ async function drainAnnouncements(): Promise<void> {
     );
     if (!streamer || !streamer.enabled) continue;
 
+    if (payload.fine) {
+      await segnaFineDiretta(payload.guildId, streamer);
+      continue;
+    }
+
     const stream = await getStream(payload.userId);
     await announceLive(payload.guildId, streamer, {
       title: stream?.title ?? 'In diretta',
@@ -104,7 +112,7 @@ async function syncStreamer(guildId: string, streamer: StreamerConfig): Promise<
   const prisma = getPrisma();
 
   const existing = await prisma.twitchSubscription.findFirst({
-    where: { guildId, twitchLogin: streamer.login.toLowerCase() },
+    where: { guildId, twitchLogin: streamer.login.toLowerCase(), eventsubType: 'stream.online' },
   });
 
   let userId = existing?.twitchUserId ?? streamer.userId;
@@ -143,14 +151,33 @@ async function syncStreamer(guildId: string, streamer: StreamerConfig): Promise<
         'EventSub non attivabile (serve un URL pubblico HTTPS): si userà il controllo periodico',
       );
     }
+
+    await sottoscriviFineDiretta(guildId, streamer, userId, callbackUrl);
     return;
   }
+
+  // Anche per una sottoscrizione già esistente: il ruolo «in diretta» può
+  // essere stato configurato dopo, e in quel caso la fine della diretta non
+  // arriverebbe mai — il ruolo resterebbe addosso per sempre.
+  await sottoscriviFineDiretta(guildId, streamer, userId, callbackUrl);
 
   // Senza EventSub attivo si verifica lo stato con il polling: meno tempestivo,
   // ma meglio di nessun avviso.
   if (!existing.eventsubId) {
     const stream = await getStream(userId);
-    if (!stream) return;
+
+    if (!stream) {
+      // Transizione a offline: senza EventSub nessuno la annuncia, e il ruolo
+      // «in diretta» resterebbe addosso finché qualcuno non lo toglie a mano.
+      if (existing.lastLiveAt) {
+        await segnaFineDiretta(guildId, streamer);
+        await prisma.twitchSubscription.update({
+          where: { id: existing.id },
+          data: { lastLiveAt: null },
+        });
+      }
+      return;
+    }
 
     const recentlyAnnounced =
       existing.lastAnnouncedAt &&
@@ -171,11 +198,92 @@ async function syncStreamer(guildId: string, streamer: StreamerConfig): Promise<
   }
 }
 
+/**
+ * Sottoscrive `stream.offline`, ma solo per chi ha un ruolo da restituire.
+ *
+ * Twitch limita il numero di sottoscrizioni: chiederne una per ogni streamer
+ * seguito, quando alla fine della diretta non deve succedere nulla, consumerebbe
+ * quota per un evento che verrebbe scartato all'arrivo.
+ */
+async function sottoscriviFineDiretta(
+  guildId: string,
+  streamer: StreamerConfig,
+  userId: string,
+  callbackUrl: string | null,
+): Promise<void> {
+  if (!streamer.liveRoleId || !streamer.discordUserId) return;
+  if (!callbackUrl?.startsWith('https://')) return;
+
+  const prisma = getPrisma();
+  const gia = await prisma.twitchSubscription.findFirst({
+    where: { guildId, twitchUserId: userId, eventsubType: 'stream.offline' },
+  });
+  if (gia) return;
+
+  const eventsubId = await subscribeEventSub('stream.offline', userId, callbackUrl);
+  await prisma.twitchSubscription.create({
+    data: {
+      guildId,
+      twitchUserId: userId,
+      twitchLogin: streamer.login.toLowerCase(),
+      eventsubId,
+      eventsubType: 'stream.offline',
+      liveRoleId: streamer.liveRoleId,
+    },
+  });
+}
+
+/**
+ * Dà o toglie allo streamer il ruolo «in diretta».
+ *
+ * Il collegamento fra il canale Twitch e la persona su Discord lo fa la
+ * configurazione: senza `discordUserId` il bot non ha modo di sapere chi sia
+ * quello streamer nel server, e il ruolo resterebbe una decorazione.
+ *
+ * Il ruolo si dà comunque, anche quando l'annuncio non parte perché manca il
+ * canale o perché è scattato il cooldown: sono due cose diverse, e chi ha
+ * impostato il ruolo lo vuole addosso finché la diretta è accesa.
+ */
+async function ruoloDiretta(
+  guildId: string,
+  streamer: StreamerConfig,
+  inDiretta: boolean,
+): Promise<void> {
+  if (!streamer.liveRoleId || !streamer.discordUserId) return;
+
+  await setMemberRole(
+    guildId,
+    streamer.discordUserId,
+    streamer.liveRoleId,
+    inDiretta,
+    inDiretta ? `Diretta Twitch di ${streamer.login}` : `Fine diretta Twitch di ${streamer.login}`,
+  );
+}
+
+/** Fine della diretta: il ruolo va tolto, e resta traccia nel registro. */
+export async function segnaFineDiretta(
+  guildId: string,
+  streamer: StreamerConfig,
+): Promise<void> {
+  if (!streamer.liveRoleId || !streamer.discordUserId) return;
+
+  await ruoloDiretta(guildId, streamer, false);
+  await recordWorkerEvent({
+    guildId,
+    type: 'INTEGRATION_ANNOUNCEMENT',
+    targetId: streamer.discordUserId,
+    summary: `Fine diretta di **${streamer.login}**: ruolo <@&${streamer.liveRoleId}> rimosso`,
+    payload: { platform: 'twitch', login: streamer.login, live: false },
+  });
+}
+
 export async function announceLive(
   guildId: string,
   streamer: StreamerConfig,
   info: { title: string; game: string; viewers: number; thumbnail: string },
 ): Promise<void> {
+  await ruoloDiretta(guildId, streamer, true);
+
   const channelId = streamer.announceChannelId;
   if (!channelId) return;
 
