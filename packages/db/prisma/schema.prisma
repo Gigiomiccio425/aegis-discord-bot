@@ -184,7 +184,6 @@ model AttachmentArchive {
   height      Int?
   /// Verdetto dello scanner: CLEAN | SUSPICIOUS | MALICIOUS | UNSCANNED
   verdict     String   @default("UNSCANNED")
-  scanResult  Json     @default("{}")
   createdAt   DateTime @default(now())
 
   @@index([guildId, createdAt(sort: Desc)])
@@ -289,8 +288,6 @@ model UserProfile {
 
   messageCount Int      @default(0)
   lastMessageAt DateTime?
-  /// Momento in cui l'utente è tornato attivo dopo un periodo di silenzio.
-  dormantSince DateTime?
 
   warnCount Int @default(0)
   caseCount Int @default(0)

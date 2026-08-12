@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { describeField, SECTION_DOCS } from '@angel/shared/docs';
+import { analizzaConfigurazione } from '@angel/shared/coerenza';
 import { virgoletteSugliId } from '@angel/shared/json';
 import { api } from '../api.js';
 import { ChannelPicker, MultiPicker, RolePicker } from '../components/pickers.js';
@@ -112,6 +113,8 @@ export function Settings() {
         />
       )}
 
+      <Coerenza config={draft} onApri={setSelected} />
+
       <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
         <nav className="space-y-1">
           {sections.map((section) => {
@@ -165,6 +168,104 @@ export function Settings() {
       <ConfigHistory guildId={guildId} onRestored={() => location.reload()} />
       <PanelSessions />
     </div>
+  );
+}
+
+/**
+ * Cosa non torna nella configurazione, mentre la si modifica.
+ *
+ * Guarda la bozza e non ciò che è salvato: un problema che compare nel momento
+ * in cui lo si crea è un problema che si corregge subito, mentre lo stesso
+ * avviso letto tre giorni dopo è una caccia a cosa si era cambiato.
+ *
+ * I moduli spenti non producono nulla: dire a chi non usa i ticket che manca
+ * la categoria dei ticket è il modo più rapido per far ignorare l'intero
+ * riquadro.
+ */
+function Coerenza({ config, onApri }: { config: Json; onApri: (modulo: string) => void }) {
+  const [aperto, setAperto] = useState(false);
+  const problemi = useMemo(() => {
+    try {
+      return analizzaConfigurazione(config as unknown as Parameters<typeof analizzaConfigurazione>[0]);
+    } catch {
+      // Una bozza a metà modifica può non essere ancora valida: in quel caso il
+      // riquadro sparisce invece di mostrare un errore che non riguarda l'utente.
+      return [];
+    }
+  }, [config]);
+
+  if (problemi.length === 0) return null;
+
+  const errori = problemi.filter((problema) => problema.livello === 'errore');
+  const avvisi = problemi.filter((problema) => problema.livello === 'avviso');
+  const note = problemi.filter((problema) => problema.livello === 'nota');
+  const mostrati = aperto ? problemi : [...errori, ...avvisi].slice(0, 4);
+
+  const colore = (livello: string): string =>
+    livello === 'errore'
+      ? 'text-[var(--color-danger)]'
+      : livello === 'avviso'
+        ? 'text-[var(--color-warning)]'
+        : 'text-neutral-500';
+
+  return (
+    <Card
+      title="Controlli di coerenza"
+      subtitle={
+        errori.length > 0
+          ? `${errori.length} ${errori.length === 1 ? 'modulo acceso non può funzionare' : 'moduli accesi non possono funzionare'}`
+          : 'Nessun blocco: solo cose che vale la pena sapere.'
+      }
+      action={
+        <div className="flex items-center gap-2 text-xs">
+          {errori.length > 0 && <Badge tone="danger">{errori.length} da sistemare</Badge>}
+          {avvisi.length > 0 && <Badge tone="warning">{avvisi.length} da guardare</Badge>}
+          {note.length > 0 && <Badge tone="neutral">{note.length} note</Badge>}
+        </div>
+      }
+    >
+      <ul className="space-y-2 text-sm">
+        {mostrati.map((problema, indice) => (
+          <li key={indice} className="flex items-start gap-2">
+            <span className={`mt-0.5 ${colore(problema.livello)}`}>●</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-neutral-200">{problema.titolo}</span>
+                <button
+                  type="button"
+                  onClick={() => onApri(problema.modulo)}
+                  className="text-xs text-[var(--color-accent-soft)] underline"
+                >
+                  apri {problema.modulo}
+                </button>
+              </div>
+              <p className="text-xs leading-relaxed text-neutral-400">
+                {stripMarkdown(problema.dettaglio)}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {problemi.length > mostrati.length && (
+        <button
+          type="button"
+          onClick={() => setAperto(true)}
+          className="mt-3 text-xs text-neutral-500 underline"
+        >
+          mostra tutti ({problemi.length})
+        </button>
+      )}
+      {aperto && (
+        <button
+          type="button"
+          onClick={() => setAperto(false)}
+          className="mt-3 text-xs text-neutral-500 underline"
+        >
+          mostra meno
+        </button>
+      )}
+    </Card>
   );
 }
 

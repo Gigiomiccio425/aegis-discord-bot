@@ -17,6 +17,10 @@
     "./json": {
       "types": "./dist/util/json.d.ts",
       "default": "./dist/util/json.js"
+    },
+    "./coerenza": {
+      "types": "./dist/config/coerenza.d.ts",
+      "default": "./dist/config/coerenza.js"
     }
   },
   "scripts": {

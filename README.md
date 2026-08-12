@@ -58,6 +58,30 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 Il resto — anti-spam, controllo account, verifica d'ingresso, ruoli appiccicosi — è configurabile
 modulo per modulo dal pannello.
 
+### Controlli di coerenza
+
+I guasti peggiori non stanno dentro un modulo: stanno **fra** i moduli, e per questo non si vedono
+guardando la sezione di quello che sembra rotto. Sono sempre di tre tipi.
+
+| | Esempio reale |
+|---|---|
+| **Dipendenza spenta** | Il rilevatore di account compromessi prende due dei suoi segnali dallo scanner: con lo scanner spento restano a zero per sempre |
+| **Campo necessario vuoto** | Una soglia dice «quarantena» e il ruolo di quarantena non è impostato: l'azione non isola nessuno |
+| **Contrasto** | Lo stesso ruolo usato come «non ha ancora verificato» e come «è stato sanzionato»: chi entra risulta punito senza aver fatto nulla |
+
+Le dipendenze sono **dichiarate** in [`coerenza.ts`](packages/shared/src/config/coerenza.ts), non
+dedotte dal codice: dedurle avrebbe scoperto esattamente ciò che il codice fa, cioè anche i difetti,
+spacciandoli per regole. Sono i test a tenere la dichiarazione onesta — ogni modulo del pannello
+deve comparire, e ogni campo citato deve esistere davvero nella configurazione.
+
+Il risultato si legge in due posti, dalla stessa funzione: un riquadro in cima alla
+**Configurazione**, che si aggiorna mentre modifichi invece di aspettare il salvataggio, e il
+comando **`/diagnosi`** su Discord.
+
+Nessun controllo impedisce di salvare. Una configurazione incoerente è spesso un passaggio
+intermedio verso quella giusta, e un pannello che blocca a metà strada costringe a fare tutto in un
+colpo solo o a rinunciare.
+
 ### Il filtro sul linguaggio
 
 Arriva con **561 espressioni** divise in sette categorie — volgarità, insulti, discriminazione,

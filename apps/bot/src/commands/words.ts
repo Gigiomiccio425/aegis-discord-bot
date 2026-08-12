@@ -10,7 +10,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { GuildConfigSchema, type GuildConfig } from '@angel/shared';
+import { analizzaConfigurazione, GuildConfigSchema, type GuildConfig } from '@angel/shared';
 import type { Command } from './types.js';
 import { getGuildConfig, saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -237,4 +237,58 @@ async function salva(
   await saveGuildConfig(guildId, config, { id: actorId, source: 'command', paths: percorsi });
 }
 
-export const wordCommands: Command[] = [parole];
+/* ═══════════════════════════════════════════════════════════════════════
+   DIAGNOSI
+
+   Risponde alla domanda che si pone quando qualcosa non funziona e non si
+   capisce perché: «il modulo è acceso, e allora?». Le cause sono quasi sempre
+   fra i moduli e non dentro uno — un campo che manca, una dipendenza spenta,
+   due impostazioni che si annullano — e nessuna di queste si vede guardando
+   la sezione del modulo che sembra rotto.
+   ═══════════════════════════════════════════════════════════════════════ */
+const diagnosi: Command = {
+  data: new SlashCommandBuilder()
+    .setName('diagnosi')
+    .setDescription('Controlla che i moduli accesi possano davvero funzionare')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+  requiredPermissions: [PermissionFlagsBits.ManageGuild],
+  async execute({ interaction, config }) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const problemi = analizzaConfigurazione(config);
+
+    if (problemi.length === 0) {
+      await interaction.editReply('✅ Tutto coerente: ogni modulo acceso ha ciò che gli serve.');
+      return;
+    }
+
+    const icona = { errore: '🔴', avviso: '🟠', nota: '⚪' } as const;
+    const errori = problemi.filter((problema) => problema.livello === 'errore').length;
+
+    const embed = new EmbedBuilder()
+      .setTitle('Diagnosi della configurazione')
+      .setColor(errori > 0 ? 0xe05263 : 0xd8b45f)
+      .setDescription(
+        problemi
+          .slice(0, 15)
+          .map(
+            (problema) =>
+              `${icona[problema.livello]} **${problema.titolo}** — \`${problema.modulo}\`\n` +
+              problema.dettaglio.replace(/\*\*/g, ''),
+          )
+          .join('\n\n')
+          .slice(0, 4000),
+      )
+      .setFooter({
+        text:
+          errori > 0
+            ? `${errori} da sistemare · le altre voci sono avvisi e note`
+            : 'Nessun blocco: solo cose che vale la pena sapere',
+      });
+
+    await interaction.editReply({ embeds: [embed] });
+  },
+};
+
+export const wordCommands: Command[] = [parole, diagnosi];
