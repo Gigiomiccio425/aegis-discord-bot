@@ -74,10 +74,21 @@ const salute: Command = {
       const totale = stat.blocks * stat.bsize;
       const libero = stat.bavail * stat.bsize;
       const usato = totale > 0 ? Math.round((1 - libero / totale) * 100) : 0;
-      discoOk = usato < 90;
+
+      // Gli inode finiscono per conto loro, e quando finiscono il sistema dice
+      // «No space left on device» con centinaia di giga liberi. Senza questo
+      // numero, quel messaggio manda a cercare nel posto sbagliato.
+      const inode = stat.files > 0 ? Math.round((1 - stat.ffree / stat.files) * 100) : 0;
+
+      discoOk = usato < 90 && inode < 90;
       disco =
-        `**${usato}%** usato · ${(libero / 1_073_741_824).toFixed(1)} GB liberi ` +
-        `su ${(totale / 1_073_741_824).toFixed(1)}`;
+        `Spazio: **${usato}%** usato · ${(libero / 1_073_741_824).toFixed(1)} GB liberi ` +
+        `su ${(totale / 1_073_741_824).toFixed(1)}
+` +
+        `Inode: **${inode}%** usati` +
+        (inode >= 90
+          ? ' — **è questo il problema**: i file sono troppi, non troppo grandi'
+          : '');
     } catch {
       /* Su alcune configurazioni il percorso non esiste: non è un guasto. */
     }

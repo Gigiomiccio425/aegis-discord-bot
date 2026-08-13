@@ -37,7 +37,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  * ogni caso far girare un processo per leggere un numero è un modo elaborato
  * di introdurre un guasto in più.
  */
-async function spazioLibero(): Promise<{ liberoGb: number; totaleGb: number; usatoPercento: number } | null> {
+async function spazioLibero(): Promise<{
+  liberoGb: number;
+  totaleGb: number;
+  usatoPercento: number;
+  inodeUsatiPercento: number | null;
+} | null> {
   try {
     const percorso = process.env.STORAGE_DIR ?? '/data';
     const stat = await statfs(percorso);
@@ -45,10 +50,21 @@ async function spazioLibero(): Promise<{ liberoGb: number; totaleGb: number; usa
     const libero = stat.bavail * stat.bsize;
     const giga = (byte: number): number => Math.round((byte / 1_073_741_824) * 10) / 10;
 
+    /*
+     * Gli inode sono l'altra metà del problema, e quella che manda fuori strada:
+     * quando finiscono, il sistema risponde «No space left on device» mentre lo
+     * spazio libero è di centinaia di giga. Sono un numero fisso deciso quando
+     * il filesystem è stato creato, e li esauriscono i file piccoli — un
+     * archivio di allegati, per esempio.
+     */
+    const inode =
+      stat.files > 0 ? Math.round((1 - stat.ffree / stat.files) * 100) : null;
+
     return {
       liberoGb: giga(libero),
       totaleGb: giga(totale),
       usatoPercento: totale > 0 ? Math.round((1 - libero / totale) * 100) : 0,
+      inodeUsatiPercento: inode,
     };
   } catch {
     // Un controllo di salute non deve fallire perché non è riuscito a leggere

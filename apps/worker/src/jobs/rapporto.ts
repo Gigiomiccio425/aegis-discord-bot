@@ -135,12 +135,18 @@ async function statoSistema(): Promise<{ testo: string; critico: boolean }> {
     const usato = totale > 0 ? Math.round((1 - libero / totale) * 100) : 0;
     const giga = (byte: number): string => (byte / 1_073_741_824).toFixed(1);
 
-    critico = usato >= 90;
+    // Due numeri e non uno: gli inode si esauriscono da soli, e in quel caso
+    // il sistema risponde «No space left on device» con il disco quasi vuoto.
+    const inode = stat.files > 0 ? Math.round((1 - stat.ffree / stat.files) * 100) : 0;
+    critico = usato >= 90 || inode >= 90;
+
     righe.push(
       `${critico ? '🔴' : usato >= 75 ? '🟠' : '🟢'} Disco: **${usato}%** usato · ` +
-        `${giga(libero)} GB liberi su ${giga(totale)}`,
+        `${giga(libero)} GB liberi su ${giga(totale)} · inode **${inode}%**`,
     );
-    if (critico) {
+    if (inode >= 90) {
+      righe.push('**Gli inode sono finiti: troppi file piccoli, non troppo spazio occupato.**');
+    } else if (critico) {
       righe.push('**Sopra il 90% il bot smette di funzionare bene: fai spazio adesso.**');
     }
   } catch {
