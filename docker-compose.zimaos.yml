@@ -200,14 +200,25 @@ services:
     # scadenza, cioè la cache. Le code, che scadenza non ce l'hanno, restano.
     command:
       - redis-server
+      # Istantanea ogni cinque minuti se sono cambiate almeno cento chiavi.
+      - --save
+      - '300 100'
+      # AOF spento: qui dentro ci sono code e cache, non dati da custodire. La
+      # scrittura continua dell'AOF su un disco lento produceva «fsync is taking
+      # too long» a ripetizione e rallentava tutto — per riguadagnare, nel caso
+      # peggiore, qualche minuto di coda che i job periodici ricreano da soli.
       - --appendonly
-      - 'yes'
+      - 'no'
+      # Un disco pieno non deve bloccare ogni scrittura: senza questo, Redis
+      # smette di servire e con lui si ferma tutto il bot.
       - --stop-writes-on-bgsave-error
       - 'no'
-      - --maxmemory
-      - 512mb
+      # noeviction e non volatile-lru: BullMQ lo pretende, e ha ragione —
+      # sfrattare una chiave di coda significa perdere un lavoro in attesa
+      # senza che nessuno se ne accorga. Redis qui occupa pochi megabyte, il
+      # limite di memoria non serve.
       - --maxmemory-policy
-      - volatile-lru
+      - noeviction
     volumes:
       - /DATA/AppData/aegis/redis:/data
     logging:
