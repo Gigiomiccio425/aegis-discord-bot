@@ -27,7 +27,22 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/api/auth/login', async (request, reply) => {
     const state = generateState();
-    await getRedis().set(`oauth:state:${state}`, '1', 'EX', 600);
+
+    /*
+     * Lo stato anti-CSRF sta in Redis, quindi senza Redis non si entra — e
+     * questa è una di quelle porte che non si tengono aperte per comodità.
+     *
+     * Ciò che si può fare è dirlo: prima l'eccezione risaliva così com'era e
+     * il pannello rispondeva con un errore 500 pieno di gergo su RDB e
+     * snapshot, dal quale nessuno ricava che il problema è il disco.
+     */
+    const scritto = await getRedis()
+      .set(`oauth:state:${state}`, '1', 'EX', 600)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!scritto) return reply.redirect('/?errore=redis_non_disponibile');
+
     return reply.redirect(authorizeUrl(state));
   });
 
@@ -40,7 +55,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (!code || !state) return reply.redirect('/?errore=parametri_mancanti');
 
       const redis = getRedis();
-      const valid = await redis.del(`oauth:state:${state}`);
+      const valid = await redis.del(`oauth:state:${state}`).catch(() => -1);
+      if (valid === -1) return reply.redirect('/?errore=redis_non_disponibile');
       if (valid !== 1) return reply.redirect('/?errore=stato_non_valido');
 
       const tokens = await exchangeCode(code);

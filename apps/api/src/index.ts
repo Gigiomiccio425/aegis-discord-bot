@@ -139,6 +139,22 @@ async function main(): Promise<void> {
     max: 300,
     timeWindow: '1 minute',
     redis: getRedis(),
+    /*
+     * Se Redis non risponde, la richiesta passa lo stesso.
+     *
+     * Il valore predefinito è l'opposto — errore del contatore, errore 500 — e
+     * ha una logica: senza contatore non c'è protezione. Nella pratica però
+     * significa che un problema di Redis spegne l'intero pannello, comprese le
+     * pagine che servono a capire cosa non va: con il disco pieno ogni
+     * richiesta rispondeva «MISCONF», e da fuori sembrava che il bot fosse
+     * morto.
+     *
+     * Fra un pannello senza limite di richieste per qualche minuto e un
+     * pannello inaccessibile proprio mentre lo si sta usando per riparare, la
+     * scelta non è dubbia: il pannello è già dietro autenticazione e, in questa
+     * installazione, dietro Tailscale.
+     */
+    skipOnError: true,
     // Il feed live e i file statici non devono consumare la quota: sono
     // richieste legittime e frequenti.
     allowList: (request) =>
