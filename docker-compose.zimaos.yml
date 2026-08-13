@@ -147,6 +147,20 @@ services:
       POSTGRES_USER: aegis
       POSTGRES_PASSWORD: *db-password
       POSTGRES_DB: aegis
+    # ⚠️ Cartella su `/DATA`, non un volume Docker con un nome.
+    #
+    # Su ZimaOS i volumi Docker vivono sotto `/var/lib/docker`, cioè sul disco
+    # di sistema — spesso una eMMC da poche decine di giga — mentre `/DATA` è
+    # il disco grande. Un database che cresce riempie quindi la partizione di
+    # sistema mentre `df -h` sul disco dati continua a mostrare terabyte
+    # liberi, ed è la ragione per cui «lo spazio c'è» e Postgres non parte.
+    #
+    # **Chi arriva da una versione con i volumi Docker** (`aegis_postgres` e
+    # simili) deve copiarne il contenuto qui prima di installare, altrimenti il
+    # bot parte con un database vuoto:
+    #
+    #   docker run --rm -v aegis_postgres:/da -v /DATA/AppData/aegis/postgres:/a \
+    #     alpine sh -c 'cd /da && cp -a . /a'
     volumes:
       - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
     logging:
