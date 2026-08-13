@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { REST, Routes, type Client } from 'discord.js';
-import { commands } from '../commands/index.js';
+import { commandsDaRegistrare as commands } from '../commands/index.js';
 import { buildSlashCommand, loadCustomCommands } from '../personas/customCommands.js';
 import { childLogger } from '../core/logger.js';
 

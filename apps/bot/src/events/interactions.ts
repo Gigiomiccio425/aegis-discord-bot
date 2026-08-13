@@ -14,7 +14,7 @@ import {
 } from 'discord.js';
 import { getPrisma } from '@angel/db';
 import { getGuildConfig } from '../core/config.js';
-import { unverifiedRoleId } from '@angel/shared';
+import { unverifiedRoleId, type GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { handleCommand } from '../commands/index.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -90,6 +90,10 @@ async function handleButton(client: Client, interaction: ButtonInteraction): Pro
       await handleTicketButton(client, interaction, rest, config);
       return;
 
+    case 'mod':
+      await handleModAction(client, interaction, rest[0] ?? '', rest[1] ?? '', config);
+      return;
+
     case 'lift-quarantine': {
       const targetId = rest[0];
       if (!targetId) return;
@@ -114,6 +118,174 @@ async function handleButton(client: Client, interaction: ButtonInteraction): Pro
     default:
       return;
   }
+}
+
+/**
+ * I pulsanti di moderazione delle segnalazioni.
+ *
+ * Il tempo fra «ho letto la segnalazione» e «ho agito» è quello in cui il danno
+ * continua, e ricordarsi il comando giusto con i suoi argomenti lo allunga di
+ * parecchio. Qui si sceglie e basta.
+ *
+ * Ogni azione passa dai controlli veri: il permesso di chi preme, la gerarchia
+ * dei ruoli, il caso registrato. Un pulsante che scavalca i controlli sarebbe
+ * un modo elegante di regalare la moderazione a chiunque veda il messaggio.
+ */
+async function handleModAction(
+  client: Client,
+  interaction: ButtonInteraction,
+  azione: string,
+  targetId: string,
+  config: GuildConfig,
+): Promise<void> {
+  const locale = config.general.locale;
+  const membro = interaction.member as GuildMember | null;
+  const guild = interaction.guild!;
+
+  const necessario =
+    azione === 'ban'
+      ? PermissionFlagsBits.BanMembers
+      : azione === 'kick'
+        ? PermissionFlagsBits.KickMembers
+        : PermissionFlagsBits.ModerateMembers;
+
+  if (!membro?.permissions.has(necessario)) {
+    await interaction.reply({ content: t(locale, 'common.noPermission'), flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (azione === 'archivia') {
+    // Archiviare non è non fare niente: è dire che qualcuno l'ha guardata. Una
+    // segnalazione senza esito visibile viene riaperta da un altro moderatore
+    // due ore dopo.
+    await interaction.update({
+      components: [],
+      content: `✅ Archiviata da <@${interaction.user.id}>.`,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const bersaglio = await guild.members.fetch(targetId).catch(() => null);
+  if (!bersaglio && azione !== 'ban') {
+    await interaction.editReply('La persona non è più nel server.');
+    return;
+  }
+
+  // La gerarchia la controlla anche Discord, ma il messaggio suo è un codice
+  // d'errore: dirlo prima, e con parole, evita il «non funziona» che segue.
+  if (bersaglio && membro.roles.highest.position <= bersaglio.roles.highest.position) {
+    await interaction.editReply(
+      'Ha un ruolo pari o superiore al tuo: Discord non ti consente di agire su di lui.',
+    );
+    return;
+  }
+
+  const motivo = `Azione rapida da <@${interaction.user.id}> su segnalazione`;
+  let esito = '';
+
+  try {
+    switch (azione) {
+      case 'mute10':
+      case 'mute60': {
+        const minuti = azione === 'mute10' ? 10 : 60;
+        await bersaglio!.timeout(minuti * 60_000, motivo);
+        esito = `🔇 Silenziato per ${minuti} minuti.`;
+        await registraCaso(guild.id, 'MUTE', targetId, interaction.user.id, motivo, minuti * 60);
+        break;
+      }
+
+      case 'quarantena': {
+        const { quarantineMember } = await import('../core/enforcer.js');
+        await quarantineMember(
+          { client, guild, config, member: bersaglio!, module: 'pannello' },
+          motivo,
+        );
+        esito = '🔒 Messo in quarantena: i ruoli sono stati conservati e si possono restituire.';
+        break;
+      }
+
+      case 'kick': {
+        await bersaglio!.kick(motivo);
+        esito = '👢 Espulso. Può rientrare con un nuovo invito.';
+        await registraCaso(guild.id, 'KICK', targetId, interaction.user.id, motivo, 0);
+        break;
+      }
+
+      case 'ban': {
+        await guild.members.ban(targetId, { reason: motivo, deleteMessageSeconds: 3600 });
+        esito = '🔨 Bandito, con i messaggi dell\'ultima ora eliminati.';
+        await registraCaso(guild.id, 'BAN', targetId, interaction.user.id, motivo, 0);
+        break;
+      }
+
+      default:
+        await interaction.editReply('Azione sconosciuta.');
+        return;
+    }
+  } catch (errore) {
+    await interaction.editReply(
+      'Discord ha rifiutato l\'azione: di solito è un permesso mancante al bot o la gerarchia dei ruoli.',
+    );
+    log.warn({ err: errore, azione, targetId }, 'azione rapida fallita');
+    return;
+  }
+
+  await interaction.editReply(esito);
+
+  await recordEvent(client, {
+    guildId: guild.id,
+    type: azione === 'ban' ? 'MOD_BAN' : azione === 'kick' ? 'MOD_KICK' : 'MOD_MUTE',
+    actorId: interaction.user.id,
+    actorTag: interaction.user.tag,
+    targetId,
+    severity: azione === 'ban' ? 70 : azione === 'kick' ? 50 : 30,
+    summary: `Azione rapida **${azione}** su <@${targetId}> da <@${interaction.user.id}>`,
+    payload: { azione },
+  });
+
+  // Il messaggio della segnalazione mostra cosa è stato deciso: chi arriva dopo
+  // non deve chiedersi se qualcuno se ne è occupato.
+  await interaction.message
+    .edit({
+      components: [],
+      content: `${esito.split('.')[0]} — <@${interaction.user.id}>`,
+    })
+    .catch(() => undefined);
+}
+
+/** Registra il provvedimento, così finisce nella scheda della persona. */
+async function registraCaso(
+  guildId: string,
+  tipo: 'MUTE' | 'KICK' | 'BAN',
+  targetId: string,
+  actorId: string,
+  reason: string,
+  durataSec: number,
+): Promise<void> {
+  const prisma = getPrisma();
+  const ultimo = await prisma.case.findFirst({
+    where: { guildId },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
+
+  await prisma.case
+    .create({
+      data: {
+        guildId,
+        number: (ultimo?.number ?? 0) + 1,
+        type: tipo,
+        targetId,
+        actorId,
+        reason,
+        automated: false,
+        module: 'azioni-rapide',
+        expiresAt: durataSec > 0 ? new Date(Date.now() + durataSec * 1000) : null,
+      },
+    })
+    .catch(() => undefined);
 }
 
 async function handleVerify(

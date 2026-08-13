@@ -18,6 +18,7 @@ import { eventCommands } from './events.js';
 import { voiceCommands } from './voice.js';
 import { announceCommands } from './announce.js';
 import { wordCommands } from './words.js';
+import { reportCommands } from './reports.js';
 
 const log = childLogger('commands');
 
@@ -34,9 +35,74 @@ export const commands: Command[] = [
   ...voiceCommands,
   ...announceCommands,
   ...wordCommands,
+  ...reportCommands,
 ];
 
-export const commandMap = new Map(commands.map((command) => [command.data.name, command]));
+/* ═══════════════════════════════════════════════════════════════════════
+   NOMI INGLESI
+
+   I comandi sono in italiano perché il bot lo è, e perché `/bandisci` è più
+   chiaro di `/ban` per chi non modera da anni. Ma chi modera da anni ha nelle
+   dita `ban`, `kick`, `warn`: sono le parole con cui ha imparato, e cercare la
+   traduzione mentre serve agire è tempo perso proprio nel momento peggiore.
+
+   Discord non ha gli alias, quindi si registra un secondo comando che punta
+   alla stessa funzione. Costa una voce nell'elenco — il limite è cento per
+   server, qui si è largamente sotto — e non duplica una riga di logica: il
+   giorno in cui `/bandisci` cambia comportamento, `/ban` cambia con lui.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const PSEUDONIMI: Record<string, string> = {
+  avverti: 'warn',
+  silenzia: 'mute',
+  'rimuovi-silenzio': 'unmute',
+  espelli: 'kick',
+  bandisci: 'ban',
+  'revoca-ban': 'unban',
+  pulisci: 'purge',
+  utente: 'whois',
+  nota: 'note',
+  quarantena: 'quarantine',
+  segnala: 'report',
+  azioni: 'actions',
+  parole: 'words',
+  diagnosi: 'diagnosis',
+  panico: 'panic',
+  verifica: 'verify',
+  'prepara-server': 'setup',
+  annunci: 'announcements',
+  archivio: 'archive',
+  sondaggio: 'poll',
+  ticket: 'tickets',
+  stato: 'status',
+  'dì': 'say',
+};
+
+/** Lo stesso comando con un altro nome: nessuna logica duplicata. */
+function conNomeInglese(command: Command, nome: string): Command {
+  const json = command.data.toJSON();
+  const dati = { ...json, name: nome };
+
+  return {
+    ...command,
+    // Un oggetto minimo con ciò che serve davvero: `name` per lo smistamento,
+    // `toJSON` per la registrazione. Ricostruire il builder intero
+    // significherebbe riscrivere tutte le opzioni, cioè avere due dichiarazioni
+    // dello stesso comando che possono divergere.
+    data: { name: nome, toJSON: () => dati } as unknown as Command['data'],
+  };
+}
+
+const alias: Command[] = commands
+  .filter((command) => PSEUDONIMI[command.data.name])
+  .map((command) => conNomeInglese(command, PSEUDONIMI[command.data.name]!));
+
+export const commandMap = new Map(
+  [...commands, ...alias].map((command) => [command.data.name, command]),
+);
+
+/** Tutto ciò che va registrato su Discord: comandi e loro nomi inglesi. */
+export const commandsDaRegistrare: Command[] = [...commands, ...alias];
 
 /**
  * Smistamento dei comandi.

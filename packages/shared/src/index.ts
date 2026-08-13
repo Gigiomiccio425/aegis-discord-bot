@@ -82,4 +82,6 @@ export const Queues = {
   social: 'social',
   /** Copia dei propri dati fuori dal volume dell'applicazione. */
   selfBackup: 'self-backup',
+  /** Rapporto giornaliero a chi possiede il bot. */
+  rapporto: 'rapporto',
 } as const;

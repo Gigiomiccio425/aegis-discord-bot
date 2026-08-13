@@ -58,6 +58,42 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 Il resto — anti-spam, controllo account, verifica d'ingresso, ruoli appiccicosi — è configurabile
 modulo per modulo dal pannello.
 
+### Rapporto giornaliero in privato
+
+A mezzanotte, a chi possiede il bot (`OWNER_IDS`), un messaggio privato con **una scheda per
+server**: ingressi e uscite, messaggi archiviati ed eliminati, provvedimenti divisi per tipo, eventi
+per categoria, cosa è successo di più, ticket, persone in quarantena e attenzionate, incidenti — e
+in fondo la diagnosi della configurazione, cioè cosa non funzionerebbe se servisse.
+
+La ragione è che il pannello lo si apre quando si sospetta un problema, quindi non lo si apre mai
+finché il problema non è già successo. Un rapporto che arriva da solo racconta anche i giorni in cui
+non è successo niente, ed è confrontando quei giorni che ci si accorge di quello diverso.
+
+Il colore della scheda dice in un colpo d'occhio se c'è da fare qualcosa: rosso configurazione rotta,
+giallo incidenti, grigio normalità. I limiti di Discord — 4096 caratteri per descrizione, 1024 per
+campo, 25 campi, 10 embed — sono rispettati alla fonte: ogni pezzo viene troncato e il rapporto si
+divide in più messaggi invece di non partire affatto.
+
+L'ora è quella del container: `TZ` nel compose la sposta senza toccare il codice.
+
+### Segnalazioni con azioni rapide
+
+`/segnala` manda una segnalazione nel canale riservato (`angel-segnalazioni`, creato dalla
+predisposizione) con le prove congelate: se chi ha scritto il messaggio lo cancella subito dopo, la
+copia resta. Il nome di chi segnala lo vede solo lo staff.
+
+Accanto alla segnalazione ci sono i pulsanti — **silenzia 10 min**, **silenzia 1 ora**,
+**quarantena**, **espelli**, **bandisci**, **archivia** — perché il tempo fra «ho letto la
+segnalazione» e «ho agito» è quello in cui il danno continua.
+
+I pulsanti non scavalcano niente: controllano il permesso di chi preme, la gerarchia dei ruoli, e
+registrano il provvedimento nella scheda della persona esattamente come farebbe il comando. Quando
+uno viene premuto, il messaggio mostra chi ha deciso cosa — una segnalazione senza esito visibile
+viene riaperta da un altro moderatore due ore dopo.
+
+`/azioni` apre lo stesso pannello su una persona qualsiasi, per il moderatore che ha visto la cosa
+con i propri occhi e non vuole ricordarsi cinque comandi con i loro argomenti.
+
 ### Controlli di coerenza
 
 I guasti peggiori non stanno dentro un modulo: stanno **fra** i moduli, e per questo non si vedono
@@ -697,9 +733,17 @@ persona no, il pannello lo dice invece di lasciare una funzione che non parte ma
 
 ## Comandi
 
+**I comandi hanno anche il nome inglese.** `/ban`, `/kick`, `/mute`, `/warn`, `/purge`, `/whois`,
+`/report`, `/setup`, `/words`, `/status`, `/say` fanno esattamente quello che fanno `/bandisci`,
+`/espelli`, `/silenzia`, `/avverti`, `/pulisci`, `/utente`, `/segnala`, `/prepara-server`,
+`/parole`, `/stato`, `/dì`. Non è una copia del comando: è lo stesso, registrato con due nomi, così
+il giorno in cui uno cambia comportamento cambiano entrambi.
+
 | Comando | Chi può usarlo | Cosa fa |
 |---|---|---|
 | `/ping` | tutti | Latenza e versioni |
+| `/segnala` · `/report` | tutti | Segnala una persona allo staff: arriva nel canale riservato con i pulsanti per intervenire |
+| `/azioni` · `/actions` | Modera membri | Pulsanti rapidi su una persona: silenzia, quarantena, espelli, bandisci |
 | `/stato` | Gestisci server | Stato dei moduli e problemi da sistemare |
 | `/pannello` | Gestisci server | Link al pannello |
 | `/verifica-staff parola:` | tutti | Verifica se chi ti ha contattato è davvero dello staff |

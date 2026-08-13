@@ -13,6 +13,7 @@ import { integrationsProcessor } from './jobs/integrations.js';
 import { securityAuditProcessor } from './jobs/securityAudit.js';
 import { socialProcessor } from './jobs/social.js';
 import { runSelfBackup } from './jobs/selfBackup.js';
+import { rapportoProcessor } from './jobs/rapporto.js';
 import { terminateOcr } from '@angel/scanner';
 
 /**
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
     new Worker(Queues.securityAudit, securityAuditProcessor, { connection, concurrency: 1 }),
     new Worker(Queues.social, socialProcessor, { connection, concurrency: 2 }),
     new Worker(Queues.selfBackup, async () => runSelfBackup(), { connection, concurrency: 1 }),
+    new Worker(Queues.rapporto, async () => rapportoProcessor(), { connection, concurrency: 1 }),
   ];
 
   for (const worker of workers) {
@@ -112,6 +114,16 @@ async function scheduleRecurringJobs(): Promise<void> {
     'copia-di-sicurezza',
     { pattern: '15 4 * * *' }, // ogni notte, dopo lo snapshot
     { name: 'periodico', opts: { removeOnComplete: 10 } },
+  );
+
+  // A mezzanotte: il rapporto racconta il giorno appena finito, e leggerlo la
+  // mattina dopo è il momento in cui serve. L'ora è quella del container —
+  // impostare TZ nel compose la sposta senza toccare il codice.
+  const rapporto = new Queue(Queues.rapporto, { connection });
+  await rapporto.upsertJobScheduler(
+    'rapporto-giornaliero',
+    { pattern: '0 0 * * *' },
+    { name: 'quotidiano', opts: { removeOnComplete: 10, removeOnFail: 20 } },
   );
 
   const retention = new Queue(Queues.retention, { connection });

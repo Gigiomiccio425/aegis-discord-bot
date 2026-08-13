@@ -56,6 +56,31 @@ export async function sendMessage(
 }
 
 /**
+ * Manda un messaggio privato.
+ *
+ * Due chiamate e non una: Discord non permette di scrivere a un utente per ID,
+ * bisogna prima aprire (o riaprire) il canale privato. Restituisce `false` se
+ * la persona ha i messaggi privati chiusi, che non è un errore ma una scelta
+ * legittima — e chi chiama deve poterla distinguere da un guasto.
+ */
+export async function inviaInPrivato(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const canale = (await getRest().post(Routes.userChannels(), {
+      body: { recipient_id: userId },
+    })) as { id: string };
+
+    await getRest().post(Routes.channelMessages(canale.id), { body: payload });
+    return true;
+  } catch (error) {
+    log.debug({ err: error, userId }, 'messaggio privato non consegnato');
+    return false;
+  }
+}
+
+/**
  * Dà o toglie un ruolo a un membro.
  *
  * Le REST bastano: aggiungere un ruolo è una chiamata sola e non richiede la
