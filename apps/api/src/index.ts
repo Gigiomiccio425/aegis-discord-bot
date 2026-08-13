@@ -1,3 +1,4 @@
+import { statfs } from 'node:fs/promises';
 import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,33 @@ import { syncRoutes } from './routes/sync.js';
 import { registerLiveFeed } from './ws.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Spazio libero sul volume dei dati, in percentuale e in gigabyte.
+ *
+ * `statfs` e non un comando esterno: dentro il container non c'è `df`, e in
+ * ogni caso far girare un processo per leggere un numero è un modo elaborato
+ * di introdurre un guasto in più.
+ */
+async function spazioLibero(): Promise<{ liberoGb: number; totaleGb: number; usatoPercento: number } | null> {
+  try {
+    const percorso = process.env.STORAGE_DIR ?? '/data';
+    const stat = await statfs(percorso);
+    const totale = stat.blocks * stat.bsize;
+    const libero = stat.bavail * stat.bsize;
+    const giga = (byte: number): number => Math.round((byte / 1_073_741_824) * 10) / 10;
+
+    return {
+      liberoGb: giga(libero),
+      totaleGb: giga(totale),
+      usatoPercento: totale > 0 ? Math.round((1 - libero / totale) * 100) : 0,
+    };
+  } catch {
+    // Un controllo di salute non deve fallire perché non è riuscito a leggere
+    // un dato accessorio.
+    return null;
+  }
+}
 
 async function main(): Promise<void> {
   const sessionSecret = process.env.SESSION_SECRET;
@@ -110,6 +138,11 @@ async function main(): Promise<void> {
       ok: true,
       uptime: process.uptime(),
       versione: runningVersion(),
+      // Lo spazio libero sta qui perché il disco pieno non si annuncia: il bot
+      // continua a rispondere mentre Postgres non riesce più a scrivere e Redis
+      // blocca le code. Averlo nel controllo di salute significa accorgersene
+      // dal sorvegliante, prima che diventi un guasto.
+      disco: await spazioLibero(),
       // `principale` o `emergenza`. Il nodo di emergenza si spegne da solo
       // quando vede un principale rispondere: la priorità non si negozia.
       ruolo: process.env.ANGEL_MODE === 'emergenza' ? 'emergenza' : 'principale',

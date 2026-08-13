@@ -1,3 +1,4 @@
+import { statfs } from 'node:fs/promises';
 import { getPrisma } from '@angel/db';
 import { analizzaConfigurazione, GuildConfigSchema, runningVersion } from '@angel/shared';
 import { childLogger } from '../logger.js';
@@ -79,9 +80,11 @@ export async function rapportoProcessor(): Promise<void> {
     if (scheda.errori > 0) serverConErrori += 1;
   }
 
+  const sistema = await statoSistema();
+
   const intestazione: Embed = {
     title: `🛡️ ANGEL · rapporto del ${new Date().toLocaleDateString('it-IT')}`,
-    color: serverConErrori > 0 ? 0xd8b45f : 0x6f8a95,
+    color: sistema.critico ? 0xe05263 : serverConErrori > 0 ? 0xd8b45f : 0x6f8a95,
     description: taglia(
       `**${guilds.length}** ${guilds.length === 1 ? 'server' : 'server'} · ` +
         `**${totaleEventi}** eventi registrati · **${totaleProvvedimenti}** provvedimenti\n` +
@@ -90,6 +93,7 @@ export async function rapportoProcessor(): Promise<void> {
           : 'Nessun problema di configurazione.'),
       MAX_DESCRIZIONE,
     ),
+    fields: [{ name: 'Macchina', value: taglia(sistema.testo, MAX_CAMPO) }],
     footer: { text: `versione ${runningVersion()} · le ultime 24 ore` },
   };
 
@@ -109,6 +113,53 @@ export async function rapportoProcessor(): Promise<void> {
   }
 
   log.info({ server: guilds.length, destinatari: destinatari.length }, 'rapporto giornaliero inviato');
+}
+
+/**
+ * Spazio su disco e peso di ciò che il bot conserva.
+ *
+ * Sta in cima al rapporto perché il disco pieno è il guasto che non si
+ * annuncia: il bot risponde ancora, il pannello si apre, e intanto Postgres
+ * non riesce più a scrivere e Redis blocca le code. Quando ce se ne accorge
+ * è già tutto fermo da ore.
+ */
+async function statoSistema(): Promise<{ testo: string; critico: boolean }> {
+  const prisma = getPrisma();
+  const righe: string[] = [];
+  let critico = false;
+
+  try {
+    const stat = await statfs(process.env.STORAGE_DIR ?? '/data');
+    const totale = stat.blocks * stat.bsize;
+    const libero = stat.bavail * stat.bsize;
+    const usato = totale > 0 ? Math.round((1 - libero / totale) * 100) : 0;
+    const giga = (byte: number): string => (byte / 1_073_741_824).toFixed(1);
+
+    critico = usato >= 90;
+    righe.push(
+      `${critico ? '🔴' : usato >= 75 ? '🟠' : '🟢'} Disco: **${usato}%** usato · ` +
+        `${giga(libero)} GB liberi su ${giga(totale)}`,
+    );
+    if (critico) {
+      righe.push('**Sopra il 90% il bot smette di funzionare bene: fai spazio adesso.**');
+    }
+  } catch {
+    righe.push('Disco: non leggibile');
+  }
+
+  const [firme, archivio, eventi] = await Promise.all([
+    prisma.threatSignature.count().catch(() => 0),
+    prisma.messageArchive.count().catch(() => 0),
+    prisma.auditEvent.count().catch(() => 0),
+  ]);
+
+  righe.push(
+    `Righe: **${eventi.toLocaleString('it-IT')}** eventi · ` +
+      `**${archivio.toLocaleString('it-IT')}** messaggi · ` +
+      `**${firme.toLocaleString('it-IT')}** firme di minaccia`,
+  );
+
+  return { testo: righe.join('\n'), critico };
 }
 
 /** La scheda di un singolo server. */

@@ -102,11 +102,14 @@ async function scheduleRecurringJobs(): Promise<void> {
     { name: 'scheduled', opts: { removeOnComplete: 20 } },
   );
 
+  // Ogni sei ore, non ogni ora: le blocklist pubbliche si aggiornano nell'arco
+  // di ore, e ogni giro tocca centinaia di migliaia di righe. Il costo era
+  // sproporzionato al guadagno — e a un certo punto ha riempito il disco.
   const feeds = new Queue(Queues.threatFeeds, { connection });
   await feeds.upsertJobScheduler(
     'aggiorna-blocklist',
-    { every: 3_600_000 }, // ogni ora
-    { name: 'sync', opts: { removeOnComplete: 10 } },
+    { pattern: '20 */6 * * *' },
+    { name: 'sync', opts: { removeOnComplete: 10, removeOnFail: 20 } },
   );
 
   const backup = new Queue(Queues.selfBackup, { connection });

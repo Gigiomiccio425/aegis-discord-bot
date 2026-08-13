@@ -14,6 +14,16 @@ const log = childLogger('threatFeeds');
  * conterrebbe soprattutto domini ormai innocui — e i falsi positivi
  * distruggono la fiducia nel sistema più di qualche mancato blocco.
  */
+/**
+ * Quante voci si tengono per fonte.
+ *
+ * Phishing.Database da sola ne pubblica oltre un milione. Tenerle tutte non
+ * rende il bot più sicuro in proporzione — i domini che compaiono davvero in
+ * una chat Discord sono nella parte alta di ogni lista — mentre costa spazio,
+ * indici e, come si è visto, disco pieno.
+ */
+const MAX_VOCI = Number(process.env.THREAT_FEED_MAX ?? 150_000);
+
 export async function threatFeedProcessor(_job: Job): Promise<void> {
   if (process.env.THREAT_FEEDS_ENABLED === 'false') return;
 
@@ -30,13 +40,14 @@ export async function threatFeedProcessor(_job: Job): Promise<void> {
     if (result.entries.length === 0) continue;
 
     const kind = feed.kind === 'DOMAIN' ? 'DOMAIN' : 'URL';
+    const voci = result.entries.slice(0, MAX_VOCI);
     let written = 0;
 
     // Inserimento a lotti: le liste hanno decine di migliaia di voci e una
     // transazione unica bloccherebbe la tabella per minuti.
     const BATCH = 1000;
-    for (let i = 0; i < result.entries.length; i += BATCH) {
-      const batch = result.entries.slice(i, i + BATCH);
+    for (let i = 0; i < voci.length; i += BATCH) {
+      const batch = voci.slice(i, i + BATCH);
       await prisma.threatSignature
         .createMany({
           data: batch.map((value) => ({
@@ -56,17 +67,35 @@ export async function threatFeedProcessor(_job: Job): Promise<void> {
         .catch((error) => log.debug({ err: error, feed: feed.name }, 'lotto non inserito'));
     }
 
-    // Le voci già presenti vengono rinnovate, così non scadono finché la fonte
-    // continua a segnalarle.
-    await prisma.threatSignature
+    /*
+     * Rinnovo della scadenza **solo per ciò che sta per scadere**.
+     *
+     * Prima si rinnovava tutto a ogni giro. Con un milione di voci e un giro
+     * all'ora significa un milione di righe riscritte ogni ora: Postgres non
+     * modifica una riga, ne scrive una nuova e lascia la vecchia da ripulire.
+     * Il risultato è stato una tabella cresciuta fino a riempire il disco, un
+     * WAL da mezzo giga ogni tre secondi, e da lì Redis che non riusciva più a
+     * salvare e bloccava le scritture di tutti.
+     *
+     * Con la scadenza a sette giorni e il controllo ogni sei ore, qui non
+     * viene riscritto quasi mai nulla: solo la coda che sta per scadere.
+     */
+    const soglia = new Date(Date.now() + 2 * 86_400_000);
+    const rinnovate = await prisma.threatSignature
       .updateMany({
-        where: { source: feed.name, kind },
+        where: { source: feed.name, kind, expiresAt: { lt: soglia } },
         data: { expiresAt },
       })
-      .catch(() => undefined);
+      .catch(() => ({ count: 0 }));
 
     log.info(
-      { feed: feed.name, total: result.entries.length, nuove: written },
+      {
+        feed: feed.name,
+        total: result.entries.length,
+        tenute: voci.length,
+        nuove: written,
+        rinnovate: rinnovate.count,
+      },
       'blocklist aggiornata',
     );
   }

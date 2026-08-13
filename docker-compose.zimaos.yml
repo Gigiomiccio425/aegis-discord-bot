@@ -67,12 +67,19 @@ services:
   # ─────────────────────────────────────────────────────────
   angel:
     # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.21.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.21.1
     # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
     # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
     pull_policy: always
     container_name: angel
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        # Senza limite, un errore che si ripete riempie il disco con il proprio
+        # racconto: è successo, gigabyte di righe identiche mentre lo spazio finiva.
+        max-size: '10m'
+        max-file: '3'
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -142,6 +149,13 @@ services:
       POSTGRES_DB: aegis
     volumes:
       - /DATA/AppData/aegis/postgres:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        # Senza limite, un errore che si ripete riempie il disco con il proprio
+        # racconto: è successo, gigabyte di righe identiche mentre lo spazio finiva.
+        max-size: '10m'
+        max-file: '3'
     # Nessun healthcheck: su ZimaOS l'exec dentro i container viene rifiutato
     # («exec failed: permission denied») e il controllo fallirebbe per sempre,
     # bloccando chi attende il servizio «sano». L'attesa sta nel supervisore
@@ -151,9 +165,32 @@ services:
     image: redis:7-alpine
     container_name: aegis-redis
     restart: unless-stopped
-    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    # stop-writes-on-bgsave-error no: senza, un disco pieno blocca ogni
+    # scrittura su Redis, e da lì si ferma tutto il bot — code, cache,
+    # contatori. Il salvataggio su disco resta, ma se fallisce il bot continua
+    # a funzionare invece di morire in silenzio.
+    #
+    # maxmemory con volatile-lru: si sacrificano solo le chiavi con
+    # scadenza, cioè la cache. Le code, che scadenza non ce l'hanno, restano.
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --stop-writes-on-bgsave-error
+      - 'no'
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - volatile-lru
     volumes:
       - /DATA/AppData/aegis/redis:/data
+    logging:
+      driver: json-file
+      options:
+        # Senza limite, un errore che si ripete riempie il disco con il proprio
+        # racconto: è successo, gigabyte di righe identiche mentre lo spazio finiva.
+        max-size: '10m'
+        max-file: '3'
 
 x-casaos:
   architectures:
