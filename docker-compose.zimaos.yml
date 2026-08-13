@@ -147,13 +147,25 @@ services:
       POSTGRES_USER: aegis
       POSTGRES_PASSWORD: *db-password
       POSTGRES_DB: aegis
-    # ⚠️ Cartella su `/DATA`, non un volume Docker con un nome.
+    # ⚠️ ATTENZIONE A DOVE PORTA `/DATA` SU QUESTA MACCHINA.
     #
-    # Su ZimaOS i volumi Docker vivono sotto `/var/lib/docker`, cioè sul disco
-    # di sistema — spesso una eMMC da poche decine di giga — mentre `/DATA` è
-    # il disco grande. Un database che cresce riempie quindi la partizione di
-    # sistema mentre `df -h` sul disco dati continua a mostrare terabyte
-    # liberi, ed è la ragione per cui «lo spazio c'è» e Postgres non parte.
+    # Su ZimaBoard e ZimaBlade `/DATA` **non è il disco grande**: è la eMMC
+    # interna, che dopo le partizioni di sistema (boot, recovery, due slot
+    # RAUC, overlay, metadati) lascia circa 17 GB utili. Il disco da terabyte
+    # è montato altrove, e resta vuoto mentre questo si riempie.
+    #
+    # È il motivo per cui si può avere «centoquaranta giga liberi» e Postgres
+    # che non riesce a scrivere il proprio file di lock: sono due filesystem
+    # diversi, e quello guardato non è quello che si riempie.
+    #
+    # Prima di installare, in ZimaOS: **Impostazioni → App → Migrating
+    # location**, e sposta sul disco grande tutte e tre le voci — dati delle
+    # app, immagini Docker, database utente. Poi controlla dove è finito
+    # `/DATA/AppData` e, se serve, scrivi qui il percorso vero del disco
+    # grande al posto di `/DATA`.
+    #
+    #   df -h /DATA                      # quanto è grande davvero
+    #   findmnt -T /var/lib/docker       # dove vivono immagini e volumi
     #
     # **Chi arriva da una versione con i volumi Docker** (`aegis_postgres` e
     # simili) deve copiarne il contenuto qui prima di installare, altrimenti il

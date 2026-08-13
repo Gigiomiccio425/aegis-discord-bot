@@ -572,6 +572,38 @@ Rimetti la versione precedente nella riga `image:`, `docker compose up -d`, e se
 aveva uno schema diverso ripristina il dump corrispondente — il comando esatto lo stampa
 `aggiorna.sh` alla fine di ogni esecuzione.
 
+### ZimaOS: `/DATA` non è il disco grande
+
+Vale la pena saperlo **prima** di installare, perché il modo in cui si scopre è sempre lo stesso: il
+bot smette di funzionare, i log dicono `No space left on device`, e l'interfaccia mostra centinaia di
+giga liberi.
+
+Su ZimaBoard e ZimaBlade `/DATA` è la **eMMC interna**. Dopo le partizioni di sistema — boot,
+recovery, due slot RAUC, overlay, metadati — restano circa 17 GB utili, e lì dentro ZimaOS mette
+sia le immagini Docker sia i dati delle app. Il disco da terabyte è montato altrove e resta vuoto
+mentre quello si riempie: sono due filesystem diversi, e quello che si guarda non è quello che si
+riempie.
+
+Da qui la sequenza di sintomi tipica, tutti apparentemente scollegati: Postgres che non riesce a
+scrivere il proprio file di lock, Redis che rifiuta ogni scrittura perché non riesce a salvare, il
+pannello che risponde 500, l'App Store che non installa più niente.
+
+**Prima di installare**, in ZimaOS: *Impostazioni → App → Migrating location*, e sposta sul disco
+grande tutte e tre le voci — dati delle app, immagini Docker, database utente.
+
+Per capire dove si è davvero:
+
+```bash
+df -h /DATA                  # se dice ~17 GB, è la eMMC
+df -i /DATA                  # gli inode finiscono anche con spazio libero
+findmnt -T /var/lib/docker   # dove vivono immagini e volumi
+lsblk -f                     # dov'è montato il disco grande
+```
+
+Nota sul `df -h /` che mostra il 100%: su ZimaOS è normale e non è il problema. La radice è
+immutabile e piccola per costruzione (circa 1,2 GB); ciò che conta è la partizione che ospita
+`/var/lib/docker` e `/DATA`.
+
 ### Note specifiche di ZimaOS
 
 - Il reverse proxy (Caddy) è **incluso nel compose**. Su ZimaOS i container avviati dall'interfaccia
