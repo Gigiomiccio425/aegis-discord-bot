@@ -22,6 +22,7 @@ import { Loading } from './components/ui.js';
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ridotto, setRidotto] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -30,6 +31,13 @@ export function App() {
       .catch((error: unknown) => {
         // 401 non è un errore da mostrare: significa semplicemente che non si
         // è ancora fatto l'accesso.
+        if (error instanceof ApiError && error.status === 503) {
+          // Il server c'è ma il database no. Mostrarlo qui è tutto il punto:
+          // senza, il pannello sembrerebbe rotto e non c'è modo di sapere
+          // perché — che è esattamente la situazione da cui si vuole uscire.
+          setRidotto(error.message);
+          return;
+        }
         if (!(error instanceof ApiError) || error.status !== 401) {
           console.error(error);
         }
@@ -38,6 +46,7 @@ export function App() {
   }, []);
 
   if (loading) return <Loading />;
+  if (ridotto) return <ModalitaRidotta messaggio={ridotto} />;
   if (!me) return <Login />;
 
   return (
@@ -61,6 +70,46 @@ export function App() {
       </Route>
       <Route path="*" element={<GuildRedirect me={me} />} />
     </Routes>
+  );
+}
+
+/**
+ * Il pannello quando il database non risponde.
+ *
+ * Non è una pagina d'errore: è l'unica pagina utile in quel momento. Dice cosa
+ * è successo, cosa fare, e che non serve riavviare niente — appena il database
+ * torna, il pannello torna da solo.
+ */
+function ModalitaRidotta({ messaggio }: { messaggio: string }) {
+  return (
+    <div className="mx-auto max-w-xl p-10">
+      <h1 className="text-xl font-semibold text-[var(--color-warning)]">
+        Il database non risponde
+      </h1>
+      <p className="mt-3 text-sm leading-relaxed text-neutral-300">{messaggio}</p>
+
+      <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <p className="text-sm font-medium text-neutral-200">Nove volte su dieci è il disco pieno.</p>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-400">
+          Sulla macchina che ospita il bot:
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-lg bg-[var(--color-surface-2)] p-3 text-xs text-neutral-300">
+{`df -h            # spazio
+df -i            # inode: possono finire con spazio libero
+docker system prune -af`}
+        </pre>
+        <p className="mt-3 text-sm leading-relaxed text-neutral-400">
+          Fatto spazio, non serve riavviare nulla: il pannello riprova da solo ogni trenta secondi.
+        </p>
+      </div>
+
+      <button
+        onClick={() => location.reload()}
+        className="mt-4 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-neutral-300"
+      >
+        Ricontrolla adesso
+      </button>
+    </div>
   );
 }
 

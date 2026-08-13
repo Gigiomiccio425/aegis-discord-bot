@@ -269,11 +269,27 @@ if (!verificaFile()) process.exit(1);
 
 const aggiornato = await registraVersione();
 
+let databasePronto = true;
+
 try {
   await migra();
 } catch (errore) {
+  /*
+   * Il database non risponde. Fino alla 1.21.2 qui si usciva con codice 1, il
+   * container ripartiva, riprovava, usciva di nuovo — e il pannello non si
+   * apriva mai. Con Postgres fermo per disco pieno l'unica cosa visibile era
+   * un ciclo di errori nei log, cioè proprio dove non guarda chi sta cercando
+   * di capire perché il bot non c'è più.
+   *
+   * Ora si parte lo stesso, ma **solo con il pannello**: senza database non
+   * può moderare nulla, mentre può dire cosa non va e a quel punto è l'unica
+   * cosa che serve. Le migrazioni continuano a essere ritentate in
+   * sottofondo, e quando passano parte tutto il resto senza riavvii.
+   */
+  databasePronto = false;
   console.error(`[avvio] ${errore.message}`);
-  process.exit(1);
+  log('parto in modalità ridotta: solo il pannello, per poter dire cosa non va');
+  process.env.ANGEL_DEGRADATO = '1';
 }
 
 if (aggiornato) {
@@ -285,7 +301,32 @@ if (aggiornato) {
   process.env.BACKUP_ON_START = '1';
 }
 
-for (const servizio of SERVIZI) {
+const daAvviare = databasePronto ? SERVIZI : SERVIZI.filter((servizio) => servizio.nome === 'api');
+
+for (const servizio of daAvviare) {
   log(`avvio ${servizio.nome}`);
   avvia(servizio);
+}
+
+if (!databasePronto) {
+  /*
+   * Ritentativo in sottofondo, con calma: ogni trenta secondi. Chi deve fare
+   * spazio sul disco ci mette minuti, non secondi, e riprovare più spesso
+   * riempirebbe i log della stessa riga senza avvicinare la soluzione.
+   */
+  const riprova = setInterval(() => {
+    void migra()
+      .then(() => {
+        clearInterval(riprova);
+        delete process.env.ANGEL_DEGRADATO;
+        log('database tornato disponibile: avvio i servizi rimanenti');
+        for (const servizio of SERVIZI) {
+          if (servizio.nome === 'api') continue;
+          log(`avvio ${servizio.nome}`);
+          avvia(servizio);
+        }
+      })
+      .catch(() => log('database ancora irraggiungibile, continuo a riprovare'));
+  }, 30_000);
+  riprova.unref?.();
 }

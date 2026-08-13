@@ -71,7 +71,21 @@ async function main(): Promise<void> {
   }
 
   const prisma = getPrisma();
-  await prisma.$queryRaw`SELECT 1`;
+
+  /*
+   * Il database può non esserci. Prima si usciva, il container ripartiva, e il
+   * pannello non si apriva mai: chi cercava di capire perché il bot non c'era
+   * più trovava solo un ciclo di errori nei log.
+   *
+   * Partire lo stesso non serve a moderare — senza database non si può fare
+   * nulla — serve a **dire cosa non va**, che nel momento del guasto è
+   * esattamente ciò che manca.
+   */
+  let motivoDegrado: string | null = null;
+  await prisma.$queryRaw`SELECT 1`.catch((errore: Error) => {
+    motivoDegrado = errore.message.slice(0, 300);
+    logger.error({ err: errore }, 'database irraggiungibile: pannello in modalità ridotta');
+  });
 
   const app = Fastify({
     logger: loggerOptions,
@@ -131,11 +145,57 @@ async function main(): Promise<void> {
    * Non espone nulla di sensibile: se questo risponde, la porta è già
    * raggiungibile, e chi la raggiunge sta già dentro il tailnet.
    */
+  /*
+   * Modalità ridotta: le rotte che hanno bisogno del database rispondono con
+   * una spiegazione invece di un errore di connessione grezzo, e `/health`
+   * continua a rispondere — è quello che il nodo di emergenza interroga, e
+   * deve poter distinguere «server morto» da «server vivo ma senza database».
+   */
+  app.addHook('onRequest', async (request, reply) => {
+    if (!motivoDegrado) return;
+    if (!request.url.startsWith('/api/')) return;
+    if (request.url.startsWith('/api/version')) return;
+
+    await reply.code(503).send({
+      error:
+        'Il database non risponde, quindi il pannello è in modalità ridotta: può dire cosa non va, non modificare nulla.',
+      dettaglio: motivoDegrado,
+      cosaFare:
+        'Nove volte su dieci è il disco pieno. Controlla con `df -h` e `df -i` sulla macchina, ' +
+        'poi libera spazio: il database riparte da solo e il pannello torna completo senza riavvii.',
+    });
+  });
+
+  // Ogni mezzo minuto si riprova: quando il database torna, il pannello torna
+  // completo da solo. Riavviare a mano dopo aver fatto spazio è un passaggio
+  // che nessuno ricorda di dover fare.
+  if (motivoDegrado) {
+    const riprova = setInterval(() => {
+      void prisma.$queryRaw`SELECT 1`
+        .then(() => {
+          motivoDegrado = null;
+          clearInterval(riprova);
+          logger.info('database tornato disponibile: pannello completo');
+        })
+        .catch(() => undefined);
+    }, 30_000);
+    riprova.unref();
+  }
+
   app.get('/health', async () => {
-    await prisma.$queryRaw`SELECT 1`;
-    await getRedis().ping();
+    const database = await prisma
+      .$queryRaw`SELECT 1`
+      .then(() => true)
+      .catch(() => false);
+    const redis = await getRedis()
+      .ping()
+      .then(() => true)
+      .catch(() => false);
+
     return {
-      ok: true,
+      ok: database && redis,
+      database,
+      redis,
       uptime: process.uptime(),
       versione: runningVersion(),
       // Lo spazio libero sta qui perché il disco pieno non si annuncia: il bot
