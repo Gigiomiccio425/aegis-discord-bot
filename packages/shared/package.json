@@ -21,6 +21,10 @@
     "./coerenza": {
       "types": "./dist/config/coerenza.d.ts",
       "default": "./dist/config/coerenza.js"
+    },
+    "./elenchi": {
+      "types": "./dist/config/elenchi.d.ts",
+      "default": "./dist/config/elenchi.js"
     }
   },
   "scripts": {

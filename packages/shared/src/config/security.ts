@@ -791,6 +791,95 @@ export const FlameConfig = GuardModuleBase.extend({
 
   /** Canali dove il modulo non interviene. */
   exemptChannelIds: SnowflakeList,
+
+  /* ── Vocabolario ─────────────────────────────────────────────────────
+     Il modulo riconosce l'aggressione dal *modo*, non dalle parolacce: è la
+     differenza fra «che schifo di partita» e «fai schifo». Le espressioni
+     stavano scritte nel codice, quindi non erano né leggibili né
+     modificabili — e un modulo che decide di rallentare un canale in base a
+     un elenco che nessuno può vedere è un modulo di cui non ci si fida.
+
+     Sono volutamente inequivocabili: allargarle troppo significa rallentare
+     conversazioni normali, ed è il modo più rapido per farlo spegnere. */
+
+  /**
+   * Espressioni rivolte a una persona. Confronto su testo normalizzato: gli
+   * accenti, i caratteri strani e le lettere ripetute non aiutano a evaderle.
+   */
+  frasiOstili: z
+    .array(z.string().min(2).max(80))
+    .max(500)
+    .default([
+      'sei un',
+      'sei una',
+      'sei proprio',
+      'fai schifo',
+      'fai pena',
+      'fai cagare',
+      'fai vomitare',
+      'non capisci',
+      'non hai capito niente',
+      'non sai niente',
+      'stai zitto',
+      'stai zitta',
+      'chiudi la bocca',
+      'chiudi il becco',
+      'vai a cagare',
+      'vai a quel paese',
+      'vai a farti',
+      'ma chi sei',
+      'ma chi ti credi',
+      'impara a',
+      'patetico',
+      'patetica',
+      'ridicolo',
+      'ridicola',
+      'nessuno ti',
+      'chi ti caga',
+      'levati',
+      'sparisci',
+      'smettila',
+      'sei tu il problema',
+      'colpa tua',
+      'parli a vanvera',
+      'non sai di cosa parli',
+      'taci',
+    ]),
+
+  /**
+   * Espressioni che *abbassano* il punteggio: chi le usa sta rimediando.
+   *
+   * Senza, il messaggio con cui qualcuno chiede scusa nel mezzo di un litigio
+   * conta come un colpo in più, e l'intervento arriva proprio quando la
+   * discussione stava rientrando da sola.
+   */
+  frasiDiTregua: z
+    .array(z.string().min(2).max(80))
+    .max(200)
+    .default([
+      'scusa',
+      'scusate',
+      'chiedo scusa',
+      'ho sbagliato',
+      'hai ragione',
+      'non volevo',
+      'mi sono espresso male',
+      'facciamo pace',
+      'lasciamo perdere',
+      'va bene dai',
+      'ok dai',
+    ]),
+
+  /** Quanto pesa un'espressione rivolta a una persona. */
+  pesoFrase: z.number().int().min(0).max(100).default(30),
+  /** Quanto pesa il messaggio urlato, e solo se già rivolto a qualcuno. */
+  pesoUrlato: z.number().int().min(0).max(100).default(15),
+  /** Quanto pesa la menzione del destinatario. */
+  pesoMenzione: z.number().int().min(0).max(100).default(15),
+  /** Quanto pesa la ripetizione della punteggiatura: «ma sei scemo???!!!». */
+  pesoPunteggiatura: z.number().int().min(0).max(100).default(10),
+  /** Quanto vale una frase di tregua, in negativo. */
+  scontoTregua: z.number().int().min(0).max(100).default(25),
 }).default({});
 export type FlameConfig = z.infer<typeof FlameConfig>;
 

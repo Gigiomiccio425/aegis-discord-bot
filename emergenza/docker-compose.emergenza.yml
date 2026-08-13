@@ -32,7 +32,7 @@ x-encryption-key: &encryption-key 'STESSA_ENCRYPTION_KEY_DEL_SERVER'
 
 services:
   angel-emergenza:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.19.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.20.0
     pull_policy: always
     container_name: angel-emergenza
     # `no` e non `unless-stopped`: chi decide se questo nodo deve girare è il

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { leggiElenco, paroleMancanti, scriviElenco, unisciElenchi } from '@angel/shared/elenchi';
 import { Badge, Button } from './ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -114,6 +115,47 @@ export function WordlistEditor({
     );
   };
 
+  /* Le voci predefinite che questo server non ha: è il caso di chi ha
+     configurato il bot mesi fa, perché i valori predefiniti valgono solo per
+     le configurazioni nuove e le parole aggiunte da allora non arrivano. */
+  const mancanti = useMemo(() => paroleMancanti(value), [value]);
+
+  const importa = async (file: File | null): Promise<void> => {
+    if (!file) return;
+    const testo = await file.text().catch(() => null);
+    if (testo === null) {
+      setAvviso('Non sono riuscito a leggere il file.');
+      return;
+    }
+
+    const letto = leggiElenco(testo);
+    if (letto.voci.length === 0) {
+      setAvviso(
+        letto.errori.length > 0
+          ? `Nessuna parola valida. Primo problema alla riga ${letto.errori[0]!.riga}: ${letto.errori[0]!.motivo}.`
+          : 'Nessuna parola valida nel file.',
+      );
+      return;
+    }
+
+    const esito = unisciElenchi(value, letto.voci);
+    onChange(esito.voci as Termine[]);
+    setAvviso(
+      `${esito.aggiunte} aggiunte${esito.gia > 0 ? `, ${esito.gia} già presenti` : ''}` +
+        `${letto.errori.length > 0 ? `, ${letto.errori.length} righe saltate` : ''}.`,
+    );
+  };
+
+  const esporta = (): void => {
+    const testo = scriviElenco(value, `Elenco esportato dal pannello di ANGEL\n${value.length} voci.`);
+    const url = URL.createObjectURL(new Blob([testo], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'parole.elenco';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const modifica = (indice: number, campi: Partial<Termine>): void =>
     onChange(value.map((voce, posizione) => (posizione === indice ? { ...voce, ...campi } : voce)));
 
@@ -191,6 +233,41 @@ export function WordlistEditor({
         )}
 
         {avviso && <p className="mt-2 text-xs text-[var(--color-accent-soft)]">{avviso}</p>}
+
+        {/* Allineamento e file: due modi di far entrare molte parole insieme. */}
+        <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[var(--color-border)] pt-2">
+          {mancanti.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                const esito = unisciElenchi(value, mancanti);
+                onChange(esito.voci as Termine[]);
+                setAvviso(`${esito.aggiunte} parole predefinite aggiunte. Le tue non sono state toccate.`);
+              }}
+              className="rounded-lg border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-3 py-1 text-xs text-[var(--color-accent-soft)]"
+            >
+              Aggiungi le {mancanti.length} parole predefinite che ti mancano
+            </button>
+          ) : (
+            <span className="text-xs text-neutral-600">
+              Allineato all&apos;elenco predefinito del bot.
+            </span>
+          )}
+
+          <label className="cursor-pointer text-xs text-neutral-500 underline">
+            importa da file
+            <input
+              type="file"
+              accept=".elenco,.txt,text/plain"
+              className="hidden"
+              onChange={(event) => void importa(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          <button type="button" onClick={esporta} className="text-xs text-neutral-500 underline">
+            esporta
+          </button>
+        </div>
       </div>
 
       {/* Ricerca e filtri */}

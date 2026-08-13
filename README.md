@@ -84,7 +84,7 @@ colpo solo o a rinunciare.
 
 ### Il filtro sul linguaggio
 
-Arriva con **561 espressioni** divise in sette categorie — volgarità, insulti, discriminazione,
+Arriva con **718 espressioni** divise in sette categorie — volgarità, insulti, discriminazione,
 minacce, istigazione all'autolesionismo, bestemmie, contenuto sessuale — ognuna con la sua gravità e
 il suo interruttore. Il contenuto sessuale parte spento: su un server di adulti la conversazione può
 essere legittima.
@@ -108,6 +108,52 @@ ridere), `crepa` (una crepa nel muro), `sega` (l'attrezzo), `figa` (in mezza Ita
 
 `/prova-filtro` mostra cosa verrebbe riconosciuto in un testo senza sanzionare nessuno — utile
 perché in chat amministratori e proprietari del bot sono esenti, cioè proprio chi vorrebbe provarlo.
+
+#### Se il bot è installato da tempo, le parole nuove non ti arrivano
+
+I valori predefiniti valgono **solo per le configurazioni nuove**. Su un server configurato mesi fa
+l'elenco salvato resta quello di allora: le voci aggiunte al bot nel frattempo non compaiono, e non
+c'è modo di accorgersene se non notando che una parola non viene riconosciuta.
+
+Si rimedia con **`/parole aggiorna`**, o con il pulsante nel pannello che dice quante ne mancano. Le
+tue restano come le hai messe: nessuna gravità e nessuna categoria vengono cambiate.
+
+#### Elenchi come file
+
+Il formato è in [`elenchi/`](elenchi/), con il file `italiano-base.elenco` che contiene tutte le
+voci predefinite. Si legge a occhio, si commenta, si tiene sotto controllo di versione:
+
+```
+@categoria MINACCIA
+@gravita GRAVE
+ti ammazzo
+ti trovo
+
+porco dio | BESTEMMIA | GRAVE
+```
+
+Si importa con `/parole importa` allegando il file, o dal pannello; si esporta con
+`/parole esporta`. Una riga sbagliata viene saltata e riportata con il suo numero invece di far
+fallire tutto: un file di trecento parole che non si importa per un refuso alla riga 118 è un file
+che si smette di usare.
+
+### Anti-flame
+
+Il filtro delle parole guarda un messaggio alla volta; il flame non è un messaggio, è uno scambio. La
+prima risposta non è una sanzione ma un **rallentamento del canale**: silenziare i due che litigano
+punisce chi ha risposto quanto chi ha cominciato, mentre rallentare toglie alla spirale proprio ciò
+di cui si nutre, la rapidità.
+
+Il riconoscimento non passa dalle parolacce ma dal **modo** — la differenza fra «che schifo di
+partita» e «fai schifo». Il vocabolario stava scritto nel codice; ora è configurabile, ed è giusto
+che lo sia: un modulo che decide di rallentare un canale in base a un elenco che nessuno può vedere
+è un modulo di cui non ci si fida.
+
+Si regolano le espressioni riconosciute, quanto pesa ciascun segnale (frase rivolta a una persona,
+messaggio urlato, menzione del destinatario, punteggiatura concitata) e — cosa che prima non
+esisteva — le **frasi di tregua**: «scusa», «hai ragione», «lasciamo perdere» abbassano il
+punteggio. Senza, il messaggio con cui qualcuno prova a rimediare contava come un colpo in più, e
+l'intervento arrivava proprio mentre la discussione stava rientrando da sola.
 
 ### Link e GIF: dove sì e dove no
 

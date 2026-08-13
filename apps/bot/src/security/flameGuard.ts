@@ -43,64 +43,69 @@ interface Voce {
   quando: number;
 }
 
-/*
- * Aggressione in seconda persona.
+/**
+ * Quanto è ostile un messaggio, e perché.
  *
- * È il segnale che distingue «che schifo di partita» da «fai schifo». Nessuna
- * delle due contiene un insulto dell'elenco, ma solo la seconda è rivolta a
- * una persona — e il flame vive lì.
+ * Il vocabolario arriva dalla configurazione e non più dal codice: era un
+ * elenco che decideva se rallentare un canale e che nessuno poteva né leggere
+ * né correggere. Chi modera sa quali frasi girano nel proprio server molto
+ * meglio di chi ha scritto il modulo.
  *
- * Le espressioni sono volutamente poche e inequivocabili: allargarle
- * significherebbe segnalare conversazioni normali, e un rallentamento del
- * canale imposto a chi stava discutendo civilmente è esattamente il modo di
- * far togliere il modulo.
+ * Esportata perché è la parte che si può sbagliare, ed è l'unica testabile
+ * senza mettere in piedi un finto Discord.
  */
-const SECONDA_PERSONA = [
-  /\bsei un(?:a|o)?\b/,
-  /\bsei propri(?:o|a)\b/,
-  /\bfai schifo\b/,
-  /\bfai pena\b/,
-  /\bnon capisci\b/,
-  /\bnon sai\b.{0,15}\bniente\b/,
-  /\bstai zitt(?:o|a)\b/,
-  /\bchiudi\b.{0,10}\bbocca\b/,
-  /\bvai a\b.{0,12}(?:cagare|quel paese|farti)/,
-  /\bma chi (?:sei|ti credi)\b/,
-  /\bimpara a\b/,
-  /\bpatetic(?:o|a)\b/,
-  /\bridicol(?:o|a)\b/,
-];
-
-function segnaliDiOstilita(message: Message): { punteggio: number; motivi: string[] } {
-  const testo = normalize(message.content ?? '');
+export function segnaliDiOstilita(
+  testoGrezzo: string,
+  menzioni: number,
+  settings: GuildConfig['security']['flame'],
+): { punteggio: number; motivi: string[] } {
+  const testo = normalize(testoGrezzo);
   if (!testo) return { punteggio: 0, motivi: [] };
 
   const motivi: string[] = [];
   let punteggio = 0;
 
-  const secondaPersona = SECONDA_PERSONA.some((schema) => schema.test(testo));
-  if (secondaPersona) {
-    punteggio += 30;
+  // Il confronto è sul testo normalizzato e per sottostringa: le frasi sono
+  // pezzi di discorso («ma chi ti credi»), e pretendere la parola intera
+  // significherebbe non trovarle mai.
+  const rivolto = settings.frasiOstili.some((frase) => testo.includes(normalize(frase)));
+  if (rivolto) {
+    punteggio += settings.pesoFrase;
     motivi.push('rivolto direttamente a una persona');
   }
 
   // Le maiuscole contano solo insieme a qualcos'altro: un messaggio urlato e
   // basta è maleducazione, non un litigio.
-  const lettere = (message.content ?? '').replace(/[^a-zA-Z]/g, '');
-  if (lettere.length >= 15) {
+  const lettere = testoGrezzo.replace(/[^a-zA-Z]/g, '');
+  if (lettere.length >= 15 && rivolto) {
     const maiuscole = lettere.replace(/[^A-Z]/g, '').length / lettere.length;
-    if (maiuscole > 0.7 && secondaPersona) {
-      punteggio += 15;
+    if (maiuscole > 0.7) {
+      punteggio += settings.pesoUrlato;
       motivi.push('urlato');
     }
   }
 
-  if (message.mentions.users.size > 0 && secondaPersona) {
-    punteggio += 15;
+  if (menzioni > 0 && rivolto) {
+    punteggio += settings.pesoMenzione;
     motivi.push('con menzione del destinatario');
   }
 
-  return { punteggio, motivi };
+  // «ma sei scemo???!!!»: la punteggiatura ripetuta è il tono della voce di
+  // chi scrive, e nei litigi compare molto prima degli insulti.
+  if (rivolto && /[!?]{3,}/.test(testoGrezzo)) {
+    punteggio += settings.pesoPunteggiatura;
+    motivi.push('punteggiatura concitata');
+  }
+
+  // Chi chiede scusa nel mezzo di un litigio sta rimediando: contarlo come un
+  // colpo in più farebbe scattare l'intervento proprio mentre la discussione
+  // rientrava da sola.
+  if (settings.frasiDiTregua.some((frase) => testo.includes(normalize(frase)))) {
+    punteggio -= settings.scontoTregua;
+    motivi.push('contiene un passo indietro');
+  }
+
+  return { punteggio: Math.max(0, punteggio), motivi };
 }
 
 /**
@@ -119,7 +124,11 @@ export async function trackFlame(
   if (settings.exemptChannelIds.includes(message.channelId)) return;
   if (isExempt(message.member, settings.exemptions)) return;
 
-  const segnali = segnaliDiOstilita(message);
+  const segnali = segnaliDiOstilita(
+    message.content ?? '',
+    message.mentions.users.size,
+    settings,
+  );
   const punteggio = Math.min(100, segnali.punteggio + punteggioLingua);
   if (punteggio < settings.sogliaMessaggio) return;
 

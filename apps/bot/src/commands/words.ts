@@ -9,8 +9,22 @@
    Da qui si aggiunge in dieci secondi, restando dove è successo.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { analizzaConfigurazione, GuildConfigSchema, type GuildConfig } from '@angel/shared';
+import {
+  AttachmentBuilder,
+  EmbedBuilder,
+  MessageFlags,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
+import {
+  analizzaConfigurazione,
+  GuildConfigSchema,
+  leggiElenco,
+  paroleMancanti,
+  scriviElenco,
+  unisciElenchi,
+  type GuildConfig,
+} from '@angel/shared';
 import type { Command } from './types.js';
 import { getGuildConfig, saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -90,6 +104,25 @@ const parole: Command = {
     .addSubcommand((sub) =>
       sub.setName('elenco').setDescription('Quante parole ci sono, categoria per categoria'),
     )
+    .addSubcommand((sub) =>
+      sub
+        .setName('importa')
+        .setDescription('Importa un file di parole nel formato di ANGEL')
+        .addAttachmentOption((option) =>
+          option
+            .setName('file')
+            .setDescription('File di testo: una parola per riga, o parola | categoria | gravità')
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('aggiorna')
+        .setDescription('Aggiunge le parole predefinite del bot che mancano al tuo elenco'),
+    )
+    .addSubcommand((sub) =>
+      sub.setName('esporta').setDescription('Scarica il tuo elenco come file, per portarlo altrove'),
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .setDMPermission(false),
   requiredPermissions: [PermissionFlagsBits.ManageMessages],
@@ -126,6 +159,114 @@ const parole: Command = {
         });
 
       await interaction.editReply({ embeds: [embed] });
+      return;
+    }
+
+    if (sub === 'esporta') {
+      const file = scriviElenco(
+        settings.terms,
+        `Elenco di ${interaction.guild?.name ?? 'questo server'}\n` +
+          `${settings.terms.length} voci, esportate il ${new Date().toLocaleDateString('it-IT')}.\n` +
+          'Formato: elenchi/LEGGIMI.md nel repository di ANGEL.',
+      );
+
+      await interaction.editReply({
+        content: `📄 ${settings.terms.length} voci. Si reimporta con \`/parole importa\`.`,
+        files: [
+          new AttachmentBuilder(Buffer.from(file, 'utf8'), {
+            name: `parole-${interaction.guildId}.elenco`,
+          }),
+        ],
+      });
+      return;
+    }
+
+    if (sub === 'aggiorna') {
+      // Il caso concreto: server configurato mesi fa, elenco fermo a com'era
+      // allora. I valori predefiniti valgono solo per le configurazioni nuove,
+      // quindi le voci aggiunte al bot nel frattempo non arrivano mai.
+      const mancanti = paroleMancanti(settings.terms);
+
+      if (mancanti.length === 0) {
+        await interaction.editReply(
+          `✅ Il tuo elenco ha già tutte le ${settings.terms.length} voci predefinite del bot.`,
+        );
+        return;
+      }
+
+      const esito = unisciElenchi(settings.terms, mancanti);
+      settings.terms = esito.voci;
+      await salva(config, guildId, interaction.user.id, ['security.language.terms']);
+
+      await interaction.editReply(
+        `✅ **${esito.aggiunte}** parole aggiunte, portando l'elenco a **${settings.terms.length}** voci.\n` +
+          'Le tue restano come le avevi: non è stata cambiata nessuna gravità né categoria.',
+      );
+
+      await recordEvent(client, {
+        guildId,
+        type: 'CONFIG_CHANGED',
+        actorId: interaction.user.id,
+        summary: `Elenco parole allineato ai predefiniti: ${esito.aggiunte} aggiunte`,
+        payload: { aggiunte: esito.aggiunte, totale: settings.terms.length },
+      });
+      return;
+    }
+
+    if (sub === 'importa') {
+      const allegato = interaction.options.getAttachment('file', true);
+
+      if (allegato.size > 512_000) {
+        await interaction.editReply('Il file è troppo grande: il limite è 500 KB.');
+        return;
+      }
+
+      const testo = await fetch(allegato.url)
+        .then((risposta) => (risposta.ok ? risposta.text() : null))
+        .catch(() => null);
+
+      if (testo === null) {
+        await interaction.editReply('Non sono riuscito a scaricare il file. Riprova.');
+        return;
+      }
+
+      const letto = leggiElenco(testo);
+      if (letto.voci.length === 0) {
+        await interaction.editReply(
+          'Nessuna parola valida nel file.' +
+            (letto.errori.length > 0
+              ? `\nPrimo problema, riga ${letto.errori[0]!.riga}: ${letto.errori[0]!.motivo}.`
+              : '\nIl formato è spiegato in `elenchi/LEGGIMI.md`.'),
+        );
+        return;
+      }
+
+      const esito = unisciElenchi(settings.terms, letto.voci);
+      settings.terms = esito.voci;
+      await salva(config, guildId, interaction.user.id, ['security.language.terms']);
+
+      const righeErrore = letto.errori
+        .slice(0, 5)
+        .map((errore) => `• riga ${errore.riga}: ${errore.motivo}`)
+        .join('\n');
+
+      await interaction.editReply(
+        `✅ **${esito.aggiunte}** aggiunte` +
+          (esito.gia > 0 ? `, ${esito.gia} già presenti` : '') +
+          `. L'elenco ora ha **${settings.terms.length}** voci.` +
+          (letto.errori.length > 0
+            ? `\n\n⚠️ ${letto.errori.length} righe saltate:\n${righeErrore}` +
+              (letto.errori.length > 5 ? `\n…e altre ${letto.errori.length - 5}` : '')
+            : ''),
+      );
+
+      await recordEvent(client, {
+        guildId,
+        type: 'CONFIG_CHANGED',
+        actorId: interaction.user.id,
+        summary: `Elenco parole importato da file: ${esito.aggiunte} aggiunte`,
+        payload: { aggiunte: esito.aggiunte, saltate: letto.errori.length, file: allegato.name },
+      });
       return;
     }
 

@@ -67,7 +67,7 @@ services:
   # ─────────────────────────────────────────────────────────
   angel:
     # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.19.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.20.0
     # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
     # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
     pull_policy: always

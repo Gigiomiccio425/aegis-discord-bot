@@ -920,6 +920,20 @@ const BY_KEY: Record<string, FieldDoc> = {
     help: 'Accumula prima di scrivere: una syscall per messaggio sarebbe spreco puro.',
   },
 
+  frasiOstili: {
+    label: 'Espressioni rivolte a una persona',
+    help: "Il modulo riconosce l'aggressione dal modo, non dalle parolacce: la differenza fra «che schifo di partita» e «fai schifo». Confronto su testo normalizzato.",
+  },
+  frasiDiTregua: {
+    label: 'Espressioni che abbassano il punteggio',
+    help: "Chi chiede scusa sta rimediando: senza queste, il suo messaggio conterebbe come un colpo in più e l'intervento arriverebbe mentre la discussione rientrava.",
+  },
+  pesoFrase: { label: 'Punti per espressione ostile', help: 'Quanto pesa un messaggio rivolto direttamente a qualcuno.' },
+  pesoUrlato: { label: 'Punti per messaggio urlato', help: 'Contano solo se il messaggio era già rivolto a una persona: urlare e basta è maleducazione, non un litigio.' },
+  pesoMenzione: { label: 'Punti per menzione del destinatario', help: 'Chiamare in causa qualcuno per nome alza il tono dello scambio.' },
+  pesoPunteggiatura: { label: 'Punti per punteggiatura concitata', help: '«ma sei scemo???!!!»: nei litigi compare molto prima degli insulti.' },
+  scontoTregua: { label: 'Punti tolti da un passo indietro', help: 'Quanto vale, in negativo, un messaggio che prova a rimediare.' },
+
   /* Campi delle schede: streamer, canali YouTube, feed, scale d'azione */
   login: {
     label: 'Nome utente Twitch',
@@ -1334,6 +1348,7 @@ export const COMMAND_DOCS: CommandDoc[] = [
   { name: '/dì', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Fa scrivere il bot in un canale: testo, immagini e GIF.', example: '/dì canale:#annunci testo:Manutenzione alle 21 riquadro:true', caution: 'Solo immagini e GIF, e nessuna menzione di massa: un messaggio del bot sembra venire dallo staff.' },
   { name: '/prova-filtro', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Mostra cosa riconoscerebbe il filtro in un testo, senza pubblicarlo.', example: '/prova-filtro testo:sei uno stronzo rivolto:true', caution: 'Serve perche in chat amministratori e proprietari del bot sono esenti: sono le persone piu probabili a voler provare il filtro, e le uniche che non possono.' },
   { name: '/parole aggiungi|togli|consenti|cerca|elenco', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Gestisce l\'elenco delle parole non ammesse restando su Discord.', example: '/parole aggiungi parola:scemo, imbecille categoria:Insulto gravita:media', caution: 'Il momento in cui serve aggiungere una parola è quello in cui è appena comparsa in chat: se bisogna aprire il pannello, non la aggiunge nessuno.' },
+  { name: '/parole importa|aggiorna|esporta', group: 'Utilità', permission: 'Gestire i messaggi', summary: 'Importa un elenco di parole da file, allinea il tuo ai predefiniti del bot, o esportalo.', example: '/parole aggiorna', caution: 'I valori predefiniti valgono solo per le configurazioni nuove: su un server configurato mesi fa le parole aggiunte al bot da allora non arrivano finche non si esegue /parole aggiorna.' },
   { name: '/diagnosi', group: 'Utilità', permission: 'Gestire il server', summary: 'Controlla che i moduli accesi abbiano ciò che serve per funzionare.', caution: 'Le cause dei guasti stanno quasi sempre fra i moduli e non dentro uno: un campo che manca, una dipendenza spenta, due impostazioni che si annullano.' },
   { name: '/prepara-server', group: 'Utilità', permission: 'Amministratore', summary: 'Crea ruoli, canali e configurazione mancanti per far funzionare tutto.', caution: 'Si può rieseguire quando si vuole: verifica cosa esiste già e non duplica nulla.' },
   { name: '/angel-master', group: 'Utilità', permission: 'Amministratore', summary: 'Ricrea il ruolo del proprietario del bot e lo riassegna.', caution: 'Funziona solo per gli ID elencati in OWNER_IDS: a chiunque altro risponde con un rifiuto.' },
