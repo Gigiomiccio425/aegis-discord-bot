@@ -742,6 +742,7 @@ il giorno in cui uno cambia comportamento cambiano entrambi.
 | Comando | Chi può usarlo | Cosa fa |
 |---|---|---|
 | `/ping` | tutti | Latenza e versioni |
+| `/salute` · `/health` | tutti | Dice quale pezzo non funziona: database, Redis, disco, versione |
 | `/segnala` · `/report` | tutti | Segnala una persona allo staff: arriva nel canale riservato con i pulsanti per intervenire |
 | `/azioni` · `/actions` | Modera membri | Pulsanti rapidi su una persona: silenzia, quarantena, espelli, bandisci |
 | `/stato` | Gestisci server | Stato dei moduli e problemi da sistemare |

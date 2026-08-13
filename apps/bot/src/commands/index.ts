@@ -19,6 +19,7 @@ import { voiceCommands } from './voice.js';
 import { announceCommands } from './announce.js';
 import { wordCommands } from './words.js';
 import { reportCommands } from './reports.js';
+import { healthCommands } from './health.js';
 
 const log = childLogger('commands');
 
@@ -36,6 +37,7 @@ export const commands: Command[] = [
   ...announceCommands,
   ...wordCommands,
   ...reportCommands,
+  ...healthCommands,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -64,6 +66,7 @@ const PSEUDONIMI: Record<string, string> = {
   nota: 'note',
   quarantena: 'quarantine',
   segnala: 'report',
+  salute: 'health',
   azioni: 'actions',
   parole: 'words',
   diagnosi: 'diagnosis',
@@ -124,7 +127,32 @@ export async function handleCommand(
     return;
   }
 
-  const config = await getGuildConfig(interaction.guildId);
+  /*
+   * Se la configurazione non si carica, il comando non parte nemmeno — e
+   * finora non partiva *in silenzio*: l'eccezione risaliva prima di qualunque
+   * risposta, e chi aveva scritto il comando vedeva solo «l'applicazione non
+   * ha risposto», che è vero per qualsiasi causa e non aiuta con nessuna.
+   *
+   * È successo davvero, con il disco pieno: il database rifiutava, e tutti i
+   * comandi sembravano semplicemente rotti.
+   */
+  const config = await getGuildConfig(interaction.guildId).catch((errore: unknown) => {
+    log.error({ err: errore, guildId: interaction.guildId }, 'configurazione non caricata');
+    return null;
+  });
+
+  if (!config) {
+    await interaction
+      .reply({
+        content:
+          '⚠️ Non riesco a leggere la configurazione di questo server: probabilmente il database ' +
+          'non risponde. Prova `/salute` per vedere quale pezzo è in difficoltà.',
+        flags: MessageFlags.Ephemeral,
+      })
+      .catch(() => undefined);
+    return;
+  }
+
   const builtin = commandMap.get(interaction.commandName);
 
   if (builtin) {
@@ -155,7 +183,12 @@ export async function handleCommand(
 
     try {
       await builtin.execute({ client, interaction, config });
-      await recordEvent(client, {
+
+      // La registrazione dell'evento sta **fuori** dal destino del comando: se
+      // fallisse dentro il `try`, un comando andato a buon fine verrebbe
+      // sostituito dal messaggio d'errore, e chi lo ha eseguito crederebbe che
+      // non abbia funzionato mentre invece ha funzionato benissimo.
+      void recordEvent(client, {
         guildId: interaction.guildId,
         type: 'COMMAND_USED',
         actorId: interaction.user.id,
@@ -168,7 +201,7 @@ export async function handleCommand(
             value: option.value,
           })),
         },
-      });
+      }).catch(() => undefined);
     } catch (error) {
       log.error({ err: error, command: interaction.commandName }, 'comando fallito');
       const message = t(config.general.locale, 'common.error');
