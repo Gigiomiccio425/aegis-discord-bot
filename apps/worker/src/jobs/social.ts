@@ -1,6 +1,11 @@
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { GuildConfigSchema, type RssFeedConfig, type YouTubeChannelConfig } from '@angel/shared';
+import {
+  applicaModello,
+  GuildConfigSchema,
+  type RssFeedConfig,
+  type YouTubeChannelConfig,
+} from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import { recordWorkerEvent, sendMessage } from '../discord.js';
@@ -152,9 +157,6 @@ function newItems(items: FeedItem[], lastItemId: string | null): FeedItem[] {
   return items.slice(0, index);
 }
 
-function applyTemplate(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
-}
 
 /* ── YouTube ──────────────────────────────────────────────────────────── */
 
@@ -204,7 +206,7 @@ async function checkYouTube(guildId: string, channel: YouTubeChannelConfig): Pro
     if (!channel.announceChannelId) continue;
 
     const live = channel.announceLive && looksLive(item);
-    const content = applyTemplate(
+    const content = applicaModello(
       live ? '🔴 **{autore}** è in diretta!\n**{titolo}**\n{url}' : channel.template,
       {
         autore: item.author ?? feed.title,
@@ -297,7 +299,7 @@ async function checkRss(guildId: string, feedConfig: RssFeedConfig): Promise<voi
   for (const item of fresh.slice(0, feedConfig.maxPerCheck).reverse()) {
     if (!feedConfig.announceChannelId) continue;
 
-    const content = applyTemplate(feedConfig.template, {
+    const content = applicaModello(feedConfig.template, {
       titolo: item.title,
       url: item.link,
       autore: item.author ?? label,

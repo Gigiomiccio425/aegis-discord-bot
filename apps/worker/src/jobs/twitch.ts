@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { GuildConfigSchema } from '@angel/shared';
+import { applicaModello, GuildConfigSchema } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import { recordWorkerEvent, sendMessage, setMemberRole } from '../discord.js';
@@ -18,7 +18,23 @@ const log = childLogger('twitch');
  *   • cercare i clip nuovi, che EventSub non copre
  */
 export async function twitchProcessor(job: Job): Promise<void> {
-  if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) return;
+  /*
+   * Senza credenziali qui non si può fare niente: né risolvere un login, né
+   * leggere lo stato di una diretta, né cercare i clip.
+   *
+   * Prima si usciva e basta. Il risultato era il peggiore possibile: il modulo
+   * risultava acceso nel pannello, gli streamer erano elencati, e non
+   * succedeva nulla — senza una riga di log che dicesse perché. Ora lo dice, e
+   * lo dice una volta ogni tanto invece che a ogni giro, perché una riga
+   * ripetuta ogni sei ore è un promemoria mentre una ogni minuto è rumore.
+   */
+  if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
+    log.warn(
+      'Twitch non configurato: TWITCH_CLIENT_ID e TWITCH_CLIENT_SECRET sono vuoti, ' +
+        'quindi dirette e clip non vengono nemmeno cercati. Si ottengono da dev.twitch.tv/console/apps.',
+    );
+    return;
+  }
 
   // Gli avvisi live arrivano all'API via EventSub, che li accoda qui: l'API
   // deve rispondere a Twitch entro pochi secondi e non può fermarsi a comporre
@@ -54,6 +70,29 @@ export async function twitchProcessor(job: Job): Promise<void> {
 }
 
 type StreamerConfig = ReturnType<typeof GuildConfigSchema.parse>['integrations']['twitch']['streamers'][number];
+
+/**
+ * Un indirizzo che Twitch può davvero chiamare.
+ *
+ * La documentazione è categorica su due punti, e il secondo si dimentica
+ * sempre: il callback deve essere in HTTPS **e ascoltare sulla porta 443**.
+ * Un `https://esempio.it:8443` viene accettato dal nostro codice e rifiutato
+ * da Twitch, e la sottoscrizione risulta creata senza esistere.
+ *
+ * Non è controllabile da qui se l'indirizzo è raggiungibile da internet: quello
+ * lo dice solo il tentativo. Ma la forma sbagliata si riconosce prima, e
+ * riconoscerla evita una sottoscrizione fantasma.
+ */
+export function callbackValido(url: string | null): boolean {
+  if (!url) return false;
+  try {
+    const indirizzo = new URL(url);
+    if (indirizzo.protocol !== 'https:') return false;
+    return indirizzo.port === '' || indirizzo.port === '443';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Svuota la coda degli annunci lasciata dall'API.
@@ -129,10 +168,9 @@ async function syncStreamer(guildId: string, streamer: StreamerConfig): Promise<
     // La sottoscrizione EventSub si crea solo se il pannello è raggiungibile
     // dall'esterno: Twitch deve poter chiamare il callback. In locale, senza
     // dominio pubblico, resta attivo il solo polling dei clip.
-    const eventsubId =
-      callbackUrl && callbackUrl.startsWith('https://')
-        ? await subscribeEventSub('stream.online', userId, callbackUrl)
-        : null;
+    const eventsubId = callbackValido(callbackUrl)
+      ? await subscribeEventSub('stream.online', userId, callbackUrl!)
+      : null;
 
     await prisma.twitchSubscription.create({
       data: {
@@ -147,8 +185,9 @@ async function syncStreamer(guildId: string, streamer: StreamerConfig): Promise<
 
     if (!eventsubId) {
       log.info(
-        { login: streamer.login },
-        'EventSub non attivabile (serve un URL pubblico HTTPS): si userà il controllo periodico',
+        { login: streamer.login, publicUrl },
+        'EventSub non attivabile: Twitch richiede un callback pubblico in HTTPS sulla porta 443. ' +
+          'Resta il controllo periodico, più lento ma funzionante',
       );
     }
 
@@ -212,7 +251,7 @@ async function sottoscriviFineDiretta(
   callbackUrl: string | null,
 ): Promise<void> {
   if (!streamer.liveRoleId || !streamer.discordUserId) return;
-  if (!callbackUrl?.startsWith('https://')) return;
+  if (!callbackValido(callbackUrl)) return;
 
   const prisma = getPrisma();
   const gia = await prisma.twitchSubscription.findFirst({
@@ -220,7 +259,7 @@ async function sottoscriviFineDiretta(
   });
   if (gia) return;
 
-  const eventsubId = await subscribeEventSub('stream.offline', userId, callbackUrl);
+  const eventsubId = await subscribeEventSub('stream.offline', userId, callbackUrl!);
   await prisma.twitchSubscription.create({
     data: {
       guildId,
@@ -288,12 +327,13 @@ export async function announceLive(
   if (!channelId) return;
 
   const url = `https://twitch.tv/${streamer.login}`;
-  const content = streamer.template
-    .replaceAll('{streamer}', streamer.login)
-    .replaceAll('{title}', info.title)
-    .replaceAll('{game}', info.game)
-    .replaceAll('{url}', url)
-    .replaceAll('{viewers}', String(info.viewers));
+  const content = applicaModello(streamer.template, {
+    streamer: streamer.login,
+    title: info.title,
+    game: info.game,
+    url,
+    viewers: info.viewers,
+  });
 
   await sendMessage(channelId, {
     content: streamer.mentionRoleId ? `<@&${streamer.mentionRoleId}> ${content}` : content,

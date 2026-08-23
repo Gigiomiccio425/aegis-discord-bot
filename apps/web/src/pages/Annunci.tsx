@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
+import { applicaModello } from '@angel/shared/template';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { ChannelPicker, RolePicker, UserPicker, useInventario } from '../components/pickers.js';
 import { MentionInput } from '../components/MentionInput.js';
-import { Badge, Button, Card, ErrorBox, Loading, NumberInput } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorBox,
+  Loading,
+  NumberInput,
+  formatDate,
+} from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    ANNUNCI
@@ -22,6 +31,41 @@ type Json = Record<string, unknown>;
 interface ConfigResponse {
   config: Json;
   objectArrayTemplates: Record<string, unknown>;
+}
+
+/**
+ * Cosa ha fatto davvero ogni fonte.
+ *
+ * «Non funziona» non è una diagnosi. Le cose che fermano un annuncio sono
+ * cinque, tutte silenziose: credenziali Twitch mancanti, modulo spento, voce
+ * sospesa, fonte che risponde con un errore, e semplicemente niente di nuovo
+ * da pubblicare — che è il caso più frequente e il più difficile da
+ * distinguere dagli altri quattro guardando la configurazione.
+ */
+interface StatoFonti {
+  ambiente: {
+    twitchCredenziali: boolean;
+    twitchEventsubSegreto: boolean;
+    callbackPubblico: boolean;
+    publicUrl: string;
+  };
+  fonti: {
+    piattaforma: string;
+    identificativo: string;
+    nome: string | null;
+    ultimoControllo: string | null;
+    ultimoElemento: string | null;
+    errori: number;
+    ultimoErrore: string | null;
+  }[];
+  twitch: {
+    login: string;
+    tipo: string;
+    eventsubAttivo: boolean;
+    inDirettaDa: string | null;
+    ultimoAnnuncio: string | null;
+    ultimoControlloClip: string | null;
+  }[];
 }
 
 interface Voce extends Json {
@@ -121,14 +165,12 @@ const ESEMPI: Record<string, Record<string, string>> = {
   },
 };
 
-function riempi(template: string, valori: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (intero, chiave: string) => valori[chiave] ?? intero);
-}
 
 export function Annunci() {
   const guildId = useGuildId();
   const [config, setConfig] = useState<Json | null>(null);
   const [modelli, setModelli] = useState<Record<string, unknown>>({});
+  const [stato, setStato] = useState<StatoFonti | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avviso, setAvviso] = useState<string | null>(null);
   const [inModifica, setInModifica] = useState<{ piattaforma: Piattaforma; indice: number } | null>(
@@ -143,6 +185,13 @@ export function Annunci() {
         setModelli(risultato.objectArrayTemplates ?? {});
       })
       .catch((err: Error) => setError(err.message));
+
+    // Lo stato è accessorio: se non arriva, la pagina funziona lo stesso e
+    // mostra solo la configurazione.
+    api
+      .get<StatoFonti>(`/api/guilds/${guildId}/annunci/stato`)
+      .then(setStato)
+      .catch(() => undefined);
   }, [guildId]);
 
   if (error && !config) return <ErrorBox message={error} />;
@@ -191,6 +240,35 @@ export function Annunci() {
         <div className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
           {avviso}
         </div>
+      )}
+
+      {stato && !stato.ambiente.twitchCredenziali && (
+        <Card title="⚠️ Twitch non è collegato">
+          <p className="text-sm leading-relaxed text-neutral-300">
+            Mancano <code>TWITCH_CLIENT_ID</code> e <code>TWITCH_CLIENT_SECRET</code> fra le
+            variabili del bot. Senza, dirette e clip non vengono nemmeno cercati: il modulo può
+            risultare acceso e gli streamer elencati, e non succede niente.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-400">
+            Si creano su <strong>dev.twitch.tv/console/apps</strong> — «Register Your Application»,
+            poi <em>New Secret</em>. Vanno messi nel compose e l&apos;app riavviata.
+          </p>
+        </Card>
+      )}
+
+      {stato && stato.ambiente.twitchCredenziali && !stato.ambiente.callbackPubblico && (
+        <Card title="Dirette Twitch con qualche minuto di ritardo">
+          <p className="text-sm leading-relaxed text-neutral-300">
+            L&apos;avviso immediato arriva da EventSub, e per usarlo Twitch deve poter chiamare
+            questo pannello da internet, in HTTPS. L&apos;indirizzo configurato è{' '}
+            <code>{stato.ambiente.publicUrl || 'non impostato'}</code>, che da fuori non si
+            raggiunge: il bot ripiega sul controllo periodico.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-400">
+            Funziona lo stesso, con qualche minuto di ritardo invece di pochi secondi. Per averlo
+            immediato serve un dominio pubblico in HTTPS.
+          </p>
+        </Card>
       )}
 
       {PIATTAFORME.map((piattaforma) => {
@@ -250,6 +328,7 @@ export function Annunci() {
                     guildId={guildId}
                     piattaforma={piattaforma}
                     voce={voce}
+                    stato={stato}
                     onModifica={() => setInModifica({ piattaforma, indice })}
                     onCommuta={() =>
                       scriviElenco(
@@ -308,6 +387,7 @@ function RigaVoce({
   guildId,
   piattaforma,
   voce,
+  stato,
   onModifica,
   onCommuta,
   onRimuovi,
@@ -316,6 +396,7 @@ function RigaVoce({
   guildId: string;
   piattaforma: Piattaforma;
   voce: Voce;
+  stato: StatoFonti | null;
   onModifica: () => void;
   onCommuta: () => void;
   onRimuovi: () => void;
@@ -341,7 +422,7 @@ function RigaVoce({
       return;
     }
     try {
-      const testo = riempi(voce.template ?? '', {
+      const testo = applicaModello(voce.template ?? '', {
         ...ESEMPI[piattaforma.chiave]!,
         ...(nome ? { streamer: nome, autore: nome, fonte: nome } : {}),
       });
@@ -400,7 +481,91 @@ function RigaVoce({
         </span>
         {ruolo && <span>Menziona @{ruolo.name}</span>}
       </div>
+
+      <StatoFonte piattaforma={piattaforma} voce={voce} stato={stato} nome={nome} />
     </div>
+  );
+}
+
+/**
+ * Cosa ha fatto questa fonte l'ultima volta.
+ *
+ * È la riga che mancava: senza, «non arriva niente» resta indistinguibile da
+ * «non è ancora uscito niente», che nella maggior parte dei casi è la risposta
+ * vera e non si può dedurre guardando la configurazione.
+ */
+function StatoFonte({
+  piattaforma,
+  voce,
+  stato,
+  nome,
+}: {
+  piattaforma: Piattaforma;
+  voce: Voce;
+  stato: StatoFonti | null;
+  nome: string;
+}) {
+  if (!stato) return null;
+
+  if (piattaforma.chiave === 'twitch') {
+    const riga = stato.twitch.find(
+      (altra) => altra.login.toLowerCase() === nome.toLowerCase() && altra.tipo === 'stream.online',
+    );
+
+    if (!riga) {
+      return (
+        <p className="mt-1 text-xs text-neutral-600">
+          {stato.ambiente.twitchCredenziali
+            ? 'Non ancora registrato su Twitch: succede al primo giro di controllo, entro sei ore.'
+            : 'In attesa delle credenziali Twitch.'}
+        </p>
+      );
+    }
+
+    const pezzi = [
+      riga.eventsubAttivo ? 'avviso immediato attivo' : 'controllo periodico',
+      riga.inDirettaDa ? 'in diretta adesso' : null,
+      riga.ultimoAnnuncio
+        ? `ultimo annuncio ${formatDate(riga.ultimoAnnuncio)}`
+        : 'nessun annuncio finora',
+      Number(voce.clipMinViews ?? 0) > 0 && riga.ultimoControlloClip
+        ? `clip controllati ${formatDate(riga.ultimoControlloClip)}`
+        : null,
+    ].filter(Boolean);
+
+    return <p className="mt-1 text-xs text-neutral-600">{pezzi.join(' · ')}</p>;
+  }
+
+  const fonte = stato.fonti.find(
+    (altra) =>
+      altra.piattaforma === piattaforma.chiave &&
+      (altra.identificativo === nome || altra.nome === nome),
+  );
+
+  if (!fonte) {
+    return (
+      <p className="mt-1 text-xs text-neutral-600">
+        Non ancora letta. Il primo controllo registra soltanto, senza annunciare: altrimenti
+        aggiungere una fonte riempirebbe il canale di cose già vecchie.
+      </p>
+    );
+  }
+
+  const pezzi = [
+    fonte.ultimoControllo ? `controllata ${formatDate(fonte.ultimoControllo)}` : 'mai controllata',
+    fonte.ultimoElemento ? `ultima novità ${formatDate(fonte.ultimoElemento)}` : null,
+    fonte.errori > 0 ? `${fonte.errori} errori: ${fonte.ultimoErrore ?? '—'}` : null,
+    fonte.errori >= 10 ? 'sospesa per errori ripetuti' : null,
+  ].filter(Boolean);
+
+  return (
+    <p
+      className={`mt-1 text-xs ${
+        fonte.errori > 0 ? 'text-[var(--color-warning)]' : 'text-neutral-600'
+      }`}
+    >
+      {pezzi.join(' · ')}
+    </p>
   );
 }
 
@@ -425,7 +590,7 @@ function EditorVoce({
   const campo = (chiave: string, valore: unknown): void =>
     setBozza((corrente) => ({ ...corrente, [chiave]: valore }) as Voce);
 
-  const anteprima = riempi(String(bozza.template ?? ''), ESEMPI[piattaforma.chiave]!);
+  const anteprima = applicaModello(String(bozza.template ?? ''), ESEMPI[piattaforma.chiave]!);
 
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-black/70 p-6">

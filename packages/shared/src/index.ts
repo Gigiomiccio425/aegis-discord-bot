@@ -4,6 +4,7 @@ export * from './types/decision.js';
 export * from './types/customCommands.js';
 export * from './util/text.js';
 export * from './util/json.js';
+export * from './util/template.js';
 // In fondo alle altre: importa RedisKeys, definito più sotto in questo file.
 export * from './version.js';
 export * from './env.js';

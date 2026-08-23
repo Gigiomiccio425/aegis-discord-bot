@@ -1,5 +1,5 @@
 import { ChannelType, type Message, type TextChannel } from 'discord.js';
-import type { GuildConfig } from '@angel/shared';
+import { applicaModello, type GuildConfig } from '@angel/shared';
 import { isExempt } from '../core/permissions.js';
 import { childLogger } from '../core/logger.js';
 
@@ -148,10 +148,11 @@ export async function applyLinkPolicy(message: Message, config: GuildConfig): Pr
     log.debug({ err: errore, channelId: message.channelId }, 'messaggio non eliminabile');
   });
 
-  const avviso = settings.notice
-    .replaceAll('{utente}', `<@${message.author.id}>`)
-    .replaceAll('{cosa}', cosa)
-    .replaceAll('{canali}', consentiti.map((id) => `<#${id}>`).join(', ') || 'nessuno');
+  const avviso = applicaModello(settings.notice, {
+    utente: `<@${message.author.id}>`,
+    cosa,
+    canali: consentiti.map((id) => `<#${id}>`).join(', ') || 'nessuno',
+  });
 
   const inviato = await (channel as TextChannel)
     .send({ content: avviso, allowedMentions: { users: [message.author.id] } })

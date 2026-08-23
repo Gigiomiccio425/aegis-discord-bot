@@ -76,6 +76,11 @@ export function Settings() {
         draft,
       );
       setSaved(`Salvato: ${result.changedPaths.length} modifiche applicate subito al bot.`);
+      // La copia di riferimento si aggiorna qui: senza, l'avviso «modifiche non
+      // salvate» resterebbe acceso anche dopo aver salvato.
+      setData((precedente) =>
+        precedente ? { ...precedente, config: structuredClone(draft) } : precedente,
+      );
       setError(null);
       setTimeout(() => setSaved(null), 5000);
     } catch (err) {
@@ -90,12 +95,30 @@ export function Settings() {
 
   const current = getPath(draft, selected);
 
+  /*
+   * Questa pagina non salva da sola, e non deve: fra le sue opzioni ce ne sono
+   * che spengono difese, e salvare a ogni spunta significherebbe applicarle nel
+   * mezzo di una modifica pensata a metà. Le altre pagine — annunci, azioni —
+   * salvano subito perché lì ogni gesto è già una decisione compiuta.
+   *
+   * Quello che mancava era dirlo. Chi cambiava una soglia e passava a un'altra
+   * sezione non aveva modo di sapere di non aver salvato.
+   */
+  const sporco = JSON.stringify(draft) !== JSON.stringify(data.config);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Configurazione</h1>
-        <Button variant="primary" disabled={saving} onClick={() => void save()}>
-          {saving ? 'Salvataggio…' : 'Salva modifiche'}
+        <div>
+          <h1 className="text-xl font-semibold">Configurazione</h1>
+          {sporco && (
+            <p className="mt-0.5 text-xs text-[var(--color-warning)]">
+              Modifiche non salvate: restano solo in questa pagina finché non premi «Salva».
+            </p>
+          )}
+        </div>
+        <Button variant="primary" disabled={saving || !sporco} onClick={() => void save()}>
+          {saving ? 'Salvataggio…' : sporco ? 'Salva modifiche' : 'Tutto salvato'}
         </Button>
       </div>
 

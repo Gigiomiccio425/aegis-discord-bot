@@ -25,6 +25,10 @@
     "./elenchi": {
       "types": "./dist/config/elenchi.d.ts",
       "default": "./dist/config/elenchi.js"
+    },
+    "./template": {
+      "types": "./dist/util/template.d.ts",
+      "default": "./dist/util/template.js"
     }
   },
   "scripts": {
