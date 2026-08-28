@@ -674,6 +674,31 @@ cosa attivare. L'ordine consigliato:
 7. **Whitelist anti-nuke** — aggiungi i bot legittimi che riorganizzano canali o ruoli, altrimenti
    verranno disarmati al primo lavoro di manutenzione.
 
+### Costruire il server da zero
+
+`/crea-server` (anche `/build-server`) porta un server vuoto a essere una community pronta:
+ruoli, categorie, canali, modalità community, verifica e ticket, con la configurazione già
+compilata per ogni funzione del bot — comprese quelle spente, perché un canale che esiste si
+accende con una spunta mentre un canale che manca richiede di ricordarsi che serviva.
+
+La struttura segue il percorso di chi arriva, che è la ragione per cui funziona: prima si capisce
+dove si è (regolamento, verifica, annunci, ruoli), poi si parla (pochi canali generali e pieni),
+poi le cose specifiche (dirette, clip, eventi), e in fondo staff e assistenza. Un server nuovo con
+venti canali tematici è venti canali vuoti, e il vuoto scoraggia più di una chat affollata.
+
+**La modalità community si accende da sola.** Discord la concede a un bot con Amministratore, ma
+pretende nella stessa richiesta il canale del regolamento, quello degli aggiornamenti per lo staff
+e le due impostazioni minime di sicurezza — mandandone una in meno risponde con un errore che
+parla d'altro. Da lì arrivano i canali annuncio, i forum e le funzioni riservate alle community.
+
+Si può rieseguire quando si vuole: ogni cosa viene cercata per nome prima di essere creata, e i
+campi già compilati non vengono toccati.
+
+**Il bot non può creare il server.** L'API lo consentirebbe a un bot presente in meno di dieci
+server, ma il proprietario risulterebbe il bot e la proprietà non è trasferibile a una persona: un
+server di cui non sei padrone non è tuo. Il server si crea a mano in dieci secondi, e da lì in poi
+fa tutto il comando.
+
 ### Cosa fa la predisposizione ai permessi
 
 Con la verifica attiva, «Prepara il server» chiude il server a `@everyone`: i canali diventano

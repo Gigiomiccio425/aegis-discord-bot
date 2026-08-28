@@ -20,6 +20,7 @@ import { announceCommands } from './announce.js';
 import { wordCommands } from './words.js';
 import { reportCommands } from './reports.js';
 import { healthCommands } from './health.js';
+import { serverCommands } from './server.js';
 
 const log = childLogger('commands');
 
@@ -38,6 +39,7 @@ export const commands: Command[] = [
   ...wordCommands,
   ...reportCommands,
   ...healthCommands,
+  ...serverCommands,
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -73,6 +75,7 @@ const PSEUDONIMI: Record<string, string> = {
   panico: 'panic',
   verifica: 'verify',
   'prepara-server': 'setup',
+  'crea-server': 'build-server',
   annunci: 'announcements',
   archivio: 'archive',
   sondaggio: 'poll',
