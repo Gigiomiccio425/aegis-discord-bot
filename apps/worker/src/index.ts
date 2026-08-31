@@ -13,6 +13,7 @@ import { integrationsProcessor } from './jobs/integrations.js';
 import { securityAuditProcessor } from './jobs/securityAudit.js';
 import { socialProcessor } from './jobs/social.js';
 import { runSelfBackup } from './jobs/selfBackup.js';
+import { preparaTrasloco } from './backup/trasloco.js';
 import { rapportoProcessor } from './jobs/rapporto.js';
 import { terminateOcr } from '@angel/scanner';
 
@@ -51,7 +52,23 @@ async function main(): Promise<void> {
     new Worker(Queues.integrations, integrationsProcessor, { connection, concurrency: 1 }),
     new Worker(Queues.securityAudit, securityAuditProcessor, { connection, concurrency: 1 }),
     new Worker(Queues.social, socialProcessor, { connection, concurrency: 2 }),
-    new Worker(Queues.selfBackup, async () => runSelfBackup(), { connection, concurrency: 1 }),
+    /*
+     * Una coda sola per due lavori vicini.
+     *
+     * Il kit di trasloco è una copia con attorno le variabili d'ambiente:
+     * mettergli una coda propria significherebbe che i due possono girare
+     * insieme, e girare insieme vuol dire leggere due volte tutte le tabelle
+     * nello stesso momento. Qui la concorrenza è uno, e si aspettano a vicenda.
+     */
+    new Worker(
+      Queues.selfBackup,
+      async (job) => {
+        const dati = (job.data ?? {}) as { trasloco?: boolean; conSegreti?: boolean };
+        if (dati.trasloco) return preparaTrasloco({ conSegreti: dati.conSegreti });
+        return runSelfBackup();
+      },
+      { connection, concurrency: 1 },
+    ),
     new Worker(Queues.rapporto, async () => rapportoProcessor(), { connection, concurrency: 1 }),
   ];
 

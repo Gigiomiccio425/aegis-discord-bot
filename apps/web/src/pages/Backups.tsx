@@ -192,6 +192,7 @@ export function Backups() {
 
 interface Copia {
   nome: string;
+  tipo: 'copia' | 'trasloco';
   quando: string | null;
   versione: string | null;
   righe: number;
@@ -199,6 +200,7 @@ interface Copia {
   archivio: { incluso: boolean; file: number; byte: number; motivo?: string };
   byte: number;
   ripristinata: boolean;
+  conSegreti: boolean;
   parti: string[];
   errori: string[];
 }
@@ -216,6 +218,14 @@ function peso(byte: number): string {
   return `${Math.round(byte / 1024)} KB`;
 }
 
+const ETICHETTE: Record<string, string> = {
+  dati: 'Dati',
+  archivio: 'Archivio',
+  manifesto: 'Manifesto',
+  istruzioni: 'Istruzioni',
+  trasloco: 'TRASLOCO.txt',
+};
+
 function CopieInstallazione() {
   const [elenco, setElenco] = useState<ElencoCopie | null>(null);
   // 403 significa «non sei il proprietario del bot»: la sezione sparisce
@@ -223,6 +233,8 @@ function CopieInstallazione() {
   const [nascosta, setNascosta] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [occupato, setOccupato] = useState(false);
+  const [avviso, setAvviso] = useState<string | null>(null);
+  const [chiedeKit, setChiedeKit] = useState(false);
 
   const carica = () => {
     api
@@ -241,6 +253,7 @@ function CopieInstallazione() {
     setErrore(null);
     try {
       await api.post('/api/copie');
+      setAvviso('Copia messa in coda. Compare qui sotto quando è pronta.');
       // L'esportazione la fa il worker e può durare minuti su un archivio
       // grande: si rilegge dopo un po', e chi ha fretta ricarica la pagina.
       setTimeout(carica, 10_000);
@@ -251,6 +264,40 @@ function CopieInstallazione() {
     }
   };
 
+  const preparaKit = async (conSegreti: boolean) => {
+    setOccupato(true);
+    setErrore(null);
+    setChiedeKit(false);
+    try {
+      await api.post('/api/copie/trasloco', { conSegreti });
+      setAvviso(
+        conSegreti
+          ? 'Kit in preparazione. Conterrà TRASLOCO.txt con i segreti in chiaro: scaricalo, usalo, poi elimina il kit da qui.'
+          : 'Kit in preparazione, senza segreti. I valori vanno riportati a mano dal compose.',
+      );
+      setTimeout(carica, 10_000);
+    } catch (err) {
+      setErrore((err as Error).message);
+    } finally {
+      setOccupato(false);
+    }
+  };
+
+  const elimina = async (copia: Copia) => {
+    const conferma = copia.conSegreti
+      ? `Elimino ${copia.nome}?\n\nContiene TRASLOCO.txt con il token del bot in chiaro: eliminarlo dopo il trasloco è la cosa giusta da fare.`
+      : `Elimino ${copia.nome}? Non è reversibile.`;
+    if (!confirm(conferma)) return;
+
+    setErrore(null);
+    try {
+      await api.delete(`/api/copie/${copia.nome}`);
+      carica();
+    } catch (err) {
+      setErrore((err as Error).message);
+    }
+  };
+
   if (nascosta) return null;
 
   return (
@@ -258,12 +305,56 @@ function CopieInstallazione() {
       title="Copia completa dell'installazione"
       subtitle="Database, configurazione, registro, archivio e trascrizioni di tutti i server. Prodotta ogni notte alle 4:15."
       action={
-        <Button variant="primary" disabled={occupato} onClick={() => void creaOra()}>
-          Crea copia ora
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" disabled={occupato} onClick={() => setChiedeKit(true)}>
+            Prepara il trasloco
+          </Button>
+          <Button variant="primary" disabled={occupato} onClick={() => void creaOra()}>
+            Crea copia ora
+          </Button>
+        </div>
       }
     >
       {errore && <ErrorBox message={errore} />}
+
+      {avviso && (
+        <div className="mb-3 rounded-lg border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm text-neutral-200">
+          {avviso}
+        </div>
+      )}
+
+      {/* La scelta è posta prima di agire e non dopo, perché scrivere il token
+          del bot su disco non è un'operazione che si annulla: una volta
+          scritto, è scritto, e l'unico rimedio è rigenerarlo. */}
+      {chiedeKit && (
+        <div className="mb-3 rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3 text-sm">
+          <p className="font-medium text-[var(--color-warning)]">
+            Il kit di trasloco contiene i valori da riportare sulla macchina nuova.
+          </p>
+          <p className="mt-2 leading-relaxed text-neutral-300">
+            Con i segreti in chiaro dentro <code>TRASLOCO.txt</code> ci sono token del bot, chiave di
+            cifratura e password del database: chi legge quel file può prendere il controllo del bot
+            e di ogni server dove si trova. È il motivo per cui il kit esiste — senza quei valori i
+            dati da soli non fanno ripartire niente, e stanno nel compose della macchina che stai per
+            spegnere.
+          </p>
+          <p className="mt-2 leading-relaxed text-neutral-400">
+            Senza segreti il kit è innocuo, e i valori li riporti a mano dal compose vecchio. Le
+            impronte nel file ti dicono se hai copiato quello giusto.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="primary" onClick={() => void preparaKit(true)}>
+              Con i segreti
+            </Button>
+            <Button variant="ghost" onClick={() => void preparaKit(false)}>
+              Senza segreti
+            </Button>
+            <Button variant="ghost" onClick={() => setChiedeKit(false)}>
+              Annulla
+            </Button>
+          </div>
+        </div>
+      )}
 
       {elenco && !elenco.montata && (
         <div className="mb-3 rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3 text-sm text-[var(--color-warning)]">
@@ -278,17 +369,24 @@ function CopieInstallazione() {
       )}
 
       {elenco && elenco.copie.length > 0 && (
-        <ul className="space-y-2 text-sm">
+        <ul className="space-y-3 text-sm">
           {elenco.copie.map((copia) => (
             <li
               key={copia.nome}
-              className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)]/50 pb-2"
+              className="border-b border-[var(--color-border)]/50 pb-3 last:border-0"
             >
               <div className="flex flex-wrap items-center gap-3">
+                {copia.tipo === 'trasloco' ? (
+                  <Badge tone="accent">kit di trasloco</Badge>
+                ) : (
+                  <Badge tone="neutral">copia</Badge>
+                )}
                 <span className="text-neutral-300">
                   {copia.quando ? formatDate(copia.quando) : copia.nome}
                 </span>
-                {copia.versione && <Badge tone="neutral">{copia.versione}</Badge>}
+                {copia.versione && (
+                  <span className="text-xs text-neutral-500">{copia.versione}</span>
+                )}
                 <span className="text-xs text-neutral-500">
                   {copia.righe.toLocaleString('it-IT')} righe in {copia.tabelle} tabelle
                 </span>
@@ -311,42 +409,37 @@ function CopieInstallazione() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                {copia.parti.includes('dati') && (
+
+              {copia.conSegreti && (
+                <p className="mt-1 text-xs text-[var(--color-warning)]">
+                  ⚠️ Contiene <code>TRASLOCO.txt</code> con i segreti in chiaro. Elimina questo kit
+                  appena il trasloco è finito.
+                </p>
+              )}
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {copia.parti.map((parte) => (
                   <a
-                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
-                    href={`/api/copie/${copia.nome}/dati`}
+                    key={parte}
+                    className={`rounded-md px-2 py-1 text-xs hover:bg-[var(--color-surface-2)] ${
+                      parte === 'trasloco'
+                        ? 'text-[var(--color-warning)]'
+                        : parte === 'dati' || parte === 'archivio'
+                          ? 'text-neutral-300'
+                          : 'text-neutral-500'
+                    }`}
+                    href={`/api/copie/${copia.nome}/${parte}`}
                   >
-                    Scarica dati
+                    {ETICHETTE[parte] ?? parte}
                   </a>
-                )}
-                {copia.parti.includes('archivio') && (
-                  <a
-                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
-                    href={`/api/copie/${copia.nome}/archivio`}
-                  >
-                    Scarica archivio
-                  </a>
-                )}
-                {/* Il manifesto serve per il ripristino tanto quanto i dati:
-                    senza, chi rilegge la copia non sa quali campi sono date e
-                    quali BigInt, e il ripristino si ferma prima di cominciare. */}
-                {copia.parti.includes('manifesto') && (
-                  <a
-                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
-                    href={`/api/copie/${copia.nome}/manifesto`}
-                  >
-                    Manifesto
-                  </a>
-                )}
-                {copia.parti.includes('istruzioni') && (
-                  <a
-                    className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-[var(--color-surface-2)]"
-                    href={`/api/copie/${copia.nome}/istruzioni`}
-                  >
-                    Istruzioni
-                  </a>
-                )}
+                ))}
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-xs text-neutral-600 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
+                  onClick={() => void elimina(copia)}
+                >
+                  Elimina
+                </button>
               </div>
             </li>
           ))}
@@ -354,17 +447,12 @@ function CopieInstallazione() {
       )}
 
       <p className="mt-4 text-xs leading-relaxed text-neutral-500">
-        Per spostare ANGEL su un'altra macchina: scarica «dati», «archivio» e «manifesto», rimettili
-        in una cartella <code className="rounded bg-[var(--color-surface-2)] px-1">angel-…</code>{' '}
-        dentro BACKUP_DIR sulla macchina nuova — con i nomi originali{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">dati.tar.gz</code>,{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">archivio.tar.gz</code> e{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">MANIFESTO.json</code>, togliendo
-        il prefisso che il browser aggiunge — poi aggiungi{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">RESTORE_FROM</code> al compose e
-        riavvia. La <code className="rounded bg-[var(--color-surface-2)] px-1">ENCRYPTION_KEY</code>{' '}
-        deve essere la stessa, altrimenti i token delle integrazioni restano illeggibili — e il
-        ripristino si ferma per dirtelo.
+        Per spostare ANGEL su un'altra macchina premi «Prepara il trasloco»: produce una cartella con
+        i dati <em>e</em> un <code>TRASLOCO.txt</code> che elenca i valori da riportare, le impronte
+        SHA-256 dei file, i server e i conteggi da ritrovare dopo, e la procedura passo per passo.
+        Copiala in <code>BACKUP_DIR</code> sulla macchina nuova, metti{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">RESTORE_FROM</code> nel compose e
+        riavvia.
       </p>
     </Card>
   );

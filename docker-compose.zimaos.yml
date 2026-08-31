@@ -134,9 +134,16 @@ services:
 
       # ── TRASLOCO SU UN'ALTRA MACCHINA ───────────────────────
       #
-      # Per riportare qui i dati di un'altra installazione: copia la cartella
-      # `angel-…` dentro /DATA/angel-backup, togli il cancelletto alla riga
-      # qui sotto mettendo il nome giusto, e riavvia l'app.
+      # Sulla macchina VECCHIA: pannello → Backup → «Prepara il trasloco».
+      # Produce una cartella `trasloco-…` che contiene i dati e un TRASLOCO.txt
+      # con dentro i valori da riportare qui, le impronte dei file da
+      # verificare, i conteggi da ritrovare dopo e la procedura passo per
+      # passo. ⚠️ Quel file contiene i segreti in chiaro: cancellalo a
+      # trasloco finito, dal pannello o a mano.
+      #
+      # Su QUESTA macchina: copia la cartella dentro /DATA/angel-backup, togli
+      # il cancelletto alla riga qui sotto mettendo il nome giusto, e riavvia
+      # l'app. Va bene anche una cartella `angel-…` delle copie notturne.
       #
       # Il ripristino avviene una volta sola, prima che il bot si colleghi, e
       # lascia un file RIPRISTINATO dentro la cartella perché non si ripeta.
@@ -149,7 +156,7 @@ services:
       #
       # Finito, rimetti il cancelletto.
       #
-      # RESTORE_FROM: /backup/angel-2026-08-31T04-15-00
+      # RESTORE_FROM: /backup/trasloco-2026-08-31T22-40-00
       # RESTORE_OVERWRITE: '1'
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage

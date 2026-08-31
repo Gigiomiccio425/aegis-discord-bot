@@ -92,7 +92,7 @@ export function radiceBackup(): string {
  */
 export async function runSelfBackup(): Promise<BackupResult> {
   const radice = radiceBackup();
-  const stampa = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const stampa = stampaOra();
   const cartella = path.join(radice, `${PREFISSO}${stampa}`);
   // Il lavoro sporco avviene in una cartella nascosta: se il processo muore a
   // metà, quello che resta non ha il nome di una copia valida e la potatura lo
@@ -100,62 +100,12 @@ export async function runSelfBackup(): Promise<BackupResult> {
   // sorgente di un ripristino.
   const lavoro = path.join(radice, `.in-corso-${stampa}`);
 
-  const risultato: BackupResult = {
-    cartella,
-    tabelle: 0,
-    righe: 0,
-    byte: 0,
-    archivio: { file: 0, byte: 0, incluso: false },
-    errori: [],
-  };
-
   await fs.mkdir(radice, { recursive: true });
   await controllaSpazio(radice);
-  await fs.mkdir(path.join(lavoro, 'tabelle'), { recursive: true });
 
+  let risultato: BackupResult;
   try {
-    const { tipi, righePerTabella } = await esportaTabelle(lavoro, risultato);
-
-    await tar.create(
-      { gzip: true, file: path.join(lavoro, NOMI.dati), cwd: lavoro, portable: true },
-      ['tabelle'],
-    );
-
-    const archivio = await esportaArchivio(path.join(lavoro, NOMI.archivio));
-    risultato.archivio = archivio;
-
-    const manifesto: Manifesto = {
-      prodottoDa: 'ANGEL',
-      versione: runningVersion(),
-      quando: new Date().toISOString(),
-      righe: righePerTabella,
-      totaleRighe: risultato.righe,
-      errori: risultato.errori,
-      tipi,
-      archivio: {
-        incluso: archivio.incluso,
-        file: archivio.file,
-        byte: archivio.byte,
-        ...(archivio.motivo ? { motivo: archivio.motivo } : {}),
-      },
-      improntaChiave: improntaChiave(),
-      schema: { tabelle: TABELLE.length },
-    };
-
-    await fs.writeFile(
-      path.join(lavoro, NOMI.manifesto),
-      JSON.stringify(manifesto, null, 2),
-      'utf8',
-    );
-    await fs.writeFile(
-      path.join(lavoro, NOMI.istruzioni),
-      istruzioni(manifesto, path.basename(cartella)),
-      'utf8',
-    );
-
-    // I file NDJSON sono già dentro `dati.tar.gz`: tenerli anche fuori
-    // raddoppierebbe lo spazio occupato da ogni copia.
-    await fs.rm(path.join(lavoro, 'tabelle'), { recursive: true, force: true });
+    ({ risultato } = await scriviContenuto(lavoro, path.basename(cartella)));
 
     // Rinomina finale: da questo istante la copia esiste ed è completa. È
     // un'operazione atomica sullo stesso filesystem, quindi non esiste il
@@ -180,6 +130,82 @@ export async function runSelfBackup(): Promise<BackupResult> {
     'copia di sicurezza completata',
   );
   return risultato;
+}
+
+/** Stampa temporale usata nei nomi delle cartelle: ordinabile alfabeticamente. */
+export function stampaOra(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+/**
+ * Riempie una cartella di lavoro con il contenuto di una copia.
+ *
+ * Separata da `runSelfBackup` perché la usa anche il kit di trasloco, che
+ * attorno allo stesso contenuto aggiunge le variabili d'ambiente. Ci sarebbe
+ * stata la scorciatoia di far copiare al kit l'ultima cartella notturna: si è
+ * evitata perché quell'ultima cartella può avere venti ore, e venti ore di
+ * registro perse durante un trasloco sono precisamente i dati di cui poi si
+ * sente la mancanza.
+ */
+export async function scriviContenuto(
+  lavoro: string,
+  nomeFinale: string,
+): Promise<{ manifesto: Manifesto; risultato: BackupResult }> {
+  const risultato: BackupResult = {
+    cartella: nomeFinale,
+    tabelle: 0,
+    righe: 0,
+    byte: 0,
+    archivio: { file: 0, byte: 0, incluso: false },
+    errori: [],
+  };
+
+  await fs.mkdir(path.join(lavoro, 'tabelle'), { recursive: true });
+
+  const { tipi, righePerTabella } = await esportaTabelle(lavoro, risultato);
+
+  await tar.create(
+    { gzip: true, file: path.join(lavoro, NOMI.dati), cwd: lavoro, portable: true },
+    ['tabelle'],
+  );
+
+  const archivio = await esportaArchivio(path.join(lavoro, NOMI.archivio));
+  risultato.archivio = archivio;
+
+  const manifesto: Manifesto = {
+    prodottoDa: 'ANGEL',
+    versione: runningVersion(),
+    quando: new Date().toISOString(),
+    righe: righePerTabella,
+    totaleRighe: risultato.righe,
+    errori: risultato.errori,
+    tipi,
+    archivio: {
+      incluso: archivio.incluso,
+      file: archivio.file,
+      byte: archivio.byte,
+      ...(archivio.motivo ? { motivo: archivio.motivo } : {}),
+    },
+    improntaChiave: improntaChiave(),
+    schema: { tabelle: TABELLE.length },
+  };
+
+  await fs.writeFile(
+    path.join(lavoro, NOMI.manifesto),
+    JSON.stringify(manifesto, null, 2),
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(lavoro, NOMI.istruzioni),
+    istruzioni(manifesto, nomeFinale),
+    'utf8',
+  );
+
+  // I file NDJSON sono già dentro `dati.tar.gz`: tenerli anche fuori
+  // raddoppierebbe lo spazio occupato da ogni copia.
+  await fs.rm(path.join(lavoro, 'tabelle'), { recursive: true, force: true });
+
+  return { manifesto, risultato };
 }
 
 /* ── Database ─────────────────────────────────────────────────────────── */
@@ -314,7 +340,7 @@ async function esportaArchivio(
 }
 
 /** Conta file e byte di un albero di cartelle. */
-async function misura(radice: string): Promise<{ file: number; byte: number }> {
+export async function misura(radice: string): Promise<{ file: number; byte: number }> {
   let file = 0;
   let byte = 0;
 
@@ -338,14 +364,14 @@ async function misura(radice: string): Promise<{ file: number; byte: number }> {
   return { file, byte };
 }
 
-async function pesoCartella(cartella: string): Promise<number> {
+export async function pesoCartella(cartella: string): Promise<number> {
   const { byte } = await misura(cartella);
   return byte;
 }
 
 /* ── Spazio e potatura ────────────────────────────────────────────────── */
 
-async function controllaSpazio(radice: string): Promise<void> {
+export async function controllaSpazio(radice: string): Promise<void> {
   try {
     const stato = await statfs(radice);
     const liberiMb = (stato.bsize * stato.bavail) / 1024 / 1024;

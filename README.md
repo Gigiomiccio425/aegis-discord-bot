@@ -1079,21 +1079,51 @@ sudo sh docker/trasloco.sh importa ./angel-trasloco-20260831-041500
 
 Chiede conferma due volte, ferma il bot, sostituisce il database, rimette i file, riaccende.
 
-### Strada B — dal pannello, senza terminale
+### Strada B — il kit di trasloco, dal pannello
 
-1. Nel pannello della macchina vecchia, **Backup → Copia completa**: `Scarica dati`,
-   `Scarica archivio` e `Manifesto`.
-2. Sulla macchina nuova, installa ANGEL e fallo partire una volta.
-3. Ricrea la cartella `/DATA/angel-backup/angel-<data>/` e metti dentro i tre file **togliendo dal
-   nome il prefisso** che il browser ha aggiunto — devono chiamarsi esattamente `dati.tar.gz`,
-   `archivio.tar.gz` e `MANIFESTO.json`, perché è così che il ripristino li cerca.
-4. Nel compose, nel blocco `environment:` di `angel`:
+Nel pannello, **Backup → Copia completa → «Prepara il trasloco»**. Produce una cartella
+`trasloco-<data>` dentro `BACKUP_DIR` con dentro i dati **e** un `TRASLOCO.txt` che è il pezzo che
+mancava: i dati da soli non fanno ripartire nulla, servono anche i valori — e quei valori stanno nel
+compose della macchina che stai per spegnere.
+
+`TRASLOCO.txt` contiene, in ordine:
+
+1. **cosa c'è nella cartella**, con le impronte SHA-256 dei due archivi — un file arrivato troncato
+   si estrae comunque per buona parte, e il ripristino sembra riuscito con qualche tabella in meno;
+2. **cosa devi ritrovare dopo**: l'elenco dei server con id, nome e numero di membri, e le righe per
+   tabella. È la lista di controllo — se il pannello nuovo mostra numeri diversi, il trasloco è
+   andato a metà;
+3. **i valori da riportare**, raggruppati per cosa succede se li sbagli: quelli che devono essere
+   identici, quelli il cui errore si vede subito, quelli che cambiano con la macchina;
+4. **il blocco YAML pronto da incollare** sotto `environment:`, `POSTGRES_PASSWORD` compresa —
+   che è lo stesso valore dentro `DATABASE_URL`, scritto in due punti che devono coincidere;
+5. **la procedura passo per passo**, 6. **le verifiche finali**, 7. **cosa fare se si ferma**.
+
+Il file nasce con permessi `600` e **contiene i segreti in chiaro**: token del bot, chiave di
+cifratura, password del database. È deliberato — un kit che elenca solo i nomi costringe ad andare a
+cercare i valori, cioè esattamente il passaggio che fallisce quando la macchina vecchia non risponde
+più. Se preferisci, il pannello offre anche **«Senza segreti»**: al posto dei valori restano le
+impronte, che bastano a verificare di aver riportato quello giusto ma non a ricostruirlo.
+
+Il kit non è programmato e non gira di notte: scrivere segreti su disco è una decisione, e le
+decisioni si prendono una volta. Ne vengono tenuti gli ultimi due, e il pannello ha un pulsante
+**Elimina** — usalo appena il trasloco è finito.
+
+Poi:
+
+1. Copia la cartella `trasloco-<data>` intera in `/DATA/angel-backup` sulla macchina nuova.
+2. Installa ANGEL con i valori del punto 3, cambiando `PUBLIC_URL`, e fallo partire una volta.
+3. Nel compose, nel blocco `environment:` di `angel`:
 
    ```yaml
-   RESTORE_FROM: /backup/angel-2026-08-31T04-15-00
+   RESTORE_FROM: /backup/trasloco-2026-08-31T22-40-00
    ```
 
-5. Riavvia l'app, poi togli quella riga.
+4. Riavvia l'app, poi togli quella riga ed elimina il kit.
+
+Se non hai modo di copiare la cartella, ogni pezzo si scarica singolarmente dallo stesso elenco —
+in quel caso rimettili in una cartella dal nome uguale, con i nomi originali (`dati.tar.gz`,
+`archivio.tar.gz`, `MANIFESTO.json`), togliendo il prefisso che il browser aggiunge.
 
 Il ripristino avviene **prima** che il bot si colleghi — un bot già connesso mentre il database gli
 cambia sotto reagirebbe a eventi con metà dei dati vecchi e metà nuovi — e lascia un file
@@ -1104,7 +1134,7 @@ viene rifiutato con «permission denied»: un ripristino che si può fare solo c
 macchina, non si può fare. Dove `exec` funziona c'è anche il comando diretto:
 
 ```bash
-node apps/worker/dist/ripristina.js /backup/angel-2026-08-31T04-15-00
+node apps/worker/dist/ripristina.js /backup/trasloco-2026-08-31T22-40-00
 ```
 
 ### Le tre cose che vanno storte
