@@ -1,6 +1,6 @@
 {
   "name": "angel",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "private": true,
   "description": "ANGEL — bot Discord di sicurezza avanzata con pannello web di controllo",
   "type": "module",
@@ -25,6 +25,7 @@
     "dev:web": "npm run dev -w @angel/web",
     "dev:worker": "npm run dev -w @angel/worker",
     "commands:deploy": "npm run commands:deploy -w @angel/bot",
+    "ripristina": "node apps/worker/dist/ripristina.js",
     "lint": "eslint ."
   },
   "devDependencies": {

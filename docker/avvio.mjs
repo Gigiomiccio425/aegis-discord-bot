@@ -263,6 +263,71 @@ async function registraVersione() {
   return false;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   RIPRISTINO DA UNA COPIA
+
+   Con `RESTORE_FROM` impostata, prima di far partire qualunque cosa si
+   rilegge la copia indicata. È il modo per traslocare l'installazione su
+   un'altra macchina: si copia la cartella, si aggiunge una riga al compose,
+   si riavvia.
+
+   Passa da qui e non da `docker exec` perché su ZimaOS l'exec dentro i
+   container viene rifiutato con «permission denied»: un ripristino che si
+   può fare solo con exec, su quella macchina, non si può fare.
+
+   Avviene **prima** dei servizi di proposito. Un bot già connesso mentre il
+   database gli cambia sotto reagirebbe a eventi con metà dei dati vecchi e
+   metà nuovi, e sarebbe impossibile dire quale delle due metà ha vinto.
+
+   Una volta sola: il ripristino lascia un file `RIPRISTINATO` dentro la
+   cartella della copia, e alla riaccensione successiva lo trova e non
+   ripete. Senza, ogni riavvio del container rifarebbe il ripristino — o,
+   peggio, lo rifarebbe con `RESTORE_OVERWRITE` attivo, cancellando ogni
+   giorno il lavoro del giorno prima.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function ripristinaSeChiesto() {
+  const cartella = process.env.RESTORE_FROM;
+  if (!cartella) return true;
+
+  const segno = path.join(cartella, 'RIPRISTINATO');
+  if (existsSync(segno)) {
+    log(`copia ${cartella} già ripristinata: proseguo senza toccare il database`);
+    log('puoi togliere RESTORE_FROM dal compose');
+    return true;
+  }
+
+  if (!existsSync(path.join(cartella, 'MANIFESTO.json'))) {
+    console.error(
+      `[avvio] RESTORE_FROM punta a ${cartella}, dove non c'è nessun MANIFESTO.json.\n` +
+        "[avvio] Deve indicare una cartella `angel-…`, non quella che le contiene tutte.\n" +
+        '[avvio] Il percorso è quello visto da dentro il container: con il compose\n' +
+        '[avvio] predefinito, /backup/angel-…',
+    );
+    return false;
+  }
+
+  log(`ripristino da ${cartella}`);
+  const codice = await new Promise((risolvi) => {
+    const processo = spawn('node', ['apps/worker/dist/ripristina.js', cartella], {
+      stdio: 'inherit',
+    });
+    processo.on('exit', (codice) => risolvi(codice ?? 1));
+    processo.on('error', () => risolvi(1));
+  });
+
+  if (codice !== 0) {
+    console.error(
+      '[avvio] Il ripristino è fallito: non avvio nulla.\n' +
+        '[avvio] Un bot che parte credendo di avere i dati, e non li ha, fa danni\n' +
+        '[avvio] peggiori di un bot fermo. Il motivo è nelle righe qui sopra.',
+    );
+    return false;
+  }
+
+  log('ripristino riuscito — togli RESTORE_FROM dal compose');
+  return true;
+}
+
 log(`ANGEL ${process.env.ANGEL_VERSION ?? 'sviluppo'} — avvio`);
 
 if (!verificaFile()) process.exit(1);
@@ -299,6 +364,10 @@ if (aggiornato) {
   // gira sull'host prima che l'immagine cambi.
   log('richiedo una copia di sicurezza dei dati');
   process.env.BACKUP_ON_START = '1';
+}
+
+if (databasePronto && !(await ripristinaSeChiesto())) {
+  process.exit(1);
 }
 
 const daAvviare = databasePronto ? SERVIZI : SERVIZI.filter((servizio) => servizio.nome === 'api');

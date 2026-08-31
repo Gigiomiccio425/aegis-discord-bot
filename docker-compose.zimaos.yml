@@ -67,7 +67,7 @@ services:
   # ─────────────────────────────────────────────────────────
   angel:
     # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.23.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.24.0
     # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
     # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
     pull_policy: always
@@ -110,12 +110,47 @@ services:
       TWITCH_CLIENT_SECRET: ''
       TWITCH_EVENTSUB_SECRET: ''
 
-      # Dove finiscono le copie dei propri dati. Sta fuori dai volumi
-      # dell'applicazione di proposito: disinstallando l'app da ZimaOS i volumi
-      # possono sparire, e una copia che sparisce insieme a cio che protegge
-      # non protegge nulla.
+      # ── COPIE DI SICUREZZA ──────────────────────────────────
+      #
+      # Ogni notte alle 4:15 ANGEL esporta se stesso in una cartella dentro
+      # BACKUP_DIR: database, configurazione, registro, archivio, trascrizioni
+      # dei ticket. Dal pannello, in «Backup», si scaricano e si può chiederne
+      # una fuori orario.
+      #
+      # BACKUP_DIR sta fuori dai volumi dell'applicazione di proposito:
+      # disinstallando l'app da ZimaOS i volumi possono sparire, e una copia
+      # che sparisce insieme a cio che protegge non protegge nulla.
       BACKUP_DIR: /backup
+      # Quante copie tenere. Le più vecchie vengono rimosse.
       BACKUP_KEEP: '14'
+      # Include gli allegati archiviati e le trascrizioni dei ticket. Metti
+      # 'false' solo se occupano troppo: senza, il database ripristinato è
+      # pieno di riferimenti a file che non esistono più.
+      BACKUP_INCLUDE_STORAGE: 'true'
+      # Oltre questa dimensione l'archivio dei file viene escluso invece che
+      # troncato, e il motivo finisce nel manifesto. Un archivio a metà è la
+      # cosa che sembra un backup e non lo è.
+      BACKUP_STORAGE_MAX_MB: '4096'
+
+      # ── TRASLOCO SU UN'ALTRA MACCHINA ───────────────────────
+      #
+      # Per riportare qui i dati di un'altra installazione: copia la cartella
+      # `angel-…` dentro /DATA/angel-backup, togli il cancelletto alla riga
+      # qui sotto mettendo il nome giusto, e riavvia l'app.
+      #
+      # Il ripristino avviene una volta sola, prima che il bot si colleghi, e
+      # lascia un file RIPRISTINATO dentro la cartella perché non si ripeta.
+      # Se il database contiene già qualcosa il ripristino si ferma: per
+      # sostituirlo davvero serve anche RESTORE_OVERWRITE.
+      #
+      # ⚠️ ENCRYPTION_KEY deve essere la stessa della macchina di provenienza,
+      #    altrimenti i token delle integrazioni restano illeggibili — e il
+      #    ripristino si ferma per dirtelo.
+      #
+      # Finito, rimetti il cancelletto.
+      #
+      # RESTORE_FROM: /backup/angel-2026-08-31T04-15-00
+      # RESTORE_OVERWRITE: '1'
     volumes:
       - /DATA/AppData/aegis/storage:/data/storage
       # Cartella sull'host, non un volume Docker: sopravvive alla

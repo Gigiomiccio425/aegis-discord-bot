@@ -125,6 +125,8 @@ export function Backups() {
         )}
       </Card>
 
+      <CopieInstallazione />
+
       {diff && (
         <Card
           title="Anteprima del ripristino"
@@ -173,5 +175,197 @@ export function Backups() {
         </Card>
       )}
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COPIE DELL'INTERA INSTALLAZIONE
+
+   Un'altra cosa rispetto agli snapshot qui sopra, e vale la pena dirlo nel
+   pannello e non solo nel codice: lo snapshot salva la *forma* di un server
+   Discord — ruoli, canali, permessi. Questa salva ANGEL: database,
+   configurazione, registro, archivio, trascrizioni, per tutti i server.
+
+   Il pulsante che conta è «Scarica». Una copia che sta solo sul server di cui
+   è la copia protegge da un volume cancellato per sbaglio e da nient'altro.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+interface Copia {
+  nome: string;
+  quando: string | null;
+  versione: string | null;
+  righe: number;
+  tabelle: number;
+  archivio: { incluso: boolean; file: number; byte: number; motivo?: string };
+  byte: number;
+  ripristinata: boolean;
+  parti: string[];
+  errori: string[];
+}
+
+interface ElencoCopie {
+  cartella: string;
+  montata: boolean;
+  copie: Copia[];
+  avviso?: string;
+}
+
+function peso(byte: number): string {
+  if (byte >= 1024 * 1024 * 1024) return `${(byte / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (byte >= 1024 * 1024) return `${Math.round(byte / 1024 / 1024)} MB`;
+  return `${Math.round(byte / 1024)} KB`;
+}
+
+function CopieInstallazione() {
+  const [elenco, setElenco] = useState<ElencoCopie | null>(null);
+  // 403 significa «non sei il proprietario del bot»: la sezione sparisce
+  // invece di mostrare un errore. Non è un guasto, è che non la riguarda.
+  const [nascosta, setNascosta] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+  const [occupato, setOccupato] = useState(false);
+
+  const carica = () => {
+    api
+      .get<ElencoCopie>('/api/copie')
+      .then(setElenco)
+      .catch((err: Error & { status?: number }) => {
+        if (err.status === 403) setNascosta(true);
+        else setErrore(err.message);
+      });
+  };
+
+  useEffect(carica, []);
+
+  const creaOra = async () => {
+    setOccupato(true);
+    setErrore(null);
+    try {
+      await api.post('/api/copie');
+      // L'esportazione la fa il worker e può durare minuti su un archivio
+      // grande: si rilegge dopo un po', e chi ha fretta ricarica la pagina.
+      setTimeout(carica, 10_000);
+    } catch (err) {
+      setErrore((err as Error).message);
+    } finally {
+      setOccupato(false);
+    }
+  };
+
+  if (nascosta) return null;
+
+  return (
+    <Card
+      title="Copia completa dell'installazione"
+      subtitle="Database, configurazione, registro, archivio e trascrizioni di tutti i server. Prodotta ogni notte alle 4:15."
+      action={
+        <Button variant="primary" disabled={occupato} onClick={() => void creaOra()}>
+          Crea copia ora
+        </Button>
+      }
+    >
+      {errore && <ErrorBox message={errore} />}
+
+      {elenco && !elenco.montata && (
+        <div className="mb-3 rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3 text-sm text-[var(--color-warning)]">
+          {elenco.avviso}
+        </div>
+      )}
+
+      {elenco && elenco.montata && elenco.copie.length === 0 && (
+        <Empty>
+          Nessuna copia ancora. La prima arriva stanotte, oppure premi «Crea copia ora».
+        </Empty>
+      )}
+
+      {elenco && elenco.copie.length > 0 && (
+        <ul className="space-y-2 text-sm">
+          {elenco.copie.map((copia) => (
+            <li
+              key={copia.nome}
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)]/50 pb-2"
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-neutral-300">
+                  {copia.quando ? formatDate(copia.quando) : copia.nome}
+                </span>
+                {copia.versione && <Badge tone="neutral">{copia.versione}</Badge>}
+                <span className="text-xs text-neutral-500">
+                  {copia.righe.toLocaleString('it-IT')} righe in {copia.tabelle} tabelle
+                </span>
+                <span className="text-xs text-neutral-500">{peso(copia.byte)}</span>
+                {copia.archivio.incluso ? (
+                  <span className="text-xs text-neutral-500">
+                    {copia.archivio.file} file archiviati
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--color-warning)]">
+                    senza archivio: {copia.archivio.motivo ?? 'non incluso'}
+                  </span>
+                )}
+                {copia.ripristinata && (
+                  <span className="text-xs text-[var(--color-success)]">già ripristinata</span>
+                )}
+                {copia.errori.length > 0 && (
+                  <span className="text-xs text-[var(--color-danger)]">
+                    {copia.errori.join(', ')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {copia.parti.includes('dati') && (
+                  <a
+                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
+                    href={`/api/copie/${copia.nome}/dati`}
+                  >
+                    Scarica dati
+                  </a>
+                )}
+                {copia.parti.includes('archivio') && (
+                  <a
+                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
+                    href={`/api/copie/${copia.nome}/archivio`}
+                  >
+                    Scarica archivio
+                  </a>
+                )}
+                {/* Il manifesto serve per il ripristino tanto quanto i dati:
+                    senza, chi rilegge la copia non sa quali campi sono date e
+                    quali BigInt, e il ripristino si ferma prima di cominciare. */}
+                {copia.parti.includes('manifesto') && (
+                  <a
+                    className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-[var(--color-surface-2)]"
+                    href={`/api/copie/${copia.nome}/manifesto`}
+                  >
+                    Manifesto
+                  </a>
+                )}
+                {copia.parti.includes('istruzioni') && (
+                  <a
+                    className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-[var(--color-surface-2)]"
+                    href={`/api/copie/${copia.nome}/istruzioni`}
+                  >
+                    Istruzioni
+                  </a>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-4 text-xs leading-relaxed text-neutral-500">
+        Per spostare ANGEL su un'altra macchina: scarica «dati», «archivio» e «manifesto», rimettili
+        in una cartella <code className="rounded bg-[var(--color-surface-2)] px-1">angel-…</code>{' '}
+        dentro BACKUP_DIR sulla macchina nuova — con i nomi originali{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">dati.tar.gz</code>,{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">archivio.tar.gz</code> e{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">MANIFESTO.json</code>, togliendo
+        il prefisso che il browser aggiunge — poi aggiungi{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">RESTORE_FROM</code> al compose e
+        riavvia. La <code className="rounded bg-[var(--color-surface-2)] px-1">ENCRYPTION_KEY</code>{' '}
+        deve essere la stessa, altrimenti i token delle integrazioni restano illeggibili — e il
+        ripristino si ferma per dirtelo.
+      </p>
+    </Card>
   );
 }

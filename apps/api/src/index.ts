@@ -17,6 +17,7 @@ import { logRoutes } from './routes/logs.js';
 import { moderationRoutes } from './routes/moderation.js';
 import { builderRoutes } from './routes/builder.js';
 import { backupRoutes } from './routes/backups.js';
+import { copieRoutes } from './routes/copie.js';
 import { threatRoutes } from './routes/threats.js';
 import { archiveRoutes } from './routes/archive.js';
 import { ticketRoutes } from './routes/tickets.js';
@@ -248,6 +249,7 @@ async function main(): Promise<void> {
   await app.register(moderationRoutes);
   await app.register(builderRoutes);
   await app.register(backupRoutes);
+  await app.register(copieRoutes);
   await app.register(threatRoutes);
   await app.register(archiveRoutes);
   await app.register(ticketRoutes);
