@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LivelloSicurezza, TwitchChannelConfig } from '@angel/shared';
-import { api, type Canale as CanaleDati, type Evento } from '../api.js';
+import {
+  api,
+  type Accesso,
+  type Canale as CanaleDati,
+  type Evento,
+  type Riassunto,
+} from '../api.js';
 import {
   Bottone,
   Caricamento,
@@ -18,7 +24,7 @@ import {
 /* ═══════════════════════════════════════════════════════════════════════
    LA PAGINA DEL CANALE
 
-   Una pagina sola con tre schede, e l'ordine non è casuale: si apre su
+   Una pagina sola con quattro schede, e l'ordine non è casuale: si apre su
    **Sicurezza**, perché è il motivo per cui il bot è stato installato, e
    perché la prima cosa che deve succedere è scegliere un livello. Tutto il
    resto — comandi, messaggi a tempo — è ciò che si configura la seconda
@@ -31,7 +37,7 @@ import {
    silenzioso di cui non si è certi.
    ═══════════════════════════════════════════════════════════════════════ */
 
-type Scheda = 'sicurezza' | 'chat' | 'registro';
+type Scheda = 'sicurezza' | 'chat' | 'registro' | 'collegamenti';
 
 export function Canale({
   canaleId,
@@ -120,6 +126,7 @@ export function Canale({
             ['sicurezza', 'Sicurezza'],
             ['chat', 'Chat'],
             ['registro', 'Registro'],
+            ['collegamenti', 'Collegamenti'],
           ] as const
         ).map(([chiave, nome]) => (
           <button
@@ -150,6 +157,7 @@ export function Canale({
         <Chat config={bozza} soloLettura={soloLettura} onModifica={modifica} />
       )}
       {scheda === 'registro' && <Registro canaleId={canaleId} />}
+      {scheda === 'collegamenti' && <Collegamenti dati={dati} onRicarica={carica} />}
 
       {modificato && !soloLettura && (
         <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-[var(--color-accento)]/40 bg-[var(--color-superficie)] px-5 py-4 shadow-lg shadow-black/40">
@@ -745,5 +753,193 @@ function Registro({ canaleId }: { canaleId: string }) {
         </ul>
       )}
     </Riquadro>
+  );
+}
+
+/* ── Collegamenti ─────────────────────────────────────────────────────── */
+
+/**
+ * Discord, chi può entrare qui, e cosa è successo in una settimana.
+ *
+ * Tre cose che non stanno nella configurazione del canale: riguardano il
+ * *contorno* — dove arrivano gli avvisi, chi ha le chiavi di questa pagina —
+ * e mescolarle alle soglie avrebbe reso più lunga la scheda che si apre per
+ * prima.
+ */
+function Collegamenti({ dati, onRicarica }: { dati: CanaleDati; onRicarica: () => void }) {
+  const [guildId, setGuildId] = useState(dati.guildId ?? '');
+  const [accessi, setAccessi] = useState<Accesso[] | null>(null);
+  const [riassunto, setRiassunto] = useState<Riassunto | null>(null);
+  const [nuovo, setNuovo] = useState('');
+  const [errore, setErrore] = useState<string | null>(null);
+  const [nota, setNota] = useState<string | null>(null);
+
+  const proprietario = dati.ruolo === 'PROPRIETARIO';
+
+  const caricaAccessi = useCallback(() => {
+    api
+      .get<Accesso[]>(`/api/canali/${dati.id}/accessi`)
+      .then(setAccessi)
+      .catch(() => setAccessi([]));
+  }, [dati.id]);
+
+  useEffect(() => {
+    caricaAccessi();
+    api
+      .get<Riassunto>(`/api/canali/${dati.id}/riassunto`)
+      .then(setRiassunto)
+      .catch(() => setRiassunto(null));
+  }, [dati.id, caricaAccessi]);
+
+  const salvaDiscord = async (): Promise<void> => {
+    setErrore(null);
+    setNota(null);
+    try {
+      await api.put(`/api/canali/${dati.id}/discord`, { guildId: guildId.trim() });
+      setNota(
+        guildId.trim()
+          ? 'Collegato. Su Discord, /twitch registro sceglie in quale canale far arrivare gli avvisi.'
+          : 'Scollegato: gli avvisi non arrivano più su Discord.',
+      );
+      onRicarica();
+    } catch (err) {
+      setErrore((err as Error).message);
+    }
+  };
+
+  const aggiungi = async (): Promise<void> => {
+    setErrore(null);
+    try {
+      await api.post(`/api/canali/${dati.id}/accessi`, { login: nuovo, ruolo: 'MODERATORE' });
+      setNuovo('');
+      caricaAccessi();
+    } catch (err) {
+      setErrore((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {errore && <Errore messaggio={errore} />}
+      {nota && (
+        <div className="rounded-lg border border-[var(--color-ok)]/40 bg-[var(--color-ok)]/10 px-4 py-3 text-sm text-[var(--color-ok)]">
+          {nota}
+        </div>
+      )}
+
+      <Riquadro
+        titolo="Discord"
+        sottotitolo="Ogni sanzione diventa un messaggio in un canale del tuo server, colorato per gravità."
+      >
+        <Testo
+          valore={guildId}
+          titolo="Identificativo del server"
+          descrizione="Su Discord scrivi /twitch collega: te lo mostra pronto da copiare. Lascialo vuoto per scollegare."
+          segnaposto="123456789012345678"
+          onCambia={setGuildId}
+        />
+        <Bottone
+          variante="principale"
+          disabled={!proprietario || guildId === (dati.guildId ?? '')}
+          onClick={() => void salvaDiscord()}
+        >
+          Salva
+        </Bottone>
+        {!proprietario && (
+          <p className="mt-3 text-xs text-[var(--color-fioco)]">
+            Solo chi possiede il canale può cambiarlo.
+          </p>
+        )}
+      </Riquadro>
+
+      <Riquadro
+        titolo="Chi può aprire questo pannello"
+        sottotitolo="I tuoi moderatori, con il loro nome Twitch. Vedono tutto e possono cambiare le impostazioni, ma non possono aggiungere altre persone."
+      >
+        {accessi === null ? (
+          <Caricamento />
+        ) : accessi.length === 0 ? (
+          <Vuoto>Solo tu.</Vuoto>
+        ) : (
+          <ul className="mb-4 divide-y divide-[var(--color-bordo)]/60">
+            {accessi.map((accesso) => (
+              <li key={accesso.id} className="flex items-center justify-between py-2">
+                <span className="text-sm">
+                  {accesso.login}{' '}
+                  <span className="text-xs text-[var(--color-fioco)]">
+                    {accesso.role.toLowerCase()}
+                  </span>
+                </span>
+                {proprietario && (
+                  <Bottone
+                    variante="pericolo"
+                    onClick={() =>
+                      void api
+                        .delete(`/api/canali/${dati.id}/accessi/${accesso.twitchUserId}`)
+                        .then(caricaAccessi)
+                        .catch((err: Error) => setErrore(err.message))
+                    }
+                  >
+                    Togli
+                  </Bottone>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {proprietario && (
+          <div className="flex flex-wrap items-end gap-3">
+            <span className="min-w-0 flex-1">
+              <Testo
+                valore={nuovo}
+                titolo="Aggiungi qualcuno"
+                segnaposto="nomeutente"
+                onCambia={setNuovo}
+              />
+            </span>
+            <Bottone variante="principale" disabled={!nuovo.trim()} onClick={() => void aggiungi()}>
+              Aggiungi
+            </Bottone>
+          </div>
+        )}
+      </Riquadro>
+
+      <Riquadro
+        titolo="Ultimi sette giorni"
+        sottotitolo="Quanto ha lavorato ciascun modulo. Se un modulo non compare, non ha mai avuto niente da fare — che di solito è una buona notizia."
+      >
+        {!riassunto ? (
+          <Caricamento />
+        ) : riassunto.moduli.length === 0 ? (
+          <Vuoto>Niente da segnalare in questa settimana.</Vuoto>
+        ) : (
+          <ul className="space-y-2">
+            {[...riassunto.moduli]
+              .sort((a, b) => b.quanti - a.quanti)
+              .map((voce) => {
+                const massimo = Math.max(...riassunto.moduli.map((m) => m.quanti));
+                return (
+                  <li key={voce.modulo ?? 'altro'} className="text-sm">
+                    <span className="mb-1 flex items-baseline justify-between gap-3">
+                      <span>{voce.modulo ?? 'altro'}</span>
+                      <span className="tabular-nums text-[var(--color-fioco)]">{voce.quanti}</span>
+                    </span>
+                    {/* Una barra e non un grafico: c'è una sola grandezza da
+                        confrontare, e una libreria di grafici per questo
+                        peserebbe più di tutto il resto della pagina. */}
+                    <span className="block h-1.5 rounded-full bg-[var(--color-superficie-2)]">
+                      <span
+                        className="block h-full rounded-full bg-[var(--color-accento)]"
+                        style={{ width: `${Math.round((voce.quanti / massimo) * 100)}%` }}
+                      />
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </Riquadro>
+    </div>
   );
 }

@@ -17,6 +17,7 @@ agli streamer.
 - [I termini di servizio di Twitch](#i-termini-di-servizio-di-twitch)
 - [Architettura](#architettura)
 - [Installazione](#installazione)
+- [Cosa gira da solo](#cosa-gira-da-solo)
 - [Comandi in chat](#comandi-in-chat)
 - [Limiti dichiarati](#limiti-dichiarati)
 
@@ -200,9 +201,22 @@ microsecondi — ma quello che le sta attorno:
 **1. L'applicazione Twitch** — <https://dev.twitch.tv/console/apps>. Come *OAuth Redirect URL* metti
 `TWITCH_PUBLIC_URL` + `/api/auth/callback`. Copia client ID e secret nel compose.
 
-**2. L'account del bot.** Crea un account Twitch normale con il nome che vuoi dare al bot, e fallo
-autorizzare la tua applicazione con gli ambiti `user:read:chat user:write:chat channel:bot`. Metti
-i token in `TWITCH_BOT_*`. Senza, il bot legge la chat ma non può scrivere.
+**2. L'account del bot.** Crea un account Twitch normale con il nome che vuoi dare al bot. Poi metti
+una parola qualsiasi in `TWITCH_SETUP_KEY`, riavvia, e **dal browser in cui hai fatto l'accesso con
+quell'account** apri:
+
+```
+TWITCH_PUBLIC_URL/api/auth/bot?chiave=LA_PAROLA
+```
+
+Twitch chiede la conferma, e la pagina che torna mostra le quattro righe `TWITCH_BOT_*` già pronte
+da incollare nel compose. **Poi svuota `TWITCH_SETUP_KEY`**: finché c'è, chi la indovina può rifare
+lo stesso giro. Senza quella variabile la rotta risponde 404 — non 403, perché chi non deve saperlo
+non deve nemmeno sapere che c'è qualcosa da indovinare.
+
+I token non vengono salvati da nessuna parte: si vedono una volta, e se chiudi la pagina senza
+copiarli rifai il giro. Stanno nel compose e non nel database di proposito, così un trasloco se li
+porta dietro insieme a tutte le altre credenziali.
 
 **3. La porta.** Il pannello risponde su `781`. Perché gli streamer possano raggiungerlo va esposto
 — un tunnel Cloudflare su un sottodominio è la via più pulita, e dà HTTPS senza aprire porte sul
@@ -212,8 +226,42 @@ browser, altrimenti l'accesso fallisce con «stato non valido».
 **4. Lo streamer.** Apre il pannello, preme *Entra con Twitch*, autorizza. Il canale è collegato e
 il bot entra in chat senza riavviare niente.
 
+**5. Nomina il bot moderatore del canale** (`/mod nomedelbot` in chat). Non è obbligatorio, ma
+cambia il limite dei messaggi da 20 a 100 ogni trenta secondi — e durante un'ondata è la differenza
+fra rispondere e non rispondere. Il bot se ne accorge da solo entro cinque minuti e alza il proprio
+secchiello.
+
+**6. Per gli avvisi su Discord**: nel pannello, scheda *Collegamenti*, incolla l'identificativo del
+server Discord — su Discord lo dà `/twitch bot collega`. Poi, sempre su Discord, `/twitch bot registro`
+sceglie in quale canale far arrivare tutto.
+
+Il collegamento parte dal pannello Twitch e non da Discord perché lì chi lo fa ha dimostrato di
+possedere il canale entrando con Twitch. Dall'altra parte l'unica prova sarebbe «amministro un
+server», che non dice niente su chi possiede il canale — e permetterebbe di dirottare altrove gli
+avvisi di moderazione di qualcun altro.
+
 Senza le variabili di Twitch il processo si spegne da solo e non disturba: chi usa ANGEL solo per
 Discord non se ne accorge.
+
+---
+
+## Cosa gira da solo
+
+| Ogni | Cosa |
+|---|---|
+| **10 s** | messaggi a tempo, scadenza delle restrizioni anti-raid |
+| **2 s** | scrittura del registro in blocco (o prima, a cento eventi) |
+| **5 min** | salvataggio degli spettatori, elenco dei moderatori, sincronizzazione dei termini bloccati |
+| **1 h** | conservazione: testo scaduto azzerato, eventi e spettatori vecchi rimossi, sessioni scadute |
+
+Il giro da cinque minuti è separato da quello da dieci secondi perché ha un costo di due ordini di
+grandezza diverso: il primo guarda dei numeri in memoria, il secondo fa una chiamata a Twitch e una
+scrittura per canale. Farlo ogni dieci secondi vorrebbe dire consumare il limite di frequenza per
+sapere una cosa che cambia una volta al mese.
+
+La sincronizzazione dei termini bloccati si rifà **solo quando l'elenco cambia davvero**: c'è
+un'impronta delle parole, e senza si spenderebbero cento chiamate ogni cinque minuti per riscrivere
+le stesse novanta.
 
 ---
 
@@ -252,8 +300,11 @@ potuto salvarlo».
   bloccati: ci vanno le parole più gravi, che Twitch ferma prima che compaiano. Twitch ne accetta
   cento per canale, e il bot tocca solo quelli che ha messo lui.
 - **La verifica dei bot di Twitch è sospesa.** Il limite dei messaggi resta quello basso finché lo
-  streamer non nomina il bot moderatore del proprio canale — che è la prima cosa da fare dopo
-  averlo collegato.
+  streamer non nomina il bot moderatore del proprio canale. Il bot se ne accorge da solo entro
+  cinque minuti e passa da 20 a 100 messaggi ogni trenta secondi.
+- **La reputazione degli spettatori si precarica fino a cinquemila per canale**, i più recenti. Chi
+  resta fuori non è scoperto — Twitch dichiara lui stesso `is_first_message` — ma la fiducia
+  accumulata riparte da zero.
 - **Le impronte dei nomi non riconoscono l'italiano storpiato.** Il confronto per somiglianza vede
   `yayad0ppia` e `уауadoppia`; non vede un nome del tutto diverso che finge di essere lo staff nel
   testo del messaggio.

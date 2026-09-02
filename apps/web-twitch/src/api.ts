@@ -105,6 +105,14 @@ export interface Evento {
   simulated: boolean;
 }
 
+export interface Accesso {
+  id: string;
+  twitchUserId: string;
+  login: string;
+  role: 'PROPRIETARIO' | 'MODERATORE' | 'LETTURA';
+  createdAt: string;
+}
+
 export interface Riassunto {
   da: string;
   moduli: { modulo: string | null; quanti: number }[];

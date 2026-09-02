@@ -1,10 +1,14 @@
 -- Bot di chat Twitch.
 --
--- Sette tabelle che non toccano nessuna di quelle esistenti: `TwitchChannel`
+-- Cinque tabelle che non toccano nessuna di quelle esistenti: `TwitchChannel`
 -- porta un `guildId` ma **senza chiave esterna** verso `Guild`, di proposito.
 -- Uno streamer può usare il bot Twitch senza avere un server Discord, e un
 -- vincolo qui lo renderebbe impossibile; in cambio, togliere il bot da un
 -- server non porta via la configurazione del canale Twitch collegato.
+--
+-- Comandi e messaggi a tempo non hanno una tabella: stanno nel JSON di
+-- `TwitchChannel.config`, che e quello che il motore legge davvero. Due
+-- posti per lo stesso dato divergono sempre.
 --
 -- `TwitchViewer` ha per chiave (canale, utente) e non l'utente: la stessa
 -- persona in due canali sono due righe che non si parlano. Costa qualche byte
@@ -33,41 +37,6 @@ CREATE TABLE "TwitchChannel" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "TwitchChannel_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "TwitchCommand" (
-    "id" TEXT NOT NULL,
-    "channelId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "aliases" TEXT[] DEFAULT ARRAY[]::TEXT[],
-    "response" TEXT NOT NULL,
-    "level" TEXT NOT NULL DEFAULT 'TUTTI',
-    "cooldownSec" INTEGER NOT NULL DEFAULT 10,
-    "channelCooldownSec" INTEGER NOT NULL DEFAULT 3,
-    "enabled" BOOLEAN NOT NULL DEFAULT true,
-    "useCount" INTEGER NOT NULL DEFAULT 0,
-    "counter" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "TwitchCommand_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "TwitchTimer" (
-    "id" TEXT NOT NULL,
-    "channelId" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "messages" TEXT[] DEFAULT ARRAY[]::TEXT[],
-    "intervalSec" INTEGER NOT NULL DEFAULT 900,
-    "minLines" INTEGER NOT NULL DEFAULT 5,
-    "alsoOffline" BOOLEAN NOT NULL DEFAULT false,
-    "enabled" BOOLEAN NOT NULL DEFAULT true,
-    "nextIndex" INTEGER NOT NULL DEFAULT 0,
-    "lastSentAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "TwitchTimer_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -146,8 +115,6 @@ CREATE UNIQUE INDEX "TwitchChannel_login_key" ON "TwitchChannel"("login");
 CREATE INDEX "TwitchChannel_guildId_idx" ON "TwitchChannel"("guildId");
 CREATE INDEX "TwitchChannel_enabled_idx" ON "TwitchChannel"("enabled");
 
-CREATE UNIQUE INDEX "TwitchCommand_channelId_name_key" ON "TwitchCommand"("channelId", "name");
-CREATE UNIQUE INDEX "TwitchTimer_channelId_name_key" ON "TwitchTimer"("channelId", "name");
 
 -- Gli indici del registro sono quelli che il pannello interroga davvero:
 -- «cosa è successo su questo canale», «solo i bandi», «tutto di questa
@@ -171,8 +138,6 @@ CREATE INDEX "TwitchSession_expiresAt_idx" ON "TwitchSession"("expiresAt");
 -- CASCADE su tutte: staccare un canale porta via il suo registro, i suoi
 -- comandi e i suoi spettatori. È voluto — sono dati di quello streamer, e
 -- conservarli dopo che ha tolto il bot sarebbe tenere quello che non serve.
-ALTER TABLE "TwitchCommand" ADD CONSTRAINT "TwitchCommand_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "TwitchChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "TwitchTimer" ADD CONSTRAINT "TwitchTimer_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "TwitchChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "TwitchEvent" ADD CONSTRAINT "TwitchEvent_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "TwitchChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "TwitchViewer" ADD CONSTRAINT "TwitchViewer_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "TwitchChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "TwitchAccess" ADD CONSTRAINT "TwitchAccess_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "TwitchChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;

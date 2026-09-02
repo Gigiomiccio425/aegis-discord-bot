@@ -23,6 +23,7 @@ import { GuildConfigSchema } from '@angel/shared';
 import type { Command } from './types.js';
 import { getGuildConfig, saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
+import { gestisciBotTwitch, gruppoBotTwitch } from './twitch.js';
 
 const twitch: Command = {
   data: new SlashCommandBuilder()
@@ -82,12 +83,23 @@ const twitch: Command = {
         ),
     )
     .addSubcommand((sub) => sub.setName('lista').setDescription('Streamer seguiti e loro impostazioni'))
+    // Il bot di chat Twitch vive dentro lo stesso comando: chi cerca «le cose
+    // di Twitch» le deve trovare in un posto solo.
+    .addSubcommandGroup(gruppoBotTwitch)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
   requiredPermissions: [PermissionFlagsBits.ManageGuild],
   async execute({ client, interaction }) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId!;
+
+    // Il gruppo `bot` riguarda il bot di chat e non gli annunci di diretta:
+    // non ha bisogno della configurazione del server, e leggerla per poi
+    // scartarla sarebbe una query per niente.
+    if (interaction.options.getSubcommandGroup() === 'bot') {
+      return gestisciBotTwitch(interaction, guildId);
+    }
+
     const sub = interaction.options.getSubcommand();
 
     // Si rilegge dal database invece di usare la copia passata al comando:

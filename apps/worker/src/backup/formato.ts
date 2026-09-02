@@ -61,8 +61,6 @@ export const TABELLE = [
    * tempo e soglie, e la maggior parte non lo rifarebbe.
    */
   'twitchChannel',
-  'twitchCommand',
-  'twitchTimer',
   'twitchAccess',
   'twitchViewer',
   'twitchEvent',

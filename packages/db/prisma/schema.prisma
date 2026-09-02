@@ -871,6 +871,13 @@ model TwitchChannel {
   tokenFailedAt DateTime?
 
   /// Configurazione completa, validata da TwitchChannelConfigSchema.
+  ///
+  /// Comandi e messaggi a tempo stanno **qui dentro**, non in tabelle
+  /// proprie. Ci sono state, ed erano un errore: il motore e il pannello
+  /// leggevano il JSON, le tabelle restavano vuote, e chi guardava lo schema
+  /// concludeva che i comandi fossero righe da interrogare. Due posti per lo
+  /// stesso dato divergono sempre, e il momento in cui ci si accorge di quale
+  /// dei due fosse quello vero è il peggiore.
   config       Json     @default("{}")
   configVersion Int     @default(1)
 
@@ -881,53 +888,12 @@ model TwitchChannel {
   joinedAt     DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  commands     TwitchCommand[]
-  timers       TwitchTimer[]
   events       TwitchEvent[]
   viewers      TwitchViewer[]
   access       TwitchAccess[]
 
   @@index([guildId])
   @@index([enabled])
-}
-
-/// Comando personalizzato di un canale.
-model TwitchCommand {
-  id        String   @id @default(uuid())
-  channelId String
-  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  name      String
-  aliases   String[] @default([])
-  response  String
-  level     String   @default("TUTTI")
-  cooldownSec Int    @default(10)
-  channelCooldownSec Int @default(3)
-  enabled   Boolean  @default(true)
-  useCount  Int      @default(0)
-  /// Contatore libero usabile nella risposta con {contatore}.
-  counter   Int      @default(0)
-  createdAt DateTime @default(now())
-
-  @@unique([channelId, name])
-}
-
-/// Messaggio a tempo.
-model TwitchTimer {
-  id        String   @id @default(uuid())
-  channelId String
-  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  name      String
-  messages  String[] @default([])
-  intervalSec Int    @default(900)
-  minLines  Int      @default(5)
-  alsoOffline Boolean @default(false)
-  enabled   Boolean  @default(true)
-  /// Quale messaggio tocca la prossima volta: la rotazione sopravvive al riavvio.
-  nextIndex Int      @default(0)
-  lastSentAt DateTime?
-  createdAt DateTime @default(now())
-
-  @@unique([channelId, name])
 }
 
 /// Registro di quello che è successo in chat.

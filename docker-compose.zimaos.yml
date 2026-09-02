@@ -67,7 +67,7 @@ services:
   # ─────────────────────────────────────────────────────────
   angel:
     # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.25.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.26.0
     # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
     # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
     pull_policy: always
@@ -127,8 +127,17 @@ services:
       #    È un account Twitch normale — creane uno chiamato come il tuo bot —
       #    che autorizza l'applicazione una volta sola. Senza, il bot legge la
       #    chat ma non può scrivere: per parlare serve una bocca.
-      #    I token si ottengono con il flusso OAuth dell'applicazione,
-      #    chiedendo gli ambiti  user:read:chat user:write:chat channel:bot
+      #
+      #    Per ottenere i quattro valori qui sotto **non serve fare niente a
+      #    mano**: metti una parola qualsiasi in TWITCH_SETUP_KEY, riavvia, e
+      #    apri dal browser dell'account bot
+      #
+      #        TWITCH_PUBLIC_URL/api/auth/bot?chiave=LA_PAROLA
+      #
+      #    Twitch chiede la conferma, e la pagina che torna mostra le quattro
+      #    righe già pronte da incollare qui. Poi svuota TWITCH_SETUP_KEY:
+      #    finché c'è, chi la indovina può rifare lo stesso giro.
+      TWITCH_SETUP_KEY: ''
       TWITCH_BOT_USER_ID: ''
       TWITCH_BOT_LOGIN: ''
       TWITCH_BOT_ACCESS_TOKEN: ''

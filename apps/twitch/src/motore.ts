@@ -33,8 +33,9 @@
      durante un'ondata è indistinguibile dal bot che ha smesso di funzionare.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { createHash } from 'node:crypto';
 import { getPrisma } from '@angel/db';
-import { applicaModello } from '@angel/shared';
+import { DEFAULT_WORDLIST, applicaModello } from '@angel/shared';
 import {
   Helix,
   PoolEventSub,
@@ -48,7 +49,14 @@ import {
   type EventoRaid,
 } from './deps.js';
 import { Archivio } from './archivio.js';
-import { applica, attivaScudo, manda, togliScudo, type Esecutore } from './azioni.js';
+import {
+  applica,
+  attivaScudo,
+  manda,
+  sincronizzaTermini,
+  togliScudo,
+  type Esecutore,
+} from './azioni.js';
 import { eseguiComando } from './comandi.js';
 import { encrypt } from './crypto.js';
 import { logger } from './logger.js';
@@ -56,6 +64,20 @@ import { Registro, type Canale } from './stato.js';
 
 /** Ogni quanto gira il ciclo dei timer e delle scadenze. */
 const TIC_MS = 10_000;
+
+/**
+ * Ogni quanto si tocca il database per la manutenzione: salvataggio degli
+ * spettatori, elenco dei moderatori, sincronizzazione dei termini bloccati.
+ *
+ * Cinque minuti e non dieci secondi perche' sono tutte cose che possono
+ * aspettare: un moderatore nominato adesso conta fra cinque minuti, e nel
+ * frattempo l'esenzione funziona lo stesso perche' la legge dai badge del
+ * messaggio.
+ */
+const MANUTENZIONE_MS = 300_000;
+
+/** Ogni quanto si applica la conservazione dei dati. */
+const PULIZIA_MS = 3_600_000;
 
 export interface OpzioniMotore {
   clientId: string;
@@ -74,6 +96,8 @@ export class Motore {
   private readonly secchielli = new Map<string, Secchiello>();
   private readonly online = new Map<string, number>();
   private tic: NodeJS.Timeout | null = null;
+  private manutenzione: NodeJS.Timeout | null = null;
+  private pulizia: NodeJS.Timeout | null = null;
   private readonly esecutore: Esecutore;
 
   constructor(private readonly opzioni: OpzioniMotore) {
@@ -89,10 +113,10 @@ export class Motore {
       helix: this.helix,
       archivio: this.archivio,
       botId: opzioni.bot.id,
-      // Per ora il bot non è moderatore finché lo streamer non lo nomina, e
-      // non c'è modo di saperlo senza chiederlo: si parte dal limite basso e
-      // lo si alza quando una chiamata riesce con i privilegi da moderatore.
-      botModeratore: () => false,
+      // Lo si chiede a Twitch nel ciclo di manutenzione: e' la differenza fra
+      // venti e cento messaggi ogni trenta secondi, e durante un'ondata e'
+      // esattamente la differenza fra rispondere e non rispondere.
+      botModeratore: (canaleId) => this.registro.get(canaleId)?.botModeratore ?? false,
     };
   }
 
@@ -120,6 +144,7 @@ export class Motore {
       messaggio: (m) => this.messaggio(m),
       raid: (e) => this.raidInArrivo(e),
       stato: (e) => this.cambioStato(e.canaleId, e.online),
+      notifica: (e) => this.notifica(e),
       revocata: (canaleId, tipo) => this.revocata(canaleId, tipo),
       statoConnessione: (nota, dettagli) => logger.info({ ...dettagli }, `EventSub: ${nota}`),
     });
@@ -127,10 +152,21 @@ export class Motore {
     for (const canale of this.registro.tutti()) {
       await this.pool.aggiungiCanale(canale.id, this.opzioni.bot.id);
       this.secchielli.set(canale.id, secchielloChat(false));
+      await this.registro.caricaSpettatori(canale);
     }
+
+    await this.segnaCollegati(true);
 
     this.tic = setInterval(() => void this.ciclo(), TIC_MS);
     this.tic.unref?.();
+    this.manutenzione = setInterval(() => void this.cicloLento(), MANUTENZIONE_MS);
+    this.manutenzione.unref?.();
+    this.pulizia = setInterval(() => void this.cicloPulizia(), PULIZIA_MS);
+    this.pulizia.unref?.();
+
+    // Il primo giro subito: senza, per cinque minuti il bot non sa chi sono i
+    // moderatori e nessuno spettatore ha la propria reputazione.
+    void this.cicloLento();
 
     logger.info(
       { canali: this.registro.quanti(), autonomo: this.registro.autonomo },
@@ -141,9 +177,21 @@ export class Motore {
   }
 
   async ferma(): Promise<void> {
-    if (this.tic) clearInterval(this.tic);
+    for (const timer of [this.tic, this.manutenzione, this.pulizia]) {
+      if (timer) clearInterval(timer);
+    }
     this.pool?.chiudi();
     for (const secchiello of this.secchielli.values()) secchiello.ferma();
+
+    // Gli spettatori si salvano prima di uscire: e' l'unico momento in cui il
+    // delta accumulato andrebbe perso davvero.
+    for (const canale of this.registro.tutti()) {
+      await this.registro.salvaSpettatori(canale).catch(() => 0);
+      await getPrisma()
+        .twitchChannel.update({ where: { id: canale.id }, data: { connected: false } })
+        .catch(() => undefined);
+    }
+
     await this.archivio.chiudi();
   }
 
@@ -163,6 +211,8 @@ export class Motore {
     }
     this.secchielli.set(canale.id, secchielloChat(false));
     await this.pool?.aggiungiCanale(canale.id, this.opzioni.bot.id);
+    await this.registro.caricaSpettatori(canale);
+    await this.aggiornaModeratori(canale).catch(() => undefined);
     logger.info({ canale: canale.login }, 'canale collegato');
   }
 
@@ -199,6 +249,7 @@ export class Motore {
     const spettatore = this.registro.annota(
       canale,
       messaggio.utenteId,
+      messaggio.utenteLogin,
       messaggio.testo,
     );
 
@@ -236,6 +287,24 @@ export class Motore {
         messaggioId: messaggio.messaggioId,
         testo: messaggio.testo,
       });
+
+      /*
+       * La sanzione entra nella reputazione di chi l'ha presa.
+       *
+       * Non in prova: contare quello che non e' successo significherebbe che
+       * una settimana di collaudo lascia la meta' della chat con la fedina
+       * sporca senza che nessuno sia stato toccato.
+       */
+      if (!verdetto.simulato) {
+        if (verdetto.azione === 'SILENZIA') spettatore.timeouts += 1;
+        else if (verdetto.azione === 'BANDISCI') spettatore.bans += 1;
+        else if (verdetto.azione === 'AVVERTI') spettatore.avvisi += 1;
+
+        // La fiducia scende in fretta e risale piano: e' il verso giusto per
+        // una misura che serve a decidere di chi fidarsi.
+        spettatore.fiducia = Math.max(0, spettatore.fiducia - (verdetto.punteggio >= 60 ? 25 : 10));
+        spettatore.delta += 1;
+      }
 
       // Un messaggio cancellato non deve produrre anche una risposta a un
       // comando: sarebbe il bot che risponde a qualcosa che non c'è più.
@@ -334,6 +403,35 @@ export class Motore {
     }
   }
 
+  /**
+   * Le notifiche di sistema della chat: abbonamenti, rinnovi, regali.
+   *
+   * Solo il ringraziamento agli abbonati, e solo se lo streamer lo ha scritto.
+   * Twitch manda una ventina di tipi di notizia diversi da qui, e rispondere a
+   * tutti trasformerebbe il bot in quello che non deve essere: la cosa che
+   * parla piu' di tutti in chat.
+   */
+  private async notifica(evento: {
+    canaleId: string;
+    tipo: string;
+    utenteLogin: string | null;
+  }): Promise<void> {
+    const canale = this.registro.get(evento.canaleId);
+    if (!canale) return;
+
+    const abbonamento =
+      evento.tipo === 'sub' || evento.tipo === 'resub' || evento.tipo === 'sub_gift';
+    if (!abbonamento) return;
+
+    const saluto = canale.config.chat.salutoAbbonato;
+    if (!saluto || !evento.utenteLogin) return;
+
+    await this.parla(
+      canale,
+      applicaModello(saluto, { utente: evento.utenteLogin, canale: canale.nome }),
+    );
+  }
+
   private cambioStato(canaleId: string, online: boolean): void {
     const canale = this.registro.get(canaleId);
     if (!canale) return;
@@ -393,6 +491,188 @@ export class Motore {
       await this.parla(canale, applicaModello(testo, { canale: canale.nome }));
       this.ultimoTimer.set(chiave, adesso);
       canale.righeDaTimer = 0;
+    }
+  }
+
+  /* ── Manutenzione ───────────────────────────────────────────────── */
+
+  /**
+   * Il giro lento: quello che tocca il database e l'API di Twitch.
+   *
+   * Separato dal ciclo dei timer perché ha un costo diverso di due ordini di
+   * grandezza. Il ciclo veloce guarda dei numeri in memoria; questo fa una
+   * chiamata a Twitch e una scrittura per canale, e farlo ogni dieci secondi
+   * significherebbe consumare il limite di frequenza per sapere una cosa che
+   * cambia una volta al mese.
+   */
+  private async cicloLento(): Promise<void> {
+    for (const canale of this.registro.tutti()) {
+      await this.registro.salvaSpettatori(canale).catch((errore: unknown) =>
+        logger.debug({ err: errore, canale: canale.login }, 'spettatori non salvati'),
+      );
+
+      await this.aggiornaModeratori(canale).catch((errore: unknown) =>
+        logger.debug({ err: errore, canale: canale.login }, 'moderatori non aggiornati'),
+      );
+
+      await this.allineaTermini(canale).catch((errore: unknown) =>
+        logger.debug({ err: errore, canale: canale.login }, 'termini bloccati non allineati'),
+      );
+    }
+
+    await this.segnaCollegati(true);
+  }
+
+  /**
+   * Chiede a Twitch chi modera il canale.
+   *
+   * Serve a due cose diverse. La prima è l'anti-impersonazione: senza questo
+   * elenco, il modulo confronta i nomi solo con quello dello streamer, e chi
+   * si finge un moderatore passa. La seconda è sapere se il bot stesso è
+   * moderatore, che vale il quintuplo dei messaggi al secondo.
+   */
+  private async aggiornaModeratori(canale: Canale): Promise<void> {
+    if (!canale.token) return;
+
+    const moderatori = await this.helix.moderatori(canale.id, canale.id);
+    canale.moderatori = moderatori.map((m) => m.user_login);
+    canale.moderatoriAggiornatiIl = Date.now();
+
+    const eraModeratore = canale.botModeratore;
+    canale.botModeratore = moderatori.some((m) => m.user_id === this.opzioni.bot.id);
+
+    if (canale.botModeratore !== eraModeratore) {
+      // Si ridimensiona invece di ricreare: ricreando, chi ha appena speso
+      // venti gettoni se ne ritroverebbe cento immediati.
+      this.secchielli.get(canale.id)?.ridimensiona(canale.botModeratore ? 100 : 20);
+      logger.info(
+        { canale: canale.login, moderatore: canale.botModeratore },
+        canale.botModeratore
+          ? 'il bot è stato nominato moderatore: limite dei messaggi alzato a 100/30s'
+          : 'il bot non è più moderatore: limite dei messaggi sceso a 20/30s',
+      );
+    }
+  }
+
+  /**
+   * Copia le parole più gravi nei termini bloccati nativi di Twitch.
+   *
+   * Il guadagno è di tempo, ed è tutto: AutoMod di Twitch ferma il messaggio
+   * *prima* che compaia, mentre il bot può solo cancellarlo dopo averlo letto.
+   * In una chat veloce quella differenza sono decine di persone che lo hanno
+   * già visto.
+   *
+   * Si rifà solo quando l'elenco cambia davvero. L'impronta esiste per quello:
+   * senza, ogni cinque minuti si spenderebbero cento chiamate per riscrivere
+   * le stesse novanta parole.
+   */
+  private async allineaTermini(canale: Canale): Promise<void> {
+    const modulo = canale.config.sicurezza.linguaggio;
+
+    if (!modulo.attivo || !modulo.sincronizzaTerminiTwitch) {
+      canale.improntaTermini = '';
+      return;
+    }
+
+    const parole = [
+      ...(modulo.listaCondivisa
+        ? DEFAULT_WORDLIST.filter((voce) => voce.severity === 'GRAVE').map((voce) => voce.term)
+        : []),
+      ...modulo.paroleAggiuntive,
+    ]
+      .filter((parola) => parola.length >= 2 && parola.length <= 100)
+      .sort();
+
+    const impronta = createHash('sha256').update(parole.join('|')).digest('hex').slice(0, 16);
+    if (impronta === canale.improntaTermini) return;
+
+    const esito = await sincronizzaTermini(this.esecutore, canale, parole);
+    canale.improntaTermini = impronta;
+
+    if (esito.aggiunti > 0 || esito.rimossi > 0) {
+      logger.info({ canale: canale.login, ...esito }, 'termini bloccati di Twitch allineati');
+    }
+  }
+
+  /** Segna nel database quali canali il motore sta servendo adesso. */
+  private async segnaCollegati(collegati: boolean): Promise<void> {
+    const ids = this.registro.tutti().map((canale) => canale.id);
+    if (ids.length === 0) return;
+
+    await getPrisma()
+      .twitchChannel.updateMany({
+        where: { id: { in: ids } },
+        data: { connected: collegati, lastSeenAt: new Date() },
+      })
+      .catch(() => undefined);
+  }
+
+  /* ── Conservazione dei dati ─────────────────────────────────────── */
+
+  /**
+   * Applica quello che i termini di Twitch impongono.
+   *
+   * Non è pulizia di manutenzione: è un obbligo contrattuale. Il Developer
+   * Services Agreement dice che i log di chat si conservano solo per il tempo
+   * necessario al servizio, e senza qualcosa che li cancelli quella frase
+   * resta una dichiarazione d'intenti dentro un file di configurazione.
+   *
+   * Tre passaggi, dal più urgente al meno:
+   *
+   * 1. il **testo** dei messaggi, scritto da terzi e con la scadenza più
+   *    corta — si azzera senza toccare la riga, così il provvedimento resta
+   *    verificabile e il contenuto sparisce;
+   * 2. gli **eventi** interi, oltre la loro scadenza;
+   * 3. gli **spettatori** che non si vedono da troppo.
+   */
+  private async cicloPulizia(): Promise<void> {
+    const prisma = getPrisma();
+    let testi = 0;
+    let eventi = 0;
+    let spettatori = 0;
+
+    try {
+      // Il testo non ha bisogno del canale: la scadenza è scritta sulla riga,
+      // calcolata quando è stata creata. Una query sola per tutti.
+      const scaduti = await prisma.twitchEvent.updateMany({
+        where: { textExpiresAt: { lt: new Date() }, text: { not: null } },
+        data: { text: null, textExpiresAt: null },
+      });
+      testi = scaduti.count;
+
+      for (const canale of this.registro.tutti()) {
+        const conservazione = canale.config.conservazione;
+
+        const primaDegliEventi = new Date(Date.now() - conservazione.eventiGiorni * 86_400_000);
+        const vecchi = await prisma.twitchEvent.deleteMany({
+          where: { channelId: canale.id, createdAt: { lt: primaDegliEventi } },
+        });
+        eventi += vecchi.count;
+
+        const primaDegliSpettatori = new Date(
+          Date.now() - conservazione.spettatoriGiorni * 86_400_000,
+        );
+        const dimenticati = await prisma.twitchViewer.deleteMany({
+          where: {
+            channelId: canale.id,
+            lastSeenAt: { lt: primaDegliSpettatori },
+            // Chi è stato esentato a mano resta: è una decisione dello
+            // streamer, non un dato raccolto passivamente.
+            trusted: false,
+          },
+        });
+        spettatori += dimenticati.count;
+      }
+
+      // Le sessioni scadute del pannello non hanno un canale: si tolgono qui
+      // perché è l'unico lavoro periodico che questo processo esegue.
+      await prisma.twitchSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
+      if (testi + eventi + spettatori > 0) {
+        logger.info({ testi, eventi, spettatori }, 'conservazione applicata');
+      }
+    } catch (errore) {
+      logger.warn({ err: errore }, 'pulizia per scadenza non riuscita');
     }
   }
 

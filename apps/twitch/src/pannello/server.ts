@@ -42,6 +42,7 @@ import {
   defaultTwitchConfig,
 } from '@angel/shared';
 import { AMBITI_CANALE, scambiaCodice, urlAutorizzazione, revoca } from '../deps.js';
+import { riversaFile } from '../archivio.js';
 import { encrypt } from '../crypto.js';
 import { logger } from '../logger.js';
 import { getRedis } from '../redis.js';
@@ -132,6 +133,57 @@ async function ruoloSu(
   return (accesso?.role as 'MODERATORE' | 'LETTURA' | undefined) ?? null;
 }
 
+/**
+ * La pagina che mostra i token dell'account bot.
+ *
+ * HTML scritto a mano e non una pagina del pannello React: si vede una volta
+ * sola, prima che il bot esista, e deve funzionare anche se il pannello non è
+ * stato compilato. `noindex` e `no-store` perché quello che c'è scritto non
+ * deve finire in nessuna cache di nessun tipo.
+ */
+function paginaToken(
+  utente: { id: string; login: string; display_name: string },
+  token: { accessToken: string; refreshToken: string },
+): string {
+  const righe = [
+    ['TWITCH_BOT_USER_ID', utente.id],
+    ['TWITCH_BOT_LOGIN', utente.login],
+    ['TWITCH_BOT_ACCESS_TOKEN', token.accessToken],
+    ['TWITCH_BOT_REFRESH_TOKEN', token.refreshToken],
+  ];
+
+  const scappa = (testo: string): string =>
+    testo.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  return `<!doctype html>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Credenziali del bot</title>
+<style>
+ body{margin:0;background:#0d0b14;color:#ece9f3;font:15px/1.6 system-ui,sans-serif;padding:2rem}
+ main{max-width:44rem;margin:0 auto}
+ h1{font-size:1.3rem;margin:0 0 .5rem}
+ p{color:#9a92ad}
+ pre{background:#1f1a2b;border:1px solid #2e2740;border-radius:12px;padding:1rem;overflow-x:auto;
+     white-space:pre-wrap;word-break:break-all;font-size:13px}
+ .avviso{border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.1);
+         border-radius:12px;padding:1rem;color:#f87171;margin:1.5rem 0}
+ strong{color:#ece9f3}
+</style></head><body><main>
+<h1>Credenziali di <strong>${scappa(utente.display_name)}</strong></h1>
+<p>Incolla queste quattro righe nel blocco <code>environment:</code> del compose, poi riavvia l'app.</p>
+<pre>${righe.map(([nome, valore]) => `      ${nome}: '${scappa(valore ?? '')}'`).join('\n')}</pre>
+<div class="avviso">
+  <strong>Questa pagina non si ripete.</strong> I valori non sono salvati da nessuna parte: se
+  chiudi senza copiarli, rifai il giro.<br><br>
+  Chi ha questi token può scrivere in chat come il bot. Non passarli su canali che conservano i
+  messaggi, e <strong>togli <code>TWITCH_SETUP_KEY</code> dal compose</strong> appena finito:
+  finché c'è, chiunque la indovini può rifare questo giro.
+</div>
+</main></body></html>`;
+}
+
 /* ── Server ───────────────────────────────────────────────────────────── */
 
 export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyInstance> {
@@ -164,6 +216,57 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
   }));
 
   /* ── Accesso ──────────────────────────────────────────────────── */
+
+  /**
+   * Il flusso che raccoglie i token dell'**account del bot**.
+   *
+   * È il passaggio più scomodo dell'installazione, e finora la documentazione
+   * si limitava a dire «ottienili con il flusso OAuth», che è come dire a
+   * qualcuno di procurarsi una chiave inglese senza dirgli dove.
+   *
+   * Non è una rotta pubblica: risponde solo se `TWITCH_SETUP_KEY` è impostata
+   * nel compose e la chiave nell'indirizzo combacia. Senza quella variabile
+   * non esiste — 404, non 403, perché chi non deve saperlo non deve nemmeno
+   * sapere che c'è qualcosa da indovinare.
+   *
+   * I token non vengono salvati da nessuna parte: si mostrano una volta, si
+   * incollano nel compose, e la chiave di installazione si toglie.
+   */
+  app.get<{ Querystring: { chiave?: string } }>('/api/auth/bot', async (request, reply) => {
+    const attesa = process.env.TWITCH_SETUP_KEY;
+    if (!attesa || request.query.chiave !== attesa) {
+      return reply.code(404).send({ error: 'endpoint non trovato' });
+    }
+
+    const stato = randomBytes(16).toString('base64url');
+    void reply.setCookie('angel_stato', stato, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: sicuro,
+      path: '/',
+      maxAge: 600,
+    });
+    void reply.setCookie('angel_flusso', 'bot', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: sicuro,
+      path: '/',
+      maxAge: 600,
+    });
+
+    return reply.redirect(
+      urlAutorizzazione({
+        clientId: opzioni.clientId,
+        redirectUri,
+        stato,
+        // Solo quello che serve a leggere e scrivere in chat. L'account del
+        // bot non modera niente: i permessi di moderazione li dà lo streamer
+        // sul proprio canale, ed è giusto che restino separati.
+        ambiti: ['user:read:chat', 'user:write:chat', 'channel:bot'],
+        forzaConferma: true,
+      }),
+    );
+  });
 
   app.get('/api/auth/entra', async (request, reply) => {
     const stato = randomBytes(16).toString('base64url');
@@ -198,7 +301,9 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
       if (!code || !state || state !== request.cookies.angel_stato) {
         return reply.redirect('/?errore=stato-non-valido');
       }
+      const flusso = request.cookies.angel_flusso;
       void reply.clearCookie('angel_stato', { path: '/' });
+      void reply.clearCookie('angel_flusso', { path: '/' });
 
       const token = await scambiaCodice({
         clientId: opzioni.clientId,
@@ -213,6 +318,19 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
 
       const utente = await opzioni.motore.helix.ioSono(token.accessToken);
       if (!utente) return reply.redirect('/?errore=utente-sconosciuto');
+
+      /*
+       * Flusso dell'account bot: si mostrano i valori e non si salva niente.
+       *
+       * Salvarli sarebbe più comodo e sbagliato: sono le credenziali di un
+       * account, non di un canale, e devono stare nel compose insieme alle
+       * altre — dove chi fa un trasloco le trova, e dove il kit di trasloco le
+       * legge. In un database sarebbero l'unica credenziale che sopravvive al
+       * compose e sparisce con il volume.
+       */
+      if (flusso === 'bot') {
+        return reply.type('text/html; charset=utf-8').send(paginaToken(utente, token));
+      }
 
       /*
        * L'autorizzazione crea o aggiorna il canale.
@@ -553,6 +671,173 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
 
     return { staccato: true };
   });
+
+  /**
+   * Collega il canale a un server Discord.
+   *
+   * Sta qui e non fra i comandi Discord perché qui chi la chiama ha dimostrato
+   * di possedere il canale entrando con Twitch. Dall'altra parte l'unica prova
+   * sarebbe «amministro un server», che non dice niente su chi possiede il
+   * canale — e permetterebbe di dirottare altrove gli avvisi di moderazione di
+   * qualcun altro.
+   */
+  app.put<{ Params: { id: string }; Body: { guildId?: string | null } }>(
+    '/api/canali/:id/discord',
+    async (request, reply) => {
+      const sessione = await richiediSessione(request, reply);
+      if (!sessione) return;
+      if ((await ruoloSu(sessione, request.params.id)) !== 'PROPRIETARIO') {
+        return reply.code(403).send({ error: 'solo chi possiede il canale può collegarlo' });
+      }
+
+      const grezzo = (request.body?.guildId ?? '').trim();
+
+      // Vuoto scollega. Un identificativo Discord è uno snowflake a 17-20
+      // cifre: chi incolla un invito o il nome del server se ne accorge subito
+      // invece di trovarsi un registro che non arriva mai.
+      if (grezzo && !/^\d{17,20}$/.test(grezzo)) {
+        return reply.code(400).send({
+          error:
+            'identificativo del server non valido: sono 17-20 cifre. Su Discord si copia con ' +
+            '/twitch collega, oppure con il tasto destro sul nome del server.',
+        });
+      }
+
+      const guildId = grezzo || null;
+
+      await getPrisma().twitchChannel.update({
+        where: { id: request.params.id },
+        data: { guildId },
+      });
+
+      const canale = opzioni.motore.registro.get(request.params.id);
+      if (canale) canale.guildId = guildId;
+
+      logger.info(
+        { canale: request.params.id, guildId, da: sessione.login },
+        guildId ? 'canale collegato a un server Discord' : 'canale scollegato da Discord',
+      );
+
+      return { guildId };
+    },
+  );
+
+  /* ── Chi può entrare nel pannello di questo canale ────────────── */
+
+  app.get<{ Params: { id: string } }>('/api/canali/:id/accessi', async (request, reply) => {
+    const sessione = await richiediSessione(request, reply);
+    if (!sessione) return;
+    if (!(await ruoloSu(sessione, request.params.id))) {
+      return reply.code(404).send({ error: 'canale non trovato' });
+    }
+
+    return getPrisma().twitchAccess.findMany({
+      where: { channelId: request.params.id },
+      orderBy: { createdAt: 'asc' },
+    });
+  });
+
+  /**
+   * Aggiunge qualcuno al pannello.
+   *
+   * Solo il proprietario, e non i moderatori che ha già aggiunto: un
+   * moderatore che può nominare altri moderatori è un moderatore che può
+   * regalare il canale a chiunque, e lo streamer se ne accorgerebbe dopo.
+   */
+  app.post<{ Params: { id: string }; Body: { login?: string; ruolo?: string } }>(
+    '/api/canali/:id/accessi',
+    async (request, reply) => {
+      const sessione = await richiediSessione(request, reply);
+      if (!sessione) return;
+      if ((await ruoloSu(sessione, request.params.id)) !== 'PROPRIETARIO') {
+        return reply.code(403).send({ error: 'solo chi possiede il canale può dare accesso' });
+      }
+
+      const login = (request.body?.login ?? '').trim().toLowerCase().replace(/^@/, '');
+      if (!/^[a-z0-9_]{3,25}$/.test(login)) {
+        return reply.code(400).send({ error: 'login Twitch non valido' });
+      }
+
+      const ruolo = request.body?.ruolo === 'LETTURA' ? 'LETTURA' : 'MODERATORE';
+
+      const utenti = await opzioni.motore.helix.utenti([login]).catch(() => []);
+      const utente = utenti[0];
+      if (!utente) return reply.code(404).send({ error: `nessun account Twitch «${login}»` });
+
+      if (utente.id === request.params.id) {
+        return reply.code(400).send({ error: 'il proprietario ha già accesso' });
+      }
+
+      await getPrisma().twitchAccess.upsert({
+        where: {
+          channelId_twitchUserId: { channelId: request.params.id, twitchUserId: utente.id },
+        },
+        create: {
+          channelId: request.params.id,
+          twitchUserId: utente.id,
+          login: utente.login,
+          role: ruolo,
+        },
+        update: { role: ruolo, login: utente.login },
+      });
+
+      logger.info(
+        { canale: request.params.id, a: utente.login, ruolo, da: sessione.login },
+        'accesso al pannello concesso',
+      );
+      return { login: utente.login, ruolo };
+    },
+  );
+
+  app.delete<{ Params: { id: string; utenteId: string } }>(
+    '/api/canali/:id/accessi/:utenteId',
+    async (request, reply) => {
+      const sessione = await richiediSessione(request, reply);
+      if (!sessione) return;
+      if ((await ruoloSu(sessione, request.params.id)) !== 'PROPRIETARIO') {
+        return reply.code(403).send({ error: 'solo chi possiede il canale può togliere accesso' });
+      }
+
+      await getPrisma()
+        .twitchAccess.deleteMany({
+          where: { channelId: request.params.id, twitchUserId: request.params.utenteId },
+        })
+        .catch(() => undefined);
+
+      return { tolto: true };
+    },
+  );
+
+  /**
+   * Rimette nel database il registro di un giorno rimasto solo su disco.
+   *
+   * Serve dopo un guasto: senza, il pannello ha un buco esattamente nelle ore
+   * in cui è successo qualcosa, che sono le sole in cui a qualcuno verrà in
+   * mente di guardarlo. Non è automatico di proposito — rileggere giorni di
+   * file significa scrivere decine di migliaia di righe, e farlo da soli
+   * all'avvio dopo un guasto vorrebbe dire caricare il database proprio mentre
+   * si sta riprendendo.
+   */
+  app.post<{ Params: { id: string }; Body: { giorno?: string } }>(
+    '/api/canali/:id/riversa',
+    async (request, reply) => {
+      const sessione = await richiediSessione(request, reply);
+      if (!sessione) return;
+      const ruolo = await ruoloSu(sessione, request.params.id);
+      if (!ruolo || ruolo === 'LETTURA') return reply.code(403).send({ error: 'non consentito' });
+
+      const giorno = request.body?.giorno ?? new Date().toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(giorno)) {
+        return reply.code(400).send({ error: 'la data va scritta come AAAA-MM-GG' });
+      }
+
+      const canale = opzioni.motore.registro.get(request.params.id);
+      if (!canale) return reply.code(409).send({ error: 'canale non collegato in questo momento' });
+
+      const esito = await riversaFile(canale.id, canale.login, giorno);
+      return { giorno, ...esito };
+    },
+  );
 
   /* ── Il pannello ──────────────────────────────────────────────── */
 

@@ -63,6 +63,26 @@ const RICORDA_MESSAGGI = 12;
  */
 const MAX_SPETTATORI_MEMORIA = 20_000;
 
+/** Quanti spettatori si rileggono dal database quando un canale si collega. */
+const PRECARICA_SPETTATORI = 5_000;
+
+/**
+ * Uno spettatore in memoria.
+ *
+ * Estende quello che serve al motore con la contabilita che serve a salvarlo:
+ * il login per poterlo scrivere, e quanti messaggi sono passati dall'ultimo
+ * salvataggio. Il delta e non il totale, perche due processi che scrivessero
+ * il totale si sovrascriverebbero a vicenda.
+ */
+export interface SpettatoreVivo extends StatoSpettatore {
+  login: string;
+  /** Messaggi dall'ultimo salvataggio. Zero = niente da scrivere. */
+  delta: number;
+  timeouts: number;
+  bans: number;
+  avvisi: number;
+}
+
 export interface Canale {
   id: string;
   login: string;
@@ -81,7 +101,13 @@ export interface Canale {
   raid: { nuovi: number[]; impronte: { impronta: string; quando: number }[] };
   /** Restrizioni anti-raid applicate: quando toglierle. */
   scudoFinoA: number | null;
-  spettatori: Map<string, StatoSpettatore>;
+  spettatori: Map<string, SpettatoreVivo>;
+  /** Il bot e moderatore qui: cambia il limite dei messaggi da 20 a 100 ogni 30s. */
+  botModeratore: boolean;
+  /** Ultima volta che si e chiesto a Twitch chi sono i moderatori. */
+  moderatoriAggiornatiIl: number;
+  /** Parole gia sincronizzate nei termini bloccati di Twitch, per non rifarlo a vuoto. */
+  improntaTermini: string;
 }
 
 /** Forma della copia su disco. Volutamente minima: solo ciò che serve a lavorare. */
@@ -179,6 +205,9 @@ export class Registro {
     this.canali.set(dati.id, {
       ...dati,
       online: false,
+      botModeratore: false,
+      moderatoriAggiornatiIl: 0,
+      improntaTermini: '',
       righeDaTimer: 0,
       raid: { nuovi: [], impronte: [] },
       scudoFinoA: null,
@@ -310,23 +339,140 @@ export class Registro {
    * traffico di tutto il resto del bot messo insieme. Il database riceve i
    * conteggi in blocco, ogni tanto, da `archivio.ts`.
    */
-  spettatore(canale: Canale, utenteId: string): StatoSpettatore {
+  spettatore(canale: Canale, utenteId: string, login = ''): SpettatoreVivo {
     let stato = canale.spettatori.get(utenteId);
     if (!stato) {
-      stato = { messaggi: 0, fiducia: 50, fidato: false, recenti: [] };
+      stato = {
+        login,
+        messaggi: 0,
+        fiducia: 50,
+        fidato: false,
+        recenti: [],
+        delta: 0,
+        timeouts: 0,
+        bans: 0,
+        avvisi: 0,
+      };
       canale.spettatori.set(utenteId, stato);
       if (canale.spettatori.size > MAX_SPETTATORI_MEMORIA) sfoltisci(canale);
     }
+    if (login && !stato.login) stato.login = login;
     return stato;
   }
 
   /** Registra un messaggio nello stato di chi lo ha scritto. */
-  annota(canale: Canale, utenteId: string, testo: string, quando = Date.now()): StatoSpettatore {
-    const stato = this.spettatore(canale, utenteId);
+  annota(
+    canale: Canale,
+    utenteId: string,
+    login: string,
+    testo: string,
+    quando = Date.now(),
+  ): SpettatoreVivo {
+    const stato = this.spettatore(canale, utenteId, login);
     stato.messaggi += 1;
+    stato.delta += 1;
     stato.recenti.push({ testo, quando });
     if (stato.recenti.length > RICORDA_MESSAGGI) stato.recenti.shift();
     return stato;
+  }
+
+  /**
+   * Carica dal database chi frequenta il canale.
+   *
+   * Non tutti: i piu recenti, fino a un tetto. Serve a far ritrovare la
+   * propria reputazione a chi il canale lo frequenta davvero — l'esenzione
+   * manuale, la fiducia accumulata — senza caricare in memoria anni di
+   * passanti.
+   *
+   * Chi resta fuori non e scoperto: Twitch dichiara lui stesso
+   * `is_first_message`, quindi le regole sul primo messaggio continuano a
+   * distinguere chi non ha mai scritto da chi scriveva un anno fa.
+   */
+  async caricaSpettatori(canale: Canale): Promise<number> {
+    try {
+      const righe = await getPrisma().twitchViewer.findMany({
+        where: { channelId: canale.id },
+        orderBy: { lastSeenAt: 'desc' },
+        take: PRECARICA_SPETTATORI,
+      });
+
+      for (const riga of righe) {
+        canale.spettatori.set(riga.twitchUserId, {
+          login: riga.login,
+          messaggi: riga.messageCount,
+          fiducia: riga.trust,
+          fidato: riga.trusted,
+          recenti: [],
+          delta: 0,
+          timeouts: riga.timeouts,
+          bans: riga.bans,
+          avvisi: riga.warnings,
+        });
+      }
+
+      return righe.length;
+    } catch (errore) {
+      // Senza, il canale parte con la memoria vuota e tratta tutti da nuovi.
+      // Scomodo, non rotto: e esattamente lo stato in cui gira la modalita
+      // autonoma, che funziona.
+      logger.warn({ err: errore, canale: canale.login }, 'spettatori non precaricati');
+      return 0;
+    }
+  }
+
+  /**
+   * Scrive nel database gli spettatori che si sono mossi.
+   *
+   * In blocco e solo i cambiati: una scrittura per messaggio farebbe da sola
+   * piu traffico di tutto il resto del bot. Il delta si azzera solo quando la
+   * scrittura e andata a buon fine, cosi un guasto rimanda il conteggio
+   * invece di perderlo.
+   */
+  async salvaSpettatori(canale: Canale): Promise<number> {
+    const sporchi = [...canale.spettatori.entries()].filter(([, stato]) => stato.delta > 0);
+    if (sporchi.length === 0) return 0;
+
+    const prisma = getPrisma();
+    let scritti = 0;
+
+    for (const [utenteId, stato] of sporchi) {
+      const delta = stato.delta;
+      try {
+        await prisma.twitchViewer.upsert({
+          where: { channelId_twitchUserId: { channelId: canale.id, twitchUserId: utenteId } },
+          create: {
+            channelId: canale.id,
+            twitchUserId: utenteId,
+            login: stato.login || utenteId,
+            messageCount: delta,
+            trust: stato.fiducia,
+            trusted: stato.fidato,
+            timeouts: stato.timeouts,
+            bans: stato.bans,
+            warnings: stato.avvisi,
+          },
+          update: {
+            login: stato.login || undefined,
+            // `increment` e non un valore assoluto: e l'unica forma che regge
+            // due processi che scrivono lo stesso spettatore, e il nodo di
+            // emergenza esiste apposta per essere quel secondo processo.
+            messageCount: { increment: delta },
+            timeouts: stato.timeouts,
+            bans: stato.bans,
+            warnings: stato.avvisi,
+            trust: stato.fiducia,
+            trusted: stato.fidato,
+            lastSeenAt: new Date(),
+          },
+        });
+        stato.delta -= delta;
+        scritti += 1;
+      } catch (errore) {
+        logger.debug({ err: errore, canale: canale.login }, 'spettatore non salvato');
+      }
+    }
+
+    return scritti;
   }
 }
 
