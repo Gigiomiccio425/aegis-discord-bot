@@ -242,6 +242,17 @@ export const GeneralConfig = z
     identity: BotIdentityConfig,
 
     /**
+     * Come si chiamano i ruoli che il bot gestisce.
+     *
+     * Non è una preferenza estetica: è l'informazione che permette di
+     * ritrovarli. Un ruolo rinominato resta lo stesso ruolo — stesso
+     * identificativo, stessi permessi sui canali, stesse persone dentro — e
+     * questo campo dice al bot come deve chiamarsi adesso, così una
+     * riesecuzione della predisposizione non lo riporta al nome tecnico.
+     */
+    stileRuoli: z.enum(['TECNICO', 'ANGELICO']).default('TECNICO'),
+
+    /**
      * Parola d'ordine dello staff, verificabile con `/verifica-staff`.
      * È la sola difesa pratica contro l'impersonificazione con voce clonata:
      * nessun software distingue un deepfake vocale, una parola concordata sì.

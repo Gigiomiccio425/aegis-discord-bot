@@ -40,99 +40,19 @@ import { childLogger } from '../core/logger.js';
 import { saveGuildConfig } from '../core/config.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { publishTicketPanel } from '../integrations/tickets.js';
+import { RUOLI, trovaRuolo } from './ruoli.js';
 
 const log = childLogger('predisposizione');
 
-/** Ruoli creati, con il percorso di configurazione che li riceve. */
-interface RoleSpec {
-  chiave: string;
-  nome: string;
-  colore: `#${string}`;
-  /** Mostra chi lo ha in una sezione separata della lista membri. */
-  hoist?: boolean;
-  descrizione: string;
-  /** Dove finisce l'ID. Un ruolo può servire a più campi. */
-  percorsi: string[];
-  /** Il ruolo isola: nasce senza alcun permesso e viene negato ovunque. */
-  isolante?: boolean;
-}
-
-const RUOLI: RoleSpec[] = [
-  /*
-   * Due ruoli distinti, e la distinzione non è formale.
-   *
-   * «Non verificato» è la condizione normale di chiunque arrivi: non ha
-   * ancora premuto un pulsante. «Quarantena» è un provvedimento. Usare lo
-   * stesso ruolo per entrambi significa accogliere ogni nuovo membro con un
-   * ruolo che dice «sospetto», e riempire l'elenco dei quarantenati con
-   * persone che non hanno fatto nulla — rendendolo inservibile proprio per
-   * ciò a cui serve.
-   *
-   * Anche gli effetti sono diversi: chi non ha verificato non deve *vedere*
-   * il server, chi è in quarantena lo vede ma non può *scrivere*. Era già
-   * dentro, e togliergli il contesto non aiuta nessuno.
-   */
-  {
-    chiave: 'non-verificato',
-    nome: 'ANGEL · Non verificato',
-    colore: '#6d7c94',
-    descrizione: 'Assegnato a chi entra. Vede solo il canale della verifica, finché non la supera.',
-    percorsi: ['security.verification.unverifiedRoleId'],
-  },
-  {
-    chiave: 'quarantena',
-    nome: 'ANGEL · Quarantena',
-    colore: '#8a8578',
-    descrizione: 'Isola chi è sospettato: può leggere, non può scrivere da nessuna parte.',
-    percorsi: ['general.quarantineRoleId'],
-    isolante: true,
-  },
-  {
-    chiave: 'verificato',
-    nome: 'ANGEL · Verificato',
-    colore: '#5fbf8b',
-    descrizione: 'Assegnato a chi supera il controllo d\'ingresso.',
-    percorsi: ['security.verification.verifiedRoleId'],
-  },
-  {
-    chiave: 'allerta',
-    nome: 'ANGEL · Allerta',
-    colore: '#e05263',
-    hoist: true,
-    descrizione: 'Menzionato quando succede qualcosa di grave. Dàllo a chi vuoi svegliare.',
-    percorsi: ['general.alertRoleId'],
-  },
-  {
-    chiave: 'staff',
-    nome: 'ANGEL · Staff',
-    colore: '#d8b45f',
-    hoist: true,
-    descrizione:
-      'Chi lo ha è esente dai moduli, può gestire sondaggi, eventi, giveaway e ticket.',
-    percorsi: [
-      'general.staffRoleIds',
-      'security.accountGuard.staffRoleIds',
-      'integrations.polls.creatorRoleIds',
-      'integrations.events.managerRoleIds',
-      'integrations.giveaways.hostRoleIds',
-      'integrations.tickets.supportRoleIds',
-    ],
-  },
-  {
-    chiave: 'diretta',
-    nome: 'ANGEL · In diretta',
-    colore: '#9146ff',
-    descrizione: 'Assegnato agli streamer mentre trasmettono. Serve al modulo Twitch.',
-    percorsi: [],
-  },
-  {
-    chiave: 'evento',
-    nome: 'ANGEL · Partecipa',
-    colore: '#6f8a95',
-    descrizione: 'Assegnato a chi conferma la presenza a un evento programmato.',
-    percorsi: ['integrations.events.rsvpRoleId'],
-  },
-];
+/*
+ * L'elenco dei ruoli non sta più qui.
+ *
+ * Vive in `ruoli.ts`, insieme ai nomi che assumono in ciascuno stile e ai
+ * permessi che ricevono. Erano due elenchi — uno qui, uno nel modello del
+ * server — e producevano due ruoli per lo stesso concetto: chi moderava
+ * doveva avere sia `ANGEL · Staff` sia `☾ Ali Guardiane`, uno perché il bot
+ * lo esentasse e l'altro perché si vedesse nella lista membri.
+ */
 
 /** Canali creati dentro una categoria riservata allo staff. */
 interface ChannelSpec {
@@ -210,8 +130,24 @@ export async function provisionGuild(
 
   /* ── Ruoli ─────────────────────────────────────────────────── */
   if (me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    for (const spec of RUOLI) {
-      const esistente = guild.roles.cache.find((role) => role.name === spec.nome);
+    // Lo stile scelto per questo server: chi ha già costruito il server con
+    // uno stile non deve ritrovarsi i ruoli rinominati a ogni riesecuzione.
+    const stile = bozza.general.stileRuoli;
+
+    // Solo i ruoli di base. Quelli d'identità — guida, aiutanti, sostenitori,
+    // avvisi — li crea `/crea-server`: su un'installazione che vuole solo la
+    // parte di sicurezza sarebbero sei ruoli decorativi mai chiesti.
+    for (const spec of RUOLI.filter((voce) => voce.base)) {
+      const vestito = spec.vestiti[stile];
+
+      /*
+       * Si cerca per identificativo *e* per nome, in tutti gli stili.
+       *
+       * Cercare solo il nome corrente ricreerebbe un doppione su ogni server
+       * che ha cambiato stile: `ANGEL · Staff` non esiste più perché adesso
+       * si chiama `☾ Ali Guardiane`, e la ricerca lo darebbe per mancante.
+       */
+      const esistente = trovaRuolo(guild, spec, bozza);
       let id = esistente?.id ?? null;
 
       // Un campo già compilato con un ruolo vivo non si tocca: chi ha scelto
@@ -225,24 +161,26 @@ export async function provisionGuild(
       if (!id && (!giaConfigurato || options.ricreaEliminati)) {
         const creato = await guild.roles
           .create({
-            name: spec.nome,
-            color: spec.colore,
-            hoist: spec.hoist ?? false,
+            name: vestito.nome,
+            color: vestito.colore,
+            hoist: vestito.separato,
             mentionable: false,
-            // Nessun permesso: questi ruoli servono a marcare e a isolare, non
-            // a concedere. I permessi si aggiungono a mano, sapendo cosa si fa.
+            // Nessun permesso alla nascita, nemmeno per lo staff: un ruolo
+            // appena creato non ha ancora nessuno dentro, e darglieli qui
+            // significa crearlo già pericoloso. Arrivano con lo stile, dopo
+            // che chi guarda ha visto comparire il nome.
             permissions: [],
             reason: 'Predisposizione automatica di ANGEL',
           })
           .catch((error: unknown) => {
-            log.warn({ err: error, ruolo: spec.nome }, 'creazione ruolo fallita');
-            risultato.errori.push(`ruolo ${spec.nome}`);
+            log.warn({ err: error, ruolo: vestito.nome }, 'creazione ruolo fallita');
+            risultato.errori.push(`ruolo ${vestito.nome}`);
             return null;
           });
 
         if (creato) {
           id = creato.id;
-          risultato.ruoliCreati.push(spec.nome);
+          risultato.ruoliCreati.push(vestito.nome);
           if (spec.isolante) await isolaRuolo(guild, creato.id);
         }
       }

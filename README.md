@@ -701,6 +701,72 @@ server, ma il proprietario risulterebbe il bot e la proprietà non è trasferibi
 server di cui non sei padrone non è tuo. Il server si crea a mano in dieci secondi, e da lì in poi
 fa tutto il comando.
 
+### I ruoli
+
+C'è **un ruolo per concetto**, e cambia vestito invece di essere affiancato da un secondo. Nasce con
+il nome tecnico — `ANGEL · Staff` — e quando scegli uno stile con `/crea-server` diventa
+`☾ Ali Guardiane` **restando lo stesso ruolo**: stesso identificativo, stesse persone dentro,
+stessi permessi sui canali. La configurazione non va riscritta e niente si rompe.
+
+Fino alla 1.26 erano due elenchi che non si conoscevano, e il risultato era che un moderatore doveva
+avere `ANGEL · Staff` *e* `☾ Ali Guardiane`: uno perché il bot lo esentasse, l'altro perché si
+vedesse nella lista membri.
+
+| Ruolo | Con lo stile angelico | A chi va |
+|---|---|---|
+| `ANGEL · Non verificato` | `☁︎ In attesa` | a chiunque entri — lo mette il bot |
+| `ANGEL · Verificato` | `˚ʚ♡ɞ˚ Piumette` | a chi supera la verifica — lo mette il bot |
+| `ANGEL · Quarantena` | `⛆ Nube grigia` | provvedimento: legge ovunque, non scrive |
+| `ANGEL · Staff` | `☾ Ali Guardiane` | **ai moderatori veri.** Sei campi puntano qui |
+| `ANGEL · Guida` | `⋆｡°✩ Angelo Maggiore` | a te, e a chi divide la responsabilità del server |
+| `ANGEL · Aiutanti` | `✿ Piume` | a chi dà una mano e non deve poter bandire nessuno |
+| `ANGEL · Sostenitori` | `♡ Nuvola d'oro` | a chi ha potenziato il server |
+| `ANGEL · Allerta` | `⚡ Sveglia le ali` | a chi vuoi svegliare di notte per un raid |
+| `ANGEL · In diretta` | `✧ Luci accese` | allo streamer mentre trasmette — lo mette il bot |
+| `ANGEL · Partecipa` | `✿ Ci sarò` | a chi conferma un evento — lo mette il bot |
+| `ANGEL · Avviso diretta/video/eventi` | `⋆ ✦ ✧ Avviso …` | se li prendono da soli da «prendi-i-ruoli» |
+
+I primi quattro della predisposizione (`Non verificato`, `Verificato`, `Quarantena`, `Staff`,
+più `Allerta`, `In diretta` e `Partecipa`) nascono con `/prepara-server`. Gli altri arrivano con
+`/crea-server`: su un'installazione che vuole solo la parte di sicurezza sarebbero ruoli decorativi
+mai chiesti.
+
+**I permessi arrivano con lo stile, non alla creazione.** Un ruolo appena nato non ha ancora nessuno
+dentro, e darglieli lì significa crearlo già pericoloso. Quando si sceglie uno stile, `Staff` riceve
+espelli/bandisci/silenzia/gestisci messaggi/registro/soprannomi, e `Guida` quelli più tutto il resto
+che serve a tenere in ordine il server.
+
+Tre permessi il bot non li dà **mai**, a nessun ruolo e in nessuno stile: **Amministratore**,
+**Gestire i ruoli** e **Gestire i canali**. Sono le tre chiavi con cui si prende il controllo di un
+server — chi può assegnare ruoli può assegnarsi qualunque cosa — e restano una decisione di una
+persona. C'è un test che verifica che non compaiano.
+
+E i permessi **si aggiungono, non si sostituiscono**: se ne hai tolti a mano, restano tolti. Una
+riesecuzione non riporta indietro un ruolo che avevi ridotto di proposito.
+
+### Ruoli doppi: `/ripara-ruoli`
+
+Per i server costruiti prima dell'unificazione, che hanno entrambi gli insiemi.
+
+```
+/ripara-ruoli                    guarda e racconta cosa farebbe
+/ripara-ruoli applica:true       lo fa
+/ripara-ruoli applica:true stile:Angelico
+```
+
+Per ogni concetto trova tutti i ruoli che gli corrispondono, ne sceglie uno — quello già scritto in
+configurazione, altrimenti quello con più persone, altrimenti il più alto — sposta le persone dagli
+altri, cancella i vuoti e corregge i campi.
+
+Non fa niente finché non glielo si chiede: cancellare un ruolo porta via ogni permesso che qualcuno
+gli aveva dato sui canali, uno per uno, senza avviso, e quell'anteprima è l'unica occasione di
+accorgersi che uno dei doppioni non era un doppione. Chi si sposta riceve **prima** il ruolo che
+resta e solo dopo perde il vecchio: al contrario, un errore fra le due chiamate lascerebbe qualcuno
+senza nessuno dei due.
+
+Un ruolo con più di 500 persone, o più alto del bot, o creato da un'integrazione, viene lasciato
+dov'è e segnalato.
+
 ### Cosa fa la predisposizione ai permessi
 
 Con la verifica attiva, «Prepara il server» chiude il server a `@everyone`: i canali diventano
@@ -794,7 +860,7 @@ persona no, il pannello lo dice invece di lasciare una funzione che non parte ma
 
 **I comandi hanno anche il nome inglese.** `/ban`, `/kick`, `/mute`, `/warn`, `/purge`, `/whois`,
 `/report`, `/setup`, `/words`, `/status`, `/say` fanno esattamente quello che fanno `/bandisci`,
-`/espelli`, `/silenzia`, `/avverti`, `/pulisci`, `/utente`, `/segnala`, `/prepara-server`,
+`/espelli`, `/silenzia`, `/avverti`, `/pulisci`, `/utente`, `/segnala`, `/prepara-server`, `/ripara-ruoli`,
 `/parole`, `/stato`, `/dì`. Non è una copia del comando: è lo stesso, registrato con due nomi, così
 il giorno in cui uno cambia comportamento cambiano entrambi.
 

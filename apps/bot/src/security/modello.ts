@@ -12,6 +12,7 @@ import {
 import { GuildConfigSchema, type GuildConfig } from '@angel/shared';
 import { childLogger } from '../core/logger.js';
 import { saveGuildConfig } from '../core/config.js';
+import { applicaStile, RUOLI } from './ruoli.js';
 
 const log = childLogger('modello');
 
@@ -73,64 +74,19 @@ interface CategoriaModello {
   riservata?: boolean;
 }
 
-/** I ruoli d'identità: non danno poteri, dicono chi sei e cosa vuoi ricevere. */
-interface RuoloModello {
-  nome: string;
-  colore: number;
-  separato: boolean;
-  descrizione: string;
-}
-
-const RUOLI_MODELLO: RuoloModello[] = [
-  {
-    nome: '⋆｡°✩ Angelo Maggiore',
-    colore: 0xfff6d5,
-    separato: true,
-    descrizione: 'Chi guida il server. Sopra tutti nella gerarchia, sotto nessuno.',
-  },
-  {
-    nome: '☾ Ali Guardiane',
-    colore: 0xbfd8ff,
-    separato: true,
-    descrizione: 'Moderazione: silenzia, espelle, bandisce, gestisce i ticket.',
-  },
-  {
-    nome: '✿ Piume',
-    colore: 0xc8f7dc,
-    separato: true,
-    descrizione: 'Aiutanti: rispondono, accolgono, segnalano. Nessun potere di sanzione.',
-  },
-  {
-    nome: '♡ Nuvola d’oro',
-    colore: 0xffd1dc,
-    separato: true,
-    descrizione: 'Chi ha potenziato il server. Riconoscenza, non permessi.',
-  },
-  {
-    nome: '˚ʚ♡ɞ˚ Piumette',
-    colore: 0xe6ccff,
-    separato: false,
-    descrizione: 'La community. Si ottiene con la verifica.',
-  },
-  {
-    nome: '⋆ Avviso diretta',
-    colore: 0x9146ff,
-    separato: false,
-    descrizione: 'Menzionato quando comincia una diretta. Si prende e si lascia da soli.',
-  },
-  {
-    nome: '✦ Avviso video',
-    colore: 0xff6b6b,
-    separato: false,
-    descrizione: 'Menzionato quando esce un video nuovo.',
-  },
-  {
-    nome: '✧ Avviso eventi',
-    colore: 0xffe9a8,
-    separato: false,
-    descrizione: 'Menzionato per eventi, giochi insieme, serate a tema.',
-  },
-];
+/*
+ * I ruoli non si creano più qui.
+ *
+ * Erano otto, e affiancavano i sette della predisposizione: `☾ Ali Guardiane`
+ * accanto ad `ANGEL · Staff`, con il risultato che un moderatore doveva
+ * averli tutti e due — uno perché si vedesse nella lista membri, l'altro
+ * perché il bot lo esentasse dai moduli.
+ *
+ * Adesso c'è un ruolo per concetto, in `ruoli.ts`, e costruire il server gli
+ * cambia **vestito**: nome, colore, posizione nella lista e permessi, tenendo
+ * lo stesso identificativo. La configurazione resta valida, i permessi sui
+ * canali continuano a puntare al ruolo giusto, e chi lo aveva non perde nulla.
+ */
 
 const MODELLO: CategoriaModello[] = [
   {
@@ -279,12 +235,19 @@ export const CANALI_MODELLO = MODELLO.flatMap((categoria) =>
 );
 
 /** I nomi dei ruoli del modello, per il controllo dei doppioni. */
-export const RUOLI_MODELLO_NOMI = RUOLI_MODELLO.map((ruolo) => ruolo.nome);
+/** I nomi che i ruoli assumono con questo modello. Per i test e per la documentazione. */
+export const RUOLI_MODELLO_NOMI = RUOLI.map((ruolo) => ruolo.vestiti.ANGELICO.nome);
 
 export interface EsitoModello {
   categorieCreate: string[];
   canaliCreati: string[];
   ruoliCreati: string[];
+  /** Ruoli che hanno cambiato nome invece di essere ricreati. */
+  ruoliRinominati: { da: string; a: string }[];
+  /** Ruoli che hanno ricevuto dei permessi. */
+  ruoliConPermessi: { ruolo: string; quanti: number }[];
+  /** Ruoli che il bot non ha potuto toccare, con il motivo. */
+  ruoliSaltati: { ruolo: string; motivo: string }[];
   community: 'attivata' | 'già attiva' | 'non riuscita' | 'saltata';
   campiCompilati: number;
   errori: string[];
@@ -308,6 +271,9 @@ export async function costruisciModello(
     categorieCreate: [],
     canaliCreati: [],
     ruoliCreati: [],
+    ruoliRinominati: [],
+    ruoliConPermessi: [],
+    ruoliSaltati: [],
     community: 'saltata',
     campiCompilati: 0,
     errori: [],
@@ -322,26 +288,38 @@ export async function costruisciModello(
   const bozza = GuildConfigSchema.parse(structuredClone(config));
   const modificati: string[] = [];
 
-  /* ── Ruoli d'identità ──────────────────────────────────────── */
-  if (me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    for (const spec of RUOLI_MODELLO) {
-      if (guild.roles.cache.some((role) => role.name === spec.nome)) continue;
+  /* ── Ruoli: si rivestono, non si ricreano ──────────────────── */
+  /*
+   * Qui sta il cuore del comando, e vale la pena dire cosa fa *non* facendo.
+   *
+   * Non crea un secondo insieme di ruoli accanto a quelli della
+   * predisposizione: prende quelli che ci sono — ritrovandoli
+   * dall'identificativo in configurazione, o dal nome che avevano in un
+   * qualsiasi stile precedente — e cambia loro nome, colore, posizione nella
+   * lista e permessi. Lo stesso identificativo attraversa il cambio, quindi
+   * niente si rompe: né la configurazione, né i permessi impostati sui
+   * canali, né l'appartenenza di chi quel ruolo ce l'aveva già.
+   *
+   * I permessi arrivano adesso e non alla creazione. È la differenza fra un
+   * bot che distribuisce poteri da solo appena entra e uno che li dà quando
+   * qualcuno ha detto che tipo di server vuole.
+   */
+  const stile = await applicaStile(guild, bozza, 'ANGELICO', {
+    crea: true,
+    permessi: true,
+    attore,
+  });
 
-      const creato = await guild.roles
-        .create({
-          name: spec.nome,
-          color: spec.colore,
-          hoist: spec.separato,
-          mentionable: false,
-          reason: `Modello del server, richiesto da ${attore}`,
-        })
-        .catch((errore: unknown) => {
-          log.warn({ err: errore, ruolo: spec.nome }, 'ruolo del modello non creato');
-          return null;
-        });
+  esito.ruoliCreati.push(...stile.creati);
+  esito.ruoliRinominati = stile.rinominati;
+  esito.ruoliConPermessi = stile.permessiDati;
+  esito.ruoliSaltati = stile.saltati;
 
-      if (creato) esito.ruoliCreati.push(spec.nome);
-    }
+  // Lo stile si ricorda: senza, la predisposizione successiva rimetterebbe i
+  // nomi tecnici, e i ruoli ballerebbero fra i due nomi a ogni riavvio.
+  if (bozza.general.stileRuoli !== 'ANGELICO') {
+    bozza.general.stileRuoli = 'ANGELICO';
+    modificati.push('general.stileRuoli');
   }
 
   /* ── Categorie e canali ────────────────────────────────────── */

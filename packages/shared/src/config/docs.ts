@@ -84,6 +84,14 @@ export const BY_PATH: Record<string, FieldDoc> = {
       'nessun software distingue un deepfake vocale, una parola concordata in anticipo sì.',
   },
   'general.locale': { label: 'Lingua', help: 'Lingua dei messaggi del bot: italiano o inglese.' },
+  'general.stileRuoli': {
+    label: 'Stile dei nomi dei ruoli',
+    help:
+      'Come si chiamano i ruoli gestiti dal bot. **Tecnico**: nomi espliciti con il prefisso ' +
+      "ANGEL, riconoscibili a colpo d'occhio. **Angelico**: nuvole, piume e caratteri speciali, " +
+      'lo stile del modello di server. Cambiarlo rinomina i ruoli che esistono senza ricrearli: ' +
+      'chi li aveva li mantiene, i permessi sui canali restano dove sono.',
+  },
   'security.links.linkChannelIds': {
     label: 'Canali dove i link sono ammessi',
     help: 'Vuoto = i link si possono mettere ovunque. Indicandone anche uno solo, negli altri vengono tolti.',

@@ -76,6 +76,7 @@ const PSEUDONIMI: Record<string, string> = {
   verifica: 'verify',
   'prepara-server': 'setup',
   'crea-server': 'build-server',
+  'ripara-ruoli': 'fix-roles',
   annunci: 'announcements',
   archivio: 'archive',
   sondaggio: 'poll',
