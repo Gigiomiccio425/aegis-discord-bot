@@ -67,7 +67,7 @@ services:
   # ─────────────────────────────────────────────────────────
   angel:
     # ⬇ PER AGGIORNARE: cambia il numero qui e riavvia l'app. È l'unico posto.
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.24.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.25.0
     # Riscarica l'immagine a ogni avvio. Indispensabile con `latest`, che cambia
     # sotto lo stesso nome; con una versione fissa non fa danno e toglie un dubbio.
     pull_policy: always
@@ -102,13 +102,44 @@ services:
       # un'installazione personale va tenuto acceso.
       PANEL_OWNERS_ONLY: 'true'
 
-      # Facoltative: senza, lo scanner usa le sole blocklist locali e le
-      # integrazioni Twitch restano spente. Si possono aggiungere dopo.
+      # Facoltative: senza, lo scanner usa le sole blocklist locali.
       GOOGLE_SAFE_BROWSING_KEY: ''
       THREAT_FEEDS_ENABLED: 'true'
+
+      # ── BOT TWITCH ──────────────────────────────────────────
+      #
+      # Un secondo bot dentro lo stesso container: modera la chat Twitch —
+      # anti-spam, link truffa, venditori di visualizzatori, ondate — e fa
+      # quello che fa un bot di chat: messaggi a tempo, comandi, saluti.
+      # Ha un pannello suo sulla porta 781, pensato per essere dato agli
+      # streamer perché si configurino da soli.
+      #
+      # Senza queste variabili resta spento e non disturba nessuno.
+      #
+      # 1. L'APPLICAZIONE, da https://dev.twitch.tv/console/apps
+      #    Come «OAuth Redirect URL» va TWITCH_PUBLIC_URL + /api/auth/callback
       TWITCH_CLIENT_ID: ''
       TWITCH_CLIENT_SECRET: ''
+      # Serve solo agli annunci di diretta su Discord, non al bot di chat.
       TWITCH_EVENTSUB_SECRET: ''
+
+      # 2. L'ACCOUNT da cui il bot parla in chat.
+      #    È un account Twitch normale — creane uno chiamato come il tuo bot —
+      #    che autorizza l'applicazione una volta sola. Senza, il bot legge la
+      #    chat ma non può scrivere: per parlare serve una bocca.
+      #    I token si ottengono con il flusso OAuth dell'applicazione,
+      #    chiedendo gli ambiti  user:read:chat user:write:chat channel:bot
+      TWITCH_BOT_USER_ID: ''
+      TWITCH_BOT_LOGIN: ''
+      TWITCH_BOT_ACCESS_TOKEN: ''
+      TWITCH_BOT_REFRESH_TOKEN: ''
+
+      # 3. L'indirizzo del pannello degli streamer.
+      #    A differenza del pannello Discord, questo è fatto per stare su
+      #    Internet: è lì che gli streamer vanno a collegare il proprio canale.
+      #    Deve combaciare esattamente con il redirect registrato su Twitch.
+      TWITCH_PUBLIC_URL: 'http://IP_DELLA_TUA_VPS:781'
+      TWITCH_PANEL_PORT: '781'
 
       # ── COPIE DI SICUREZZA ──────────────────────────────────
       #
@@ -169,6 +200,15 @@ services:
     ports:
       - target: 8080
         published: '780'
+        protocol: tcp
+      # Il pannello degli streamer, su una porta sua.
+      #
+      # Due porte e non una perché sono due platee: sulla 780 ci sono i dati
+      # di ogni server Discord ed è roba tua, sulla 781 ci va lo streamer a
+      # configurarsi il bot. Aprire la seconda a Internet non apre la prima —
+      # che è precisamente il motivo per cui sono separate.
+      - target: 781
+        published: '781'
         protocol: tcp
     depends_on:
       - aegis-postgres

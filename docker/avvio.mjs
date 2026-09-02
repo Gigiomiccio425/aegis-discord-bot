@@ -25,11 +25,26 @@ import { existsSync, readFileSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-/** I tre processi di lunga durata. La migrazione è a parte: finisce e basta. */
+/** I processi di lunga durata. La migrazione è a parte: finisce e basta. */
 const SERVIZI = [
   { nome: 'bot', comando: ['node', 'apps/bot/dist/index.js'] },
   { nome: 'worker', comando: ['node', 'apps/worker/dist/index.js'] },
   { nome: 'api', comando: ['node', 'apps/api/dist/index.js'] },
+  /*
+   * Il bot Twitch.
+   *
+   * Processo suo e non un pezzo del worker, per due motivi. Il primo è che
+   * tiene aperte connessioni WebSocket verso Twitch e deve reagire in
+   * millisecondi: dividere il ciclo di eventi con l'OCR delle immagini
+   * significherebbe che ogni analisi da due secondi ritarda la moderazione
+   * di una chat. Il secondo è che deve poter morire da solo — se il bot
+   * Twitch cade, Discord non se ne accorge nemmeno.
+   *
+   * Si spegne da solo se le credenziali di Twitch non ci sono, quindi resta
+   * in questo elenco anche per chi usa ANGEL solo su Discord: non fa niente
+   * e non costa niente.
+   */
+  { nome: 'twitch', comando: ['node', 'apps/twitch/dist/index.js'] },
 ];
 
 /** Tentativi di migrazione prima di arrendersi, uno ogni tre secondi. */
@@ -177,7 +192,7 @@ process.on('SIGINT', () => chiudi('SIGINT'));
    Controllarlo qui costa millisecondi e trasforma quel ciclo in una riga che
    dice cosa manca.
    ═══════════════════════════════════════════════════════════════════════ */
-const PACCHETTI = ['db', 'shared', 'scanner'];
+const PACCHETTI = ['db', 'shared', 'scanner', 'twitch'];
 
 /**
  * I file che devono esistere, ricavati e non scritti a mano.
@@ -210,8 +225,9 @@ function fileRichiesti() {
     }
   }
 
-  // Il pannello non è un modulo: è servito come file statico dall'API.
+  // I pannelli non sono moduli: sono file statici serviti da chi li espone.
   richiesti.push('apps/web/dist/index.html');
+  richiesti.push('apps/web-twitch/dist/index.html');
   return richiesti;
 }
 

@@ -1,4 +1,4 @@
-import type { Client } from 'discord.js';
+import { EmbedBuilder, type Client } from 'discord.js';
 import { z } from 'zod';
 import { childLogger } from './logger.js';
 import { getGuildConfig } from './config.js';
@@ -59,6 +59,29 @@ const PanelCommand = z.discriminatedUnion('action', [
     title: z.string().max(200).nullable().default(null),
     /** ID di un messaggio del bot da riscrivere invece di pubblicarne uno nuovo. */
     editMessageId: z.string().nullable().default(null),
+  }),
+  /*
+   * Registro del bot Twitch.
+   *
+   * Lo pubblica il processo Twitch, che con Discord non parla: l'unico
+   * collegato al gateway è il bot, e due processi con lo stesso token
+   * riceverebbero gli stessi eventi agendo due volte. Passa da qui per la
+   * stessa ragione per cui ci passa il pannello.
+   */
+  z.object({
+    action: z.literal('twitch.log'),
+    guildId: z.string(),
+    channelId: z.string(),
+    canale: z.string(),
+    tipo: z.string(),
+    modulo: z.string().nullable().default(null),
+    gravita: z.number().int().min(0).max(100).default(0),
+    utente: z.string().nullable().default(null),
+    azione: z.string().nullable().default(null),
+    durataSec: z.number().int().nullable().default(null),
+    motivo: z.string().nullable().default(null),
+    simulato: z.boolean().default(false),
+    testo: z.string().max(1000).nullable().default(null),
   }),
   z.object({ action: z.literal('commands.reload'), guildId: z.string() }),
   z.object({ action: z.literal('config.reloaded'), guildId: z.string() }),
@@ -236,6 +259,52 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
         summary: `Messaggio pubblicato dal bot su richiesta di <@${parsed.actorId}> (pannello)`,
         payload: { text: parsed.text.slice(0, 500), hasImage: Boolean(parsed.imageUrl) },
       });
+      break;
+    }
+
+    /*
+     * Un fatto della chat Twitch, portato su Discord.
+     *
+     * Embed e non testo semplice per una ragione pratica: il colore si vede
+     * prima di leggere. In un canale di registro che scorre, riconoscere un
+     * bando da un messaggio cancellato senza leggere una riga è la
+     * differenza fra guardarlo e non guardarlo.
+     */
+    case 'twitch.log': {
+      const canale = guild.channels.cache.get(parsed.channelId);
+      if (!canale?.isTextBased()) break;
+
+      const colore =
+        parsed.gravita >= 70 ? 0xe05263 : parsed.gravita >= 35 ? 0xd8b45f : 0x6f8a95;
+
+      const righe: string[] = [];
+      if (parsed.utente) righe.push(`**Chi** ${parsed.utente}`);
+      if (parsed.motivo) righe.push(`**Perché** ${parsed.motivo}`);
+      if (parsed.azione) {
+        righe.push(
+          `**Azione** ${parsed.azione.toLowerCase()}` +
+            (parsed.durataSec ? ` per ${parsed.durataSec}s` : ''),
+        );
+      }
+      if (parsed.testo) {
+        // In blocco di codice: il testo viene da un estraneo e può contenere
+        // menzioni, che in un canale di registro suonerebbero il telefono
+        // dello staff a ogni riga di spam.
+        righe.push(`\`\`\`\n${parsed.testo.replace(/`/g, "'").slice(0, 500)}\n\`\`\``);
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(colore)
+        .setAuthor({ name: `Twitch · ${parsed.canale}` })
+        .setTitle(parsed.simulato ? `${parsed.tipo} (prova)` : parsed.tipo)
+        .setDescription(righe.join('\n') || '—')
+        .setTimestamp(new Date());
+
+      if (parsed.modulo) embed.setFooter({ text: parsed.modulo });
+
+      await canale.send({ embeds: [embed] }).catch((errore: unknown) =>
+        log.warn({ err: errore, guildId: parsed.guildId }, 'registro Twitch non pubblicato'),
+      );
       break;
     }
 

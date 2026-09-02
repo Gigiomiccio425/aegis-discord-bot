@@ -1,0 +1,133 @@
+@import 'tailwindcss';
+
+/*
+  ═══════════════════════════════════════════════════════════════════════
+  ANGEL per Twitch — tema
+
+  Volutamente diverso dal pannello Discord, e non per capriccio: sono due
+  strumenti per due persone diverse, in due momenti diversi.
+
+  Il pannello Discord lo guarda chi gestisce il bot, quasi sempre dopo che è
+  successo qualcosa: fondo quasi nero, accento oro, densità alta. È una sala
+  di controllo.
+
+  Questo lo apre uno streamer, spesso una volta sola, spesso venti minuti
+  prima di andare in diretta, e con la fretta addosso. Deve capirsi da solo.
+  Da qui tre scelte:
+
+  • **Viola come Twitch, ma spostato.** Riconoscibile come «roba di Twitch»
+    senza fingere di essere Twitch: un'interfaccia che copia troppo bene una
+    piattaforma insegna a fidarsi delle interfacce che la copiano, ed è
+    esattamente l'abitudine che il phishing sfrutta.
+
+  • **Spazio, non densità.** Meno cose per schermo, ciascuna più grande. Chi
+    apre questo pannello non lo conosce, e la densità si legge solo se si sa
+    già dove guardare.
+
+  • **Il colore dice il livello.** Verde-osserva, viola-normale, ambra-alto,
+    rosso-blindato. Dopo il primo sguardo il livello si riconosce dal colore
+    del bordo senza leggere una parola, ed è la sola informazione che deve
+    passare in un secondo.
+  ═══════════════════════════════════════════════════════════════════════
+*/
+
+@theme {
+  --color-fondo: #0d0b14;
+  --color-superficie: #16121f;
+  --color-superficie-2: #1f1a2b;
+  --color-bordo: #2e2740;
+  --color-testo: #ece9f3;
+  --color-fioco: #9a92ad;
+
+  --color-accento: #a970ff;
+  --color-accento-forte: #c9a4ff;
+  --color-accento-tenue: #2a1f45;
+
+  --color-ok: #4ade80;
+  --color-attenzione: #fbbf24;
+  --color-pericolo: #f87171;
+  --color-informazione: #60a5fa;
+
+  --radius-morbido: 14px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-fondo);
+  color: var(--color-testo);
+  font-family:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+  Un alone viola in alto, appena percettibile.
+
+  Serve a dare una direzione allo sguardo su schermi grandi, dove un fondo
+  piatto lascia la pagina senza un centro. È in `background-attachment: fixed`
+  perché scorrendo non deve seguire il contenuto: è la stanza, non il mobilio.
+*/
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 32rem at 50% -12rem, rgba(169, 112, 255, 0.16), transparent 70%),
+    radial-gradient(40rem 24rem at 100% 0%, rgba(96, 165, 250, 0.06), transparent 70%);
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* Barra di scorrimento discreta: su una pagina scura quella di sistema urla. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-bordo) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bordo);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+  Focus visibile.
+
+  Non è accessibilità di facciata: questo pannello si compila spesso di corsa,
+  e chi passa da un campo all'altro con Tab deve sapere dov'è.
+*/
+:focus-visible {
+  outline: 2px solid var(--color-accento);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

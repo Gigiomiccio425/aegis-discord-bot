@@ -341,20 +341,28 @@ async function inserisci(
  * fallirebbe con un errore di chiave duplicata. Il bot sembrerebbe ripristinato
  * e non riuscirebbe a registrare più nulla.
  */
+const CONTATORI: { tabella: string; colonna: string }[] = [
+  { tabella: 'AuditEvent', colonna: 'id' },
+  { tabella: 'TwitchEvent', colonna: 'id' },
+];
+
 async function allineaSequenze(esito: EsitoRipristino): Promise<void> {
   const prisma = getPrisma();
-  try {
-    await prisma.$executeRawUnsafe(
-      `SELECT setval(
-         pg_get_serial_sequence('"AuditEvent"', 'id'),
-         GREATEST(COALESCE((SELECT MAX(id) FROM "AuditEvent"), 0), 1)
-       )`,
-    );
-  } catch (errore) {
-    esito.avvisi.push(
-      'contatore di AuditEvent non riallineato: il registro potrebbe rifiutare le nuove righe',
-    );
-    logger.warn({ err: errore }, 'riallineamento della sequenza non riuscito');
+
+  for (const { tabella, colonna } of CONTATORI) {
+    try {
+      await prisma.$executeRawUnsafe(
+        `SELECT setval(
+           pg_get_serial_sequence('"${tabella}"', '${colonna}'),
+           GREATEST(COALESCE((SELECT MAX("${colonna}") FROM "${tabella}"), 0), 1)
+         )`,
+      );
+    } catch (errore) {
+      esito.avvisi.push(
+        `contatore di ${tabella} non riallineato: potrebbe rifiutare le nuove righe`,
+      );
+      logger.warn({ err: errore, tabella }, 'riallineamento della sequenza non riuscito');
+    }
   }
 }
 

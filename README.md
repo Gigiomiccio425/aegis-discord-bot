@@ -31,6 +31,7 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 - [Backup, archivio e ruoli](#backup-archivio-e-ruoli)
 - [Traslocare su un'altra macchina](#traslocare-su-unaltra-macchina)
 - [Notifiche da fonti esterne](#notifiche-da-fonti-esterne)
+- [Il bot Twitch](#il-bot-twitch)
 - [Bacheca e ticket](#bacheca-e-ticket)
 - [Server molto grandi: sharding](#server-molto-grandi-sharding)
 - [Privacy e GDPR](#privacy-e-gdpr)
@@ -1181,6 +1182,39 @@ Due protezioni che contano più della logica di pubblicazione:
 
 Il confronto per capire cosa è nuovo usa l'**identificativo**, non la data: i feed hanno date
 inaffidabili — fusi sbagliati, aggiornamenti che ne cambiano il valore, elementi ripubblicati.
+
+---
+
+## Il bot Twitch
+
+Un secondo bot dentro lo stesso container. Non è l'integrazione che annuncia le dirette su Discord
+— quella sta qui sopra: è un **bot di chat Twitch** completo, che modera la chat e fa quello che
+fa un bot di chat.
+
+**Cosa fa.** Riconosce i venditori di visualizzatori (anche scritti `Ch̍eap Vi̇ewers` per
+aggirare i filtri), i link truffa, le finte carte regalo Steam, i wallet drainer, chi si spaccia
+per lo streamer, le ondate coordinate. E messaggi a tempo, comandi personalizzati, saluti, comandi
+integrati.
+
+**Cinque livelli invece di trenta soglie.** Osserva · Leggero · Normale · Alto · Blindato. Una
+scelta sola imposta tutto; toccare un campo porta a «personalizzato» e nessun preset lo tocca più.
+Cambiare livello non cancella timer, comandi e domini ammessi.
+
+**Condivide con il bot Discord** la lista delle parole vietate — una parola aggiunta da una parte
+vale anche dall'altra, perché non ci sono due liste — le blocklist dei domini aggiornate ogni sei
+ore, la normalizzazione del testo e i modelli con i segnaposto. In direzione opposta, ogni azione
+finisce in un canale Discord come embed colorato per gravità.
+
+**Pannello su una porta separata** (781), fatto per essere esposto: sono gli streamer a doverlo
+raggiungere per collegare il proprio canale da soli. Il pannello Discord contiene i dati di ogni
+server e resta dietro Tailscale — due porte, due platee, e aprire la seconda non apre la prima.
+
+**Funziona senza pannello.** `!angel livello alto`, `!angel scudo on`, `!angel permetti
+discord.gg` si scrivono in chat. Se cade il database, il bot riparte da una copia su disco dei
+canali e continua a moderare, rispondere e registrare su file.
+
+I dettagli — minacce, architettura, obblighi dei termini di servizio di Twitch, installazione —
+stanno in **[docs/TWITCH.md](docs/TWITCH.md)**.
 
 ---
 

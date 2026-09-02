@@ -19,7 +19,7 @@
 
 import { RedisKeys, VERSION_HEARTBEAT_SEC, VERSION_TTL_SEC } from './index.js';
 
-export type ServiceName = 'bot' | 'worker' | 'api';
+export type ServiceName = 'bot' | 'worker' | 'api' | 'twitch';
 
 /** Versione scritta nell'immagine dalla CI. `sviluppo` quando manca. */
 export function runningVersion(): string {
@@ -63,14 +63,26 @@ export interface ServiceVersions {
   stale: ServiceName[];
 }
 
+/**
+ * I servizi che devono esserci sempre.
+ *
+ * `twitch` non è qui di proposito: si accende solo se le credenziali di
+ * Twitch sono state compilate, e chi usa ANGEL per il solo Discord lo lascia
+ * spento per sempre. Metterlo fra gli obbligatori significherebbe dire a
+ * tutti gli altri che un pezzo del sistema è rimasto indietro, ogni giorno,
+ * per una funzione che non hanno chiesto.
+ */
 const ALL: ServiceName[] = ['bot', 'worker', 'api'];
+
+/** Servizi che possono legittimamente non esserci. Compaiono se rispondono. */
+const FACOLTATIVI: ServiceName[] = ['twitch'];
 
 export async function readServiceVersions(
   redis: RedisLike,
   expected = runningVersion(),
 ): Promise<ServiceVersions> {
   const entries = await Promise.all(
-    ALL.map(async (service) => {
+    [...ALL, ...FACOLTATIVI].map(async (service) => {
       const value = await redis.get(RedisKeys.serviceVersion(service)).catch(() => null);
       return [service, value] as const;
     }),

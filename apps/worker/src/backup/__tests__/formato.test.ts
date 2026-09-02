@@ -23,6 +23,8 @@ const ESCLUSE_APPOSTA = new Set([
   // Token OAuth cifrati, che scadono in pochi giorni e si rigenerano da soli:
   // nulla da recuperare, e qualcosa da perdere portandoli fuori dal volume.
   'panelSession',
+  // Stessa ragione, aggravata: il pannello Twitch sta su Internet.
+  'twitchSession',
 ]);
 
 describe('elenco delle tabelle da copiare', () => {

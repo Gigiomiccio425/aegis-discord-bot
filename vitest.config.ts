@@ -15,6 +15,7 @@ export default defineConfig({
       // `fileURLToPath` e non `.pathname`: su Windows quest'ultimo restituisce
       // un percorso con lo slash iniziale (`/E:/…`) che il resolver non trova.
       '@angel/shared': fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)),
+      '@angel/scanner': fileURLToPath(new URL('./packages/scanner/src/index.ts', import.meta.url)),
     },
   },
 });

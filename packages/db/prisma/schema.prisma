@@ -830,3 +830,210 @@ model ErasureRequest {
 
   @@index([userId])
 }
+
+// ─────────────────────────────────────────────────────────────
+//  BOT TWITCH
+//
+//  Tabelle separate da quelle di Discord, e senza `guildId` obbligatorio:
+//  è la sola parte del sistema che vive anche per conto proprio. Uno
+//  streamer può usare il bot Twitch senza avere un server Discord, e il
+//  collegamento fra i due — quando c'è — è un campo opzionale, non una
+//  chiave esterna che lo renderebbe impossibile.
+//
+//  Isolamento: ogni riga porta `channelId`. Nessuna query attraversa i
+//  canali, e non esiste un indice che inviti a farlo. Non è pigrizia
+//  progettuale: il Developer Services Agreement di Twitch vieta di
+//  raccogliere informazioni sugli spettatori per costruire archivi, e uno
+//  schema che rende comodo profilare fra canali è uno schema che prima o
+//  poi verrà usato per profilare fra canali.
+// ─────────────────────────────────────────────────────────────
+
+/// Un canale Twitch servito dal bot.
+model TwitchChannel {
+  /// ID numerico Twitch del broadcaster. Stabile: il login si può cambiare.
+  id           String   @id
+  login        String   @unique
+  displayName  String?
+  avatarUrl    String?
+
+  /// Chi ha collegato il canale, come ID Discord. Vuoto se è entrato dal pannello Twitch.
+  ownerDiscordId String?
+  /// Server Discord collegato, per registro e avvisi. Nessuna chiave esterna:
+  /// il canale deve sopravvivere alla rimozione del bot da quel server.
+  guildId      String?
+
+  /// Token OAuth del broadcaster, cifrati con ENCRYPTION_KEY (AES-256-GCM).
+  tokenEnc     String?
+  refreshEnc   String?
+  scopes       String[] @default([])
+  tokenExpiresAt DateTime?
+  /// Ultima volta che il refresh è fallito: dopo, il canale va riautorizzato.
+  tokenFailedAt DateTime?
+
+  /// Configurazione completa, validata da TwitchChannelConfigSchema.
+  config       Json     @default("{}")
+  configVersion Int     @default(1)
+
+  enabled      Boolean  @default(true)
+  /// Il motore è collegato alla chat di questo canale in questo momento.
+  connected    Boolean  @default(false)
+  lastSeenAt   DateTime?
+  joinedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  commands     TwitchCommand[]
+  timers       TwitchTimer[]
+  events       TwitchEvent[]
+  viewers      TwitchViewer[]
+  access       TwitchAccess[]
+
+  @@index([guildId])
+  @@index([enabled])
+}
+
+/// Comando personalizzato di un canale.
+model TwitchCommand {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name      String
+  aliases   String[] @default([])
+  response  String
+  level     String   @default("TUTTI")
+  cooldownSec Int    @default(10)
+  channelCooldownSec Int @default(3)
+  enabled   Boolean  @default(true)
+  useCount  Int      @default(0)
+  /// Contatore libero usabile nella risposta con {contatore}.
+  counter   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, name])
+}
+
+/// Messaggio a tempo.
+model TwitchTimer {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name      String
+  messages  String[] @default([])
+  intervalSec Int    @default(900)
+  minLines  Int      @default(5)
+  alsoOffline Boolean @default(false)
+  enabled   Boolean  @default(true)
+  /// Quale messaggio tocca la prossima volta: la rotazione sopravvive al riavvio.
+  nextIndex Int      @default(0)
+  lastSentAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, name])
+}
+
+/// Registro di quello che è successo in chat.
+///
+/// `text` è nullabile e ha una scadenza propria, più corta di quella della
+/// riga: si può conservare l'azione per sei mesi e il testo per trenta
+/// giorni, che è il compromesso fra poter verificare una sanzione contestata
+/// e non tenere in casa la chat altrui.
+model TwitchEvent {
+  id        BigInt   @id @default(autoincrement())
+  channelId String
+  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  /// MESSAGE_DELETED, TIMEOUT, BAN, RAID_DETECTED, SHIELD_ON, COMMAND_USED, …
+  type      String
+  /// Modulo che ha deciso: linguaggio, link, antiSpam, antiRaid, botSpam, …
+  module    String?
+  severity  Int      @default(0)
+
+  actorId   String?
+  actorLogin String?
+  messageId String?
+  /// Testo del messaggio, se la configurazione del canale lo consente.
+  text      String?
+  /// Scadenza del solo testo. Il lavoro di pulizia lo azzera senza toccare la riga.
+  textExpiresAt DateTime?
+
+  action    String?
+  durationSec Int?
+  reason    String?
+  /// Vero se il canale era in modalità prova: l'azione non è stata applicata.
+  simulated Boolean  @default(false)
+  payload   Json     @default("{}")
+
+  @@index([channelId, createdAt])
+  @@index([channelId, type])
+  @@index([actorId])
+  @@index([textExpiresAt])
+}
+
+/// Uno spettatore, dentro un solo canale.
+///
+/// La chiave è (canale, utente) e non l'utente: la stessa persona in due
+/// canali sono due righe che non si parlano. Costa qualche byte e rende
+/// impossibile per costruzione il profilo che i termini di Twitch vietano.
+model TwitchViewer {
+  id          String   @id @default(uuid())
+  channelId   String
+  channel     TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  twitchUserId String
+  login       String
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  messageCount Int     @default(0)
+
+  warnings    Int      @default(0)
+  timeouts    Int      @default(0)
+  bans        Int      @default(0)
+  /// Punteggio di fiducia 0-100: sale con il tempo e i messaggi, scende con le sanzioni.
+  trust       Int      @default(50)
+  /// Esentato a mano dai moduli su questo canale.
+  trusted     Boolean  @default(false)
+  note        String?
+
+  @@unique([channelId, twitchUserId])
+  @@index([channelId, lastSeenAt])
+}
+
+/// Chi può aprire il pannello di un canale.
+///
+/// Lo streamer c'è sempre; i moderatori li aggiunge lui. Il ruolo è per
+/// canale: chi modera due canali ha due righe, e revocargliene una non tocca
+/// l'altra.
+model TwitchAccess {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   TwitchChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  twitchUserId String
+  login     String
+  /// PROPRIETARIO | MODERATORE | LETTURA
+  role      String   @default("MODERATORE")
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, twitchUserId])
+  @@index([twitchUserId])
+}
+
+/// Sessione del pannello Twitch. Separata da PanelSession: l'accesso avviene
+/// con Twitch, non con Discord, e mescolare le due significherebbe che una
+/// sessione Twitch può essere presentata a una rotta Discord.
+model TwitchSession {
+  id           String   @id
+  twitchUserId String
+  login        String
+  displayName  String?
+  avatarUrl    String?
+  tokenEnc     String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  lastSeenAt   DateTime @default(now())
+  ip           String?
+  userAgent    String?
+  revokedAt    DateTime?
+
+  @@index([twitchUserId])
+  @@index([expiresAt])
+}

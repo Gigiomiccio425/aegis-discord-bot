@@ -48,18 +48,37 @@ export const TABELLE = [
   'reactionRoleSet',
   'panelAccess',
   'erasureRequest',
+
+  /*
+   * Bot Twitch.
+   *
+   * In fondo e non in mezzo: `twitchChannel` non ha chiavi esterne verso
+   * `guild` — un canale Twitch esiste anche senza un server Discord — quindi
+   * l'unico vincolo d'ordine è che venga prima delle proprie tabelle figlie.
+   *
+   * Ci sono, e non è scontato: sono la configurazione degli streamer.
+   * Perderle significa che ognuno di loro deve rifare comandi, messaggi a
+   * tempo e soglie, e la maggior parte non lo rifarebbe.
+   */
+  'twitchChannel',
+  'twitchCommand',
+  'twitchTimer',
+  'twitchAccess',
+  'twitchViewer',
+  'twitchEvent',
 ] as const;
 
 export type Tabella = (typeof TABELLE)[number];
 
 /*
- * `panelSession` è esclusa di proposito.
+ * `panelSession` e `twitchSession` sono escluse di proposito.
  *
  * Contiene i token OAuth di chi ha fatto l'accesso al pannello, cifrati con
  * ENCRYPTION_KEY. Una copia che li porta fuori dal volume dell'applicazione è
  * una superficie d'attacco in più per dei dati che, di loro, scadono in pochi
  * giorni e si rigenerano con un nuovo accesso: non c'è nulla da recuperare e
- * c'è qualcosa da perdere.
+ * c'è qualcosa da perdere. Vale identico per le sessioni del pannello Twitch,
+ * che per giunta vive esposto a Internet.
  */
 
 /** Nomi dei file dentro una cartella di copia. */
