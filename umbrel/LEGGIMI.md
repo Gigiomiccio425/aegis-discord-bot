@@ -108,7 +108,7 @@ copia *prima* che le migrazioni tocchino lo schema — che è quella che serve p
 usa lo script:
 
 ```bash
-sudo sh docker/aggiorna.sh ~/angel/docker-compose.yml 1.27.1
+sudo sh docker/aggiorna.sh ~/angel/docker-compose.yml 1.27.2
 ```
 
 ---

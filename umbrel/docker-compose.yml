@@ -30,7 +30,7 @@ services:
   #  tiene in vita e li riavvia se cadono.
   # ─────────────────────────────────────────────────────────
   angel:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.27.1
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.27.2
     pull_policy: always
     # Il nome fisso serve a `docker/trasloco.sh`, che cerca i container per
     # nome quando prepara o rilegge un trasloco. Senza, li troverebbe con i

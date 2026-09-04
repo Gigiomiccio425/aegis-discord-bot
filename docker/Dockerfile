@@ -13,14 +13,30 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 
 # ── Dipendenze ───────────────────────────────────────────────
+#
+#  Si copiano **solo** i package.json prima di `npm ci`: così il livello
+#  delle dipendenze si riusa dalla cache finché nessuno tocca un manifesto,
+#  e una modifica al codice non fa riscaricare mezzo npm.
+#
+#  Il prezzo è questo elenco, che va tenuto allineato ai workspace veri. È
+#  già costato tre versioni: `packages/twitch`, `apps/twitch` e
+#  `apps/web-twitch` sono nati senza finire qui, `npm ci` ha prodotto un
+#  albero senza i loro collegamenti, e ogni build da 1.25.0 in poi è morta
+#  dentro Docker mentre in locale passava.
+#
+#  Adesso c'è un test che confronta questo elenco con le cartelle che
+#  esistono davvero: `docker/__tests__` nel pacchetto condiviso.
 FROM base AS deps
 COPY package.json package-lock.json* ./
 COPY packages/db/package.json packages/db/
 COPY packages/shared/package.json packages/shared/
 COPY packages/scanner/package.json packages/scanner/
+COPY packages/twitch/package.json packages/twitch/
 COPY apps/bot/package.json apps/bot/
 COPY apps/api/package.json apps/api/
+COPY apps/twitch/package.json apps/twitch/
 COPY apps/web/package.json apps/web/
+COPY apps/web-twitch/package.json apps/web-twitch/
 COPY apps/worker/package.json apps/worker/
 RUN npm ci --include=dev
 
