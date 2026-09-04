@@ -1,0 +1,146 @@
+# ─────────────────────────────────────────────────────────────
+#  ANGEL su Umbrel
+#
+#  Umbrel non ha il «incolla un compose» di ZimaOS: le app si installano
+#  dallo store, e lo store prende i file da una repository git. Per un bot
+#  con dentro un token Discord e una chiave di cifratura quella strada è
+#  sbagliata — i segreti finirebbero in git, oppure in file che Umbrel
+#  riscrive a ogni aggiornamento dell'app.
+#
+#  Quindi si installa a mano via SSH, in una cartella propria. Umbrel sotto
+#  ha Docker normale: `docker compose up -d` funziona, l'app resta fuori
+#  dallo store e nessun aggiornamento di umbrelOS la tocca.
+#
+#  I segreti stanno in `.env` accanto a questo file, non qui dentro: così
+#  questo file si può leggere, copiare e incollare senza pensarci.
+#
+#      cp .env.esempio .env      # poi compila .env
+#      docker compose up -d
+#
+#  ⬇ QUI SOTTO NON C'È NIENTE DA MODIFICARE. Tutto sta in `.env`.
+# ─────────────────────────────────────────────────────────────
+name: angel
+
+services:
+  # ─────────────────────────────────────────────────────────
+  #  ANGEL — un solo container per tutto
+  #
+  #  Dentro girano quattro cose: la migrazione del database, il bot
+  #  Discord, il worker, il pannello e il bot Twitch. Un supervisore li
+  #  tiene in vita e li riavvia se cadono.
+  # ─────────────────────────────────────────────────────────
+  angel:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.27.1
+    pull_policy: always
+    # Il nome fisso serve a `docker/trasloco.sh`, che cerca i container per
+    # nome quando prepara o rilegge un trasloco. Senza, li troverebbe con i
+    # nomi generati da compose e la ricerca fallirebbe proprio nel momento
+    # in cui serve.
+    container_name: angel
+    restart: unless-stopped
+
+    # Tutti i valori arrivano da `.env`. Elencarli qui uno per uno
+    # significherebbe tenere due elenchi allineati a mano, e prima o poi
+    # una variabile nuova comparirebbe in uno solo dei due.
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      STORAGE_DIR: /data/storage
+      BACKUP_DIR: /backup
+      API_PORT: '8080'
+      # I nomi dei servizi qui sotto: dentro la rete di compose si
+      # raggiungono così, senza indirizzi IP da scrivere da nessuna parte.
+      REDIS_URL: redis://angel-redis:6379
+
+    logging:
+      driver: json-file
+      options:
+        # Senza limite, un errore che si ripete riempie il disco con il
+        # proprio racconto: è già successo, gigabyte di righe identiche
+        # mentre lo spazio finiva.
+        max-size: '10m'
+        max-file: '3'
+
+    volumes:
+      - ./dati/storage:/data/storage
+      # Le copie stanno **fuori** da `dati/`: cancellando la cartella dei
+      # dati per rifare l'installazione, le copie restano. Su Umbrel questa
+      # non è una precauzione teorica — è la cartella che si tocca per
+      # prima quando qualcosa non parte.
+      - ./copie:/backup
+
+    ports:
+      # Il pannello Discord. Contiene i dati di ogni server dove il bot è
+      # presente: resta sulla rete di casa, non su Internet.
+      - '780:8080'
+      # Il pannello degli streamer Twitch. Questo invece è fatto per essere
+      # esposto — sono gli streamer a doverlo raggiungere — e va messo
+      # dietro un tunnel con HTTPS, non aperto sul router.
+      - '781:781'
+
+    depends_on:
+      - angel-postgres
+      - angel-redis
+
+  angel-postgres:
+    # Debian e non Alpine: su alcune installazioni il bash dell'immagine
+    # Alpine non risulta eseguibile e Postgres non parte, fallendo con
+    # «env: can't execute bash: Permission denied» prima di scrivere una
+    # riga di log.
+    image: postgres:17
+    container_name: angel-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: angel
+      POSTGRES_DB: angel
+      # Stessa password che sta dentro DATABASE_URL in `.env`. Sono lo
+      # stesso valore scritto in due punti: se non coincidono, Postgres
+      # rifiuta l'autenticazione senza dire quale dei due è quello buono.
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?serve DB_PASSWORD in .env}
+
+    volumes:
+      - ./dati/postgres:/var/lib/postgresql/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  angel-redis:
+    image: redis:7-alpine
+    container_name: angel-redis
+    restart: unless-stopped
+
+    command:
+      - redis-server
+      # Istantanea ogni cinque minuti se sono cambiate almeno cento chiavi.
+      - --save
+      - '300 100'
+      # AOF spento: qui dentro ci sono code e cache, non dati da custodire.
+      # La scrittura continua su un disco lento produceva «fsync is taking
+      # too long» a ripetizione, per riguadagnare qualche minuto di coda
+      # che i job periodici ricreano da soli.
+      - --appendonly
+      - 'no'
+      # Un disco pieno non deve bloccare ogni scrittura: senza questo Redis
+      # smette di servire e con lui si ferma tutto il bot.
+      - --stop-writes-on-bgsave-error
+      - 'no'
+      # noeviction e non volatile-lru: BullMQ lo pretende, e ha ragione —
+      # sfrattare una chiave di coda significa perdere un lavoro in attesa
+      # senza che nessuno se ne accorga.
+      - --maxmemory-policy
+      - noeviction
+
+    volumes:
+      - ./dati/redis:/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

@@ -21,6 +21,7 @@ ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo
 - [Requisiti](#requisiti)
 - [Configurazione dell'applicazione Discord](#configurazione-dellapplicazione-discord)
 - [Deploy su ZimaOS](#deploy-su-zimaos)
+- [Deploy su Umbrel](#deploy-su-umbrel)
 - [Aggiornare](#aggiornare)
 - [Sviluppo in locale](#sviluppo-in-locale)
 - [Primo avvio: cosa configurare](#primo-avvio-cosa-configurare)
@@ -497,6 +498,35 @@ Oltre a `latest`, ogni tag `vX.Y.Z` produce tre riferimenti:
 | `:latest` | l'ultima build del ramo principale |
 | `:1.2.3` | quella versione esatta, che non cambia mai |
 | `:1.2` | l'ultima correzione della serie 1.2 |
+
+---
+
+## Deploy su Umbrel
+
+Umbrel non ha il «incolla un compose» di ZimaOS: le app arrivano dallo store, e lo store prende i
+file da una repository git. Per un bot con dentro un token Discord e una chiave di cifratura quella
+strada è sbagliata — i segreti finirebbero in git, oppure in file che Umbrel riscrive a ogni
+aggiornamento dell'app.
+
+Si installa quindi a mano via SSH, in una cartella propria. Sotto, Umbrel ha Docker normale: l'app
+resta fuori dallo store e nessun aggiornamento di umbrelOS la tocca.
+
+```bash
+ssh umbrel@umbrel.local
+mkdir -p ~/angel && cd ~/angel
+
+curl -fsSLO https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/umbrel/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/umbrel/.env.esempio -o .env
+
+nano .env
+docker compose up -d
+```
+
+I segreti stanno in `.env` e non nel compose: così il compose si può leggere, copiare e aggiornare
+senza pensarci. Il pannello risponde su `http://umbrel.local:780`, quello degli streamer Twitch
+sulla 781.
+
+Passaggi completi, cartelle, trasloco e diagnostica: **[umbrel/LEGGIMI.md](umbrel/LEGGIMI.md)**.
 
 ---
 
