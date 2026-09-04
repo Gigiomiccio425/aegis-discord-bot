@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 
 const qui = path.dirname(fileURLToPath(import.meta.url));
 const BASE = path.resolve(qui, '../../../../umbrel-appstore');
-const APP = 'gigiodany-angel';
+const APP = 'g-d-app-store-gd-angel2';
 
 const store = readFileSync(path.join(BASE, 'umbrel-app-store.yml'), 'utf8');
 const manifesto = readFileSync(path.join(BASE, APP, 'umbrel-app.yml'), 'utf8');
