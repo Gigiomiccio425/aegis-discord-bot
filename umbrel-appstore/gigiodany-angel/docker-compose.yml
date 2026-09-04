@@ -1,0 +1,213 @@
+# ─────────────────────────────────────────────────────────────
+#  ANGEL — app per umbrelOS
+#
+#  ⚠️ I SEGRETI NON STANNO QUI, E NON PER PRUDENZA.
+#
+#     GitHub li rifiuta. La protezione contro i segreti riconosce il
+#     formato di un token Discord e blocca il push con GH013 prima ancora
+#     che il file arrivi nella repository. Provato: rifiutato.
+#
+#     E se anche si forzasse, Discord analizza GitHub in cerca di token e
+#     revoca quelli che trova — il bot smetterebbe di collegarsi da solo,
+#     nel giro di ore.
+#
+#     Quindi qui ci sono dei segnaposto, e si compilano una volta sulla
+#     macchina dopo l'installazione. Il README dice come, e quale variante
+#     sopravvive agli aggiornamenti dell'app.
+#
+#  Differenze dal compose di ZimaOS, e non sono cosmetiche:
+#
+#  • C'è `app_proxy`. È il servizio con cui umbrelOS pubblica un'app: la
+#    porta 780 la apre lui e la gira al container. Senza, l'app si
+#    installa e non compare da nessuna parte.
+#
+#  • I percorsi passano da `${APP_DATA_DIR}`, che umbrelOS sostituisce con
+#    la cartella dei dati dell'app. Scrivere percorsi assoluti come su
+#    ZimaOS funzionerebbe finché qualcuno non sposta i dati.
+#
+#  • Redis è configurato come si deve. La VPS aveva `volatile-lru` e AOF
+#    acceso: BullMQ protestava a ogni avvio — sfrattare una chiave di coda
+#    significa perdere un lavoro in attesa senza che nessuno se ne accorga
+#    — e l'AOF su disco lento produceva «fsync is taking too long» a
+#    ripetizione. Qui è `noeviction` e AOF spento.
+# ─────────────────────────────────────────────────────────────
+version: "3.7"
+
+services:
+  # umbrelOS pubblica l'app attraverso questo. `APP_HOST` è il nome del
+  # container come lo genera compose: <id-app>_<servizio>_1. Sbagliarlo
+  # produce un'app che si installa, parte, e mostra una pagina bianca.
+  app_proxy:
+    environment:
+      APP_HOST: gigiodany-angel_angel_1
+      APP_PORT: 8080
+
+  # ─────────────────────────────────────────────────────────
+  #  ANGEL — un solo container per tutto
+  #
+  #  Dentro girano cinque cose: la migrazione del database, il bot
+  #  Discord, il worker, il pannello e il bot Twitch. Un supervisore li
+  #  tiene in vita e li riavvia se cadono, con attesa crescente fra un
+  #  tentativo e l'altro.
+  # ─────────────────────────────────────────────────────────
+  angel:
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.27.2
+    restart: on-failure
+    stop_grace_period: 1m
+
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      TZ: Europe/Rome
+
+      # ── Database e code ────────────────────────────────────
+      # I nomi qui sotto sono quelli dei servizi: dentro la rete dell'app
+      # si raggiungono così, senza indirizzi da scrivere da nessuna parte.
+      DATABASE_URL: postgresql://angel:METTI_QUI_UNA_PASSWORD@postgres:5432/angel?schema=public
+      REDIS_URL: redis://redis:6379
+
+      # ── Discord ────────────────────────────────────────────
+      #
+      # I quattro segnaposto qui sotto e i due segreti più giù si
+      # compilano **dopo l'installazione**, in
+      #     ~/umbrel/app-data/gigiodany-angel/docker-compose.yml
+      # e poi si riavvia l'app. Finché sono così, il bot parte e non
+      # riesce a collegarsi: nei log compare un errore di autenticazione
+      # di Discord, che è il modo giusto di dire «mancano le credenziali»
+      # invece di restare in silenzio.
+      DISCORD_TOKEN: METTI_QUI_IL_TOKEN
+      DISCORD_CLIENT_ID: "1536428461663453284"
+      DISCORD_CLIENT_SECRET: METTI_QUI_IL_CLIENT_SECRET
+      OWNER_IDS: "586922655349866536"
+      DEV_GUILD_ID: ""
+
+      # Riserva il pannello agli ID qui sopra. Con 'false' entra chiunque
+      # abbia «Gestisci server» dove il bot è presente.
+      PANEL_OWNERS_ONLY: "true"
+
+      # ⚠️ Deve combaciare **esattamente** con l'indirizzo che digiti nel
+      #    browser, porta compresa, e va registrato come redirect OAuth2
+      #    su Discord con /api/auth/callback in fondo. Se il tuo Umbrel non
+      #    risponde a `umbrel.local`, mettici il suo indirizzo IP — qui,
+      #    nel redirect e nel browser, tutti e tre uguali.
+      PUBLIC_URL: http://umbrel.local:780
+      API_PORT: "8080"
+
+      # ── Segreti ────────────────────────────────────────────
+      # Il primo firma i cookie del pannello. Il secondo cifra i token
+      # dentro il database: cambiarlo rende illeggibile quello che c'è già.
+      SESSION_SECRET: METTI_QUI_openssl_rand_hex_32
+      ENCRYPTION_KEY: METTI_QUI_UN_ALTRO_openssl_rand_hex_32
+
+      # ── Scanner ────────────────────────────────────────────
+      # Senza chiave restano le blocklist locali, che sono già centinaia
+      # di migliaia di domini aggiornati ogni sei ore.
+      GOOGLE_SAFE_BROWSING_KEY: ""
+      ABUSECH_AUTH_KEY: ""
+      THREAT_FEEDS_ENABLED: "true"
+      THREAT_FEED_MAX: "150000"
+
+      # ── Twitch ─────────────────────────────────────────────
+      TWITCH_CLIENT_ID: ""
+      TWITCH_CLIENT_SECRET: ""
+      TWITCH_EVENTSUB_SECRET: ""
+
+      # L'account da cui il bot parla in chat. Senza, il bot Twitch resta
+      # spento e non disturba nessuno — tutto il resto funziona lo stesso.
+      #
+      # Per ottenerli: metti una parola in TWITCH_SETUP_KEY, riavvia l'app,
+      # e dal browser in cui hai fatto l'accesso con l'account bot apri
+      #     http://umbrel.local:781/api/auth/bot?chiave=LA_PAROLA
+      # La pagina che torna li mostra pronti. Poi svuota TWITCH_SETUP_KEY.
+      TWITCH_SETUP_KEY: ""
+      TWITCH_BOT_USER_ID: ""
+      TWITCH_BOT_LOGIN: ""
+      TWITCH_BOT_ACCESS_TOKEN: ""
+      TWITCH_BOT_REFRESH_TOKEN: ""
+
+      # Il pannello degli streamer. A differenza di quello Discord è fatto
+      # per stare su Internet: è lì che gli streamer collegano il proprio
+      # canale. Mettici il dominio vero quando avrai un tunnel con HTTPS.
+      TWITCH_PUBLIC_URL: http://umbrel.local:781
+      TWITCH_PANEL_PORT: "781"
+
+      # ── Percorsi e copie ───────────────────────────────────
+      STORAGE_DIR: /data/storage
+      BACKUP_DIR: /backup
+      BACKUP_KEEP: "14"
+      BACKUP_INCLUDE_STORAGE: "true"
+      BACKUP_STORAGE_MAX_MB: "4096"
+
+      # Per riportare qui i dati di un'altra installazione: copia la
+      # cartella `trasloco-…` in app-data/gigiodany-angel/data/backup,
+      # togli il cancelletto, riavvia, poi rimettilo.
+      # RESTORE_FROM: /backup/trasloco-2026-09-05T10-00-00
+      # RESTORE_OVERWRITE: "1"
+
+    volumes:
+      - ${APP_DATA_DIR}/data/storage:/data/storage
+      # ⚠️ Su umbrelOS questa cartella vive dentro i dati dell'app, e
+      #    disinstallando l'app sparisce insieme a tutto il resto. È il
+      #    contrario di quello che serve a una copia di sicurezza: scarica
+      #    il kit dal pannello ogni tanto e tienilo altrove.
+      - ${APP_DATA_DIR}/data/backup:/backup
+
+    ports:
+      # Il pannello degli streamer Twitch, pubblicato direttamente e non
+      # attraverso `app_proxy`. È voluto: `app_proxy` chiede l'accesso a
+      # umbrelOS prima di far passare chiunque, e gli streamer un account
+      # su questa macchina non ce l'hanno.
+      - "781:781"
+
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    # Debian e non Alpine: su alcune installazioni il bash dell'immagine
+    # Alpine non risulta eseguibile e Postgres non parte, fallendo con
+    # «env: can't execute bash: Permission denied» prima di scrivere una
+    # riga di log.
+    image: postgres:17
+    restart: on-failure
+    stop_grace_period: 1m
+
+    environment:
+      POSTGRES_USER: angel
+      POSTGRES_DB: angel
+      # Stessa password che sta dentro DATABASE_URL qui sopra. Sono lo
+      # stesso valore scritto in due punti: se non coincidono, Postgres
+      # rifiuta l'autenticazione senza dire quale dei due è quello buono.
+      POSTGRES_PASSWORD: METTI_QUI_UNA_PASSWORD
+
+    volumes:
+      - ${APP_DATA_DIR}/data/postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: on-failure
+
+    command:
+      - redis-server
+      # Istantanea ogni cinque minuti se sono cambiate almeno cento chiavi.
+      - --save
+      - "300 100"
+      # AOF spento: qui dentro ci sono code e cache, non dati da custodire.
+      # Acceso, su un disco lento produceva «fsync is taking too long» a
+      # ripetizione — per riguadagnare, nel caso peggiore, qualche minuto
+      # di coda che i lavori periodici ricreano da soli.
+      - --appendonly
+      - "no"
+      # Un disco pieno non deve bloccare ogni scrittura: senza questo Redis
+      # smette di servire e con lui si ferma tutto il bot.
+      - --stop-writes-on-bgsave-error
+      - "no"
+      # noeviction e non volatile-lru: BullMQ lo pretende, e ha ragione —
+      # sfrattare una chiave di coda significa perdere un lavoro in attesa
+      # senza che nessuno se ne accorga. Redis qui occupa pochi megabyte,
+      # il limite di memoria non serve.
+      - --maxmemory-policy
+      - noeviction
+
+    volumes:
+      - ${APP_DATA_DIR}/data/redis:/data

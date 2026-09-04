@@ -1,0 +1,81 @@
+manifestVersion: 1
+
+# Deve cominciare con l'`id` dello store, quello in `umbrel-app-store.yml`.
+# La cartella che contiene questo file deve chiamarsi esattamente così: è
+# anche il prefisso dei nomi dei container, e quindi di `APP_HOST` dentro
+# il compose.
+id: gigiodany-angel
+
+category: Networking
+name: ANGEL
+version: "1.27.2"
+tagline: Il custode del tuo server Discord
+
+description: >
+  Bot Discord di moderazione e sicurezza self-hosted, con pannello web.
+
+
+  Cosa ferma:
+
+
+  - Raid e nuke, con soglie per attore e istantanee d'emergenza
+
+  - Account compromessi che di colpo pubblicano link e immagini
+
+  - Immagini truffa: legge i QR e fa OCR del testo, riconosce le campagne dall'impronta percettiva
+
+  - QR verso il login di Discord — furto di sessione senza che la vittima digiti nulla
+
+  - ClickFix: le finte CAPTCHA che fanno incollare un comando PowerShell
+
+  - Inviti dirottati, webhook non autorizzati, bot con troppi permessi
+
+  - Chi si finge staff, con confronto per somiglianza sui nomi e sull'immagine
+
+
+  E poi: registro di ogni azione, archivio dei messaggi con trascrizioni HTML
+  autonome, ticket, sondaggi, eventi, giveaway, comandi personalizzati con
+  personas, copia di sicurezza notturna con ripristino.
+
+
+  Dentro c'è anche un bot di chat Twitch: anti-spam, link truffa, venditori di
+  visualizzatori, ondate ostili, messaggi a tempo e comandi. Ha un pannello
+  suo sulla porta 781, pensato per essere dato agli streamer.
+
+
+  Il bot parte con tutti i moduli spenti: si accendono dal pannello, e conviene
+  tenere la modalità prova accesa per qualche giorno prima di far sanzionare
+  qualcuno davvero.
+
+developer: Gigiomiccio425
+website: https://github.com/Gigiomiccio425/aegis-discord-bot
+dependencies: []
+repo: https://github.com/Gigiomiccio425/aegis-discord-bot
+support: https://github.com/Gigiomiccio425/aegis-discord-bot/issues
+
+# La porta che umbrelOS apre e gira ad `app_proxy`. La stessa della VPS, così
+# l'indirizzo del pannello non cambia e il redirect OAuth2 già registrato su
+# Discord continua a valere.
+port: 780
+
+icon: https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docs/icon.svg
+
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+
+releaseNotes: >
+  Prima versione pubblicata su questo store.
+
+
+  - Ruoli unificati: un ruolo per concetto, che cambia nome e permessi con lo
+    stile scelto invece di essere affiancato da un secondo. `/ripara-ruoli`
+    sistema i server costruiti prima.
+
+  - Bot di chat Twitch completo, con pannello separato sulla porta 781.
+
+  - Copia di sicurezza rileggibile e kit di trasloco, con i valori da riportare
+    scritti in chiaro dentro la cartella.
+
+submitter: Gigiomiccio425
+submission: https://github.com/Gigiomiccio425/aegis-discord-bot
