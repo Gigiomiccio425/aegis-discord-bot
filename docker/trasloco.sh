@@ -163,14 +163,25 @@ esporta() {
 			echo "#   SESSION_SECRET   diversa fa solo ricollegare al pannello, nulla di grave"
 			echo "#"
 			echo "# Cambia con la macchina:"
-			echo "#   PUBLIC_URL       e il nuovo indirizzo va aggiunto ai redirect OAuth2"
-			echo "#                    nel Developer Portal di Discord, altrimenti l'accesso"
-			echo "#                    al pannello fallisce con «stato non valido»"
+			echo "#   PUBLIC_URL       il nuovo indirizzo va aggiunto ai redirect OAuth2 nel"
+			echo "#                    Developer Portal di Discord, altrimenti l'accesso al"
+			echo "#                    pannello fallisce con «stato non valido»"
+			echo "#   TWITCH_PUBLIC_URL idem, ma sul Developer Portal di Twitch: senza,"
+			echo "#                    nessuno streamer riesce a collegare il proprio canale"
+			echo "#"
+			echo "# NON riportata di proposito:"
+			echo "#   TWITCH_SETUP_KEY chiave temporanea per ottenere i token dell'account"
+			echo "#                    bot. Portarsela dietro lascia aperta una porta che"
+			echo "#                    serviva dieci minuti."
 			echo ""
 			for NOME in ENCRYPTION_KEY SESSION_SECRET DISCORD_TOKEN DISCORD_CLIENT_ID \
 				DISCORD_CLIENT_SECRET OWNER_IDS PUBLIC_URL DATABASE_URL \
-				GOOGLE_SAFE_BROWSING_KEY TWITCH_CLIENT_ID TWITCH_CLIENT_SECRET \
-				TWITCH_EVENTSUB_SECRET BACKUP_DIR BACKUP_KEEP STORAGE_DIR; do
+				GOOGLE_SAFE_BROWSING_KEY ABUSECH_AUTH_KEY THREAT_FEEDS_ENABLED THREAT_FEED_MAX \
+				TWITCH_CLIENT_ID TWITCH_CLIENT_SECRET TWITCH_EVENTSUB_SECRET \
+				TWITCH_BOT_USER_ID TWITCH_BOT_LOGIN TWITCH_BOT_ACCESS_TOKEN \
+				TWITCH_BOT_REFRESH_TOKEN TWITCH_PUBLIC_URL TWITCH_PANEL_PORT \
+				SHARD_COUNT BACKUP_DIR BACKUP_KEEP BACKUP_INCLUDE_STORAGE \
+				BACKUP_STORAGE_MAX_MB STORAGE_DIR; do
 				VALORE="$(variabile_di "$ANGEL" "$NOME")"
 				[ -n "$VALORE" ] && echo "$NOME=$VALORE"
 			done

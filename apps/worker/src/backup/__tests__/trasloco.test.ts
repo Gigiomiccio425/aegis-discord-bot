@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -25,7 +25,86 @@ const FUORI_APPOSTA: Record<string, string> = {
   // esistono, e stamparle nel kit suggerirebbe di impostarle.
   DEV_GUILD_ID: 'solo per lo sviluppo',
   WEB_DEV_ORIGIN: 'solo per lo sviluppo',
+  /*
+   * L'unica esclusione che è una decisione di sicurezza e non una comodità.
+   *
+   * È la chiave temporanea che apre la rotta per ottenere i token dell'account
+   * bot di Twitch. Serve dieci minuti, una volta sola, e va tolta subito dopo:
+   * portarsela dietro in un trasloco significherebbe riaprire sulla macchina
+   * nuova una porta che era stata chiusa apposta sulla vecchia.
+   */
+  TWITCH_SETUP_KEY: 'chiave temporanea: non deve sopravvivere a un trasloco',
 };
+
+/**
+ * Ogni variabile letta da qualche parte nel codice.
+ *
+ * Il test qui sotto guardava solo `env.ts`, e la premessa — «lo schema è
+ * l'elenco di tutte le variabili» — a un certo punto ha smesso di essere
+ * vera: le credenziali dell'account bot di Twitch sono arrivate leggendo
+ * `process.env` direttamente, e il kit di trasloco non se ne è accorto. Un
+ * trasloco le avrebbe lasciate indietro, e il sintomo sulla macchina nuova
+ * sarebbe stato un bot Twitch spento senza che nulla dicesse perché.
+ *
+ * Adesso si guarda anche il sorgente. Meno preciso di uno schema — un nome
+ * costruito a pezzi sfugge — e copre il caso che si è già verificato.
+ */
+function variabiliNelSorgente(): string[] {
+  const trovate = new Set<string>();
+
+  const visita = (cartella: string): void => {
+    for (const voce of readdirSync(cartella, { withFileTypes: true })) {
+      const percorso = path.join(cartella, voce.name);
+      if (voce.isDirectory()) {
+        if (voce.name === 'node_modules' || voce.name === 'dist' || voce.name === '__tests__') {
+          continue;
+        }
+        visita(percorso);
+        continue;
+      }
+      if (!voce.name.endsWith('.ts')) continue;
+
+      const sorgente = readFileSync(percorso, 'utf8');
+      for (const trovato of sorgente.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
+        trovate.add(trovato[1]!);
+      }
+    }
+  };
+
+  const radice = path.resolve(qui, '../../../../..');
+  for (const gruppo of ['apps', 'packages']) {
+    for (const progetto of readdirSync(path.join(radice, gruppo), { withFileTypes: true })) {
+      if (!progetto.isDirectory()) continue;
+      const src = path.join(radice, gruppo, progetto.name, 'src');
+      try {
+        visita(src);
+      } catch {
+        /* progetto senza src: niente da guardare */
+      }
+    }
+  }
+
+  return [...trovate];
+}
+
+/**
+ * Variabili che il programma si imposta da solo.
+ *
+ * Non le scrive nessuno nel compose: le mette la CI dentro l'immagine, o il
+ * supervisore all'avvio per parlare con i propri processi. Riportarle in un
+ * trasloco non avrebbe senso, e nel file dei valori sarebbero rumore in mezzo
+ * a quelli che invece vanno copiati a mano.
+ */
+const INTERNE = new Set([
+  'ANGEL_VERSION',
+  'ANGEL_MODE',
+  'ANGEL_DEGRADATO',
+  'BACKUP_ON_START',
+  'RESTORE_FROM',
+  'RESTORE_OVERWRITE',
+  'RESTORE_SKIP_STORAGE',
+  'RESTORE_ACCEPT_KEY_MISMATCH',
+]);
 
 describe('variabili elencate nel kit', () => {
   const chiavi = [...readFileSync(ENV, 'utf8').matchAll(/^\s{2}([A-Z][A-Z0-9_]*):/gm)].map(
@@ -41,6 +120,34 @@ describe('variabili elencate nel kit', () => {
 
   it('ogni variabile di env.ts è nel kit, o è esclusa di proposito', () => {
     const dimenticate = chiavi.filter((chiave) => !elencate.has(chiave) && !FUORI_APPOSTA[chiave]);
+    expect(dimenticate).toEqual([]);
+  });
+
+  /*
+   * Lo stesso controllo, ma partendo dal codice invece che dallo schema.
+   *
+   * È quello che avrebbe fermato il buco vero: `TWITCH_BOT_ACCESS_TOKEN` non
+   * compariva in `env.ts`, quindi il test precedente non aveva niente da
+   * confrontare e passava.
+   */
+  it('ogni variabile letta nel codice è nel kit, o è esclusa di proposito', () => {
+    const lette = variabiliNelSorgente();
+
+    /*
+     * La controprova.
+     *
+     * Una scansione che non trova niente passa sempre, e passerebbe anche con
+     * il percorso della cartella sbagliato — dando la stessa tranquillità di
+     * un controllo vero senza controllare nulla. Prima di fidarsi delle
+     * risposte si verifica che il rilevatore veda qualcosa che c'è.
+     */
+    expect(lette.length, 'la scansione del sorgente non trova niente').toBeGreaterThan(15);
+    expect(lette).toContain('ENCRYPTION_KEY');
+    expect(lette).toContain('TWITCH_PUBLIC_URL');
+
+    const dimenticate = lette.filter(
+      (chiave) => !elencate.has(chiave) && !FUORI_APPOSTA[chiave] && !INTERNE.has(chiave),
+    );
     expect(dimenticate).toEqual([]);
   });
 

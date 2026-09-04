@@ -102,10 +102,36 @@ export const GRUPPI: { titolo: string; nota: string; segrete: boolean; nomi: str
     segrete: true,
     nomi: [
       'GOOGLE_SAFE_BROWSING_KEY',
+      'ABUSECH_AUTH_KEY',
       'THREAT_FEEDS_ENABLED',
+      'THREAT_FEED_MAX',
       'TWITCH_CLIENT_ID',
       'TWITCH_CLIENT_SECRET',
       'TWITCH_EVENTSUB_SECRET',
+    ],
+  },
+  {
+    titolo: 'BOT TWITCH',
+    nota:
+      "L'account da cui il bot parla in chat. Vanno riportate identiche: sono le\n" +
+      'credenziali di un account Twitch, non di un canale, e senza il bot legge la\n' +
+      'chat ma non può scrivere.\n' +
+      '\n' +
+      'TWITCH_PUBLIC_URL invece cambia con la macchina, e il nuovo indirizzo va\n' +
+      'registrato come «OAuth Redirect URL» sul Developer Portal di Twitch con\n' +
+      '/api/auth/callback in fondo — altrimenti nessuno streamer riesce a entrare.\n' +
+      '\n' +
+      'TWITCH_SETUP_KEY non compare di proposito: è la chiave temporanea che apre\n' +
+      'la rotta dei token, e portarsela dietro vorrebbe dire lasciare aperta una\n' +
+      'porta che serviva dieci minuti.',
+    segrete: true,
+    nomi: [
+      'TWITCH_BOT_USER_ID',
+      'TWITCH_BOT_LOGIN',
+      'TWITCH_BOT_ACCESS_TOKEN',
+      'TWITCH_BOT_REFRESH_TOKEN',
+      'TWITCH_PUBLIC_URL',
+      'TWITCH_PANEL_PORT',
     ],
   },
   {
@@ -115,6 +141,7 @@ export const GRUPPI: { titolo: string; nota: string; segrete: boolean; nomi: str
       'volumi nel compose.',
     segrete: false,
     nomi: [
+      'SHARD_COUNT',
       'STORAGE_DIR',
       'BACKUP_DIR',
       'BACKUP_KEEP',
