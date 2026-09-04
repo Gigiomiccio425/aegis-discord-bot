@@ -7,12 +7,12 @@ sottocartella:
 ```
 Gigio-dany-appstore/
   umbrel-app-store.yml
-  gigiodany-angel/
+  g-d-app-store-gd-angel2/
     umbrel-app.yml
     docker-compose.yml
 ```
 
-Il nome della cartella dell'app **deve** cominciare con l'`id` dello store (`gigiodany`), ed è anche
+Il nome della cartella dell'app **deve** cominciare con l'`id` dello store (`g-d-app-store`), ed è anche
 il prefisso dei nomi dei container — quindi di `APP_HOST` dentro il compose. Rinominarla senza
 cambiare `APP_HOST` produce un'app che si installa, parte, e mostra una pagina bianca.
 
@@ -44,7 +44,7 @@ ancora che il file arrivi nella repository:
 remote: - GITHUB PUSH PROTECTION
 remote:     Push cannot contain secrets
 remote:   —— Discord Bot Token ——
-remote:      path: umbrel-appstore/gigiodany-angel/docker-compose.yml:70
+remote:      path: umbrel-appstore/g-d-app-store-gd-angel2/docker-compose.yml:70
 ```
 
 Provato: rifiutato. E se anche si forzasse con il link di sblocco che GitHub offre, resterebbe il
@@ -60,7 +60,7 @@ Dopo aver installato l'app da umbrelOS:
 
 ```bash
 ssh umbrel@umbrel.local
-nano ~/umbrel/app-data/gigiodany-angel/docker-compose.yml
+nano ~/umbrel/app-data/g-d-app-store-gd-angel2/docker-compose.yml
 ```
 
 Sostituisci i sei segnaposto:
