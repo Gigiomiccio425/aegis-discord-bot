@@ -3,6 +3,12 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api, type Me, type VersionInfo } from '../api.js';
 import { useGuildId } from '../App.js';
 
+/**
+ * Ogni minuto: è la cadenza con cui i processi riaffermano la propria
+ * versione in Redis, e chiedere più spesso non anticiperebbe nulla.
+ */
+const VERSION_REFRESH_MS = 60_000;
+
 const NAV = [
   { to: '', label: 'Dashboard', end: true },
   { to: 'log', label: 'Registro eventi' },
@@ -81,16 +87,26 @@ export function Layout({ me }: { me: Me }) {
              * la conclusione naturale è che la correzione non funzioni.
              */
             <div className="mb-2 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 px-2 py-1.5 text-xs text-[#f2a3ad]">
-              <span className="font-medium">Versioni non allineate</span>
+              <span className="font-medium">
+                {version.stale.every((s) => version.services[s as 'bot'] === null)
+                  ? 'Un processo non è in piedi'
+                  : 'Versioni non allineate'}
+              </span>
               <span className="mt-1 block text-[11px] leading-relaxed text-neutral-400">
                 {version.stale
-                  .map(
-                    (service) =>
-                      `${service}: ${version.services[service as 'bot'] ?? 'non risponde'}`,
-                  )
+                  .map((service) => `${service}: ${version.services[service as 'bot'] ?? 'fermo'}`)
                   .join(' · ')}
                 <br />
-                Attesa {version.running}. Ricrea i container rimasti indietro.
+                {/*
+                  * Il consiglio dipende da quale dei due guasti è: un processo
+                  * fermo e un processo vecchio si somigliano solo qui dentro.
+                  * Ricreare il container non serve a niente se il processo
+                  * esce da solo a ogni avvio — e il rimedio sta nei log, dove
+                  * c'è scritto perché.
+                  */}
+                {version.stale.some((s) => version.services[s as 'bot'] === null)
+                  ? 'Riparte da solo ogni 30 secondi: se resta fermo, il motivo è nei log del container.'
+                  : `Attesa ${version.running}. Ricrea i container rimasti indietro.`}
               </span>
             </div>
           )}
@@ -136,6 +152,22 @@ export function Layout({ me }: { me: Me }) {
 /**
  * Versione in esecuzione e confronto con l'ultima release.
  *
+ * Si richiede a intervalli, e non una volta sola al montaggio come faceva
+ * prima. Il pannello è la finestra da cui si guarda mentre si sistema
+ * qualcosa sul server, e Layout è il guscio dell'applicazione: montato una
+ * volta per caricamento, non si rimonta navigando fra le pagine. Il risultato
+ * era un avviso congelato al momento in cui la scheda è stata aperta, che
+ * continuava ad accusare un servizio già rimesso in piedi — e a mandare a
+ * ricreare container sani.
+ *
+ * Il minuto è la cadenza con cui i processi riaffermano la propria versione,
+ * quindi non c'è niente da guadagnare a chiedere più spesso. La chiamata è
+ * economica: il confronto con GitHub dentro la rotta è in cache per sei ore.
+ *
+ * Il ritorno sulla scheda fa da secondo innesco, perché è lì che sta il caso
+ * vero: si va a sistemare qualcosa altrove, si torna, e la risposta dev'essere
+ * quella di adesso.
+ *
  * L'errore viene ignorato di proposito: se GitHub non risponde o la sessione
  * scade proprio durante questa chiamata, il pannello non deve mostrare un
  * avviso per una informazione accessoria.
@@ -145,14 +177,28 @@ function useVersion(): VersionInfo | null {
 
   useEffect(() => {
     let attivo = true;
-    void api
-      .get<VersionInfo>('/api/version')
-      .then((data) => {
-        if (attivo) setVersion(data);
-      })
-      .catch(() => undefined);
+
+    const chiedi = (): void => {
+      void api
+        .get<VersionInfo>('/api/version')
+        .then((data) => {
+          if (attivo) setVersion(data);
+        })
+        .catch(() => undefined);
+    };
+
+    chiedi();
+    const timer = setInterval(chiedi, VERSION_REFRESH_MS);
+
+    const alRitorno = (): void => {
+      if (document.visibilityState === 'visible') chiedi();
+    };
+    document.addEventListener('visibilitychange', alRitorno);
+
     return () => {
       attivo = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', alRitorno);
     };
   }, []);
 
