@@ -39,7 +39,7 @@ services:
   # produce un'app che si installa, parte, e mostra una pagina bianca.
   app_proxy:
     environment:
-      APP_HOST: g-d-app-store-gd-angel2_angel_1
+      APP_HOST: g-d-app-store-gd-angel_angel_1
       APP_PORT: 8080
 
   # ─────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ services:
       #
       # I quattro segnaposto qui sotto e i due segreti più giù si
       # compilano **dopo l'installazione**, in
-      #     ~/umbrel/app-data/g-d-app-store-gd-angel2/docker-compose.yml
+      #     ~/umbrel/app-data/g-d-app-store-gd-angel/docker-compose.yml
       # e poi si riavvia l'app. Finché sono così, il bot parte e non
       # riesce a collegarsi: nei log compare un errore di autenticazione
       # di Discord, che è il modo giusto di dire «mancano le credenziali»
@@ -139,7 +139,7 @@ services:
       BACKUP_STORAGE_MAX_MB: "4096"
 
       # Per riportare qui i dati di un'altra installazione: copia la
-      # cartella `trasloco-…` in app-data/g-d-app-store-gd-angel2/data/backup,
+      # cartella `trasloco-…` in app-data/g-d-app-store-gd-angel/data/backup,
       # togli il cancelletto, riavvia, poi rimettilo.
       # RESTORE_FROM: /backup/trasloco-2026-09-05T10-00-00
       # RESTORE_OVERWRITE: "1"

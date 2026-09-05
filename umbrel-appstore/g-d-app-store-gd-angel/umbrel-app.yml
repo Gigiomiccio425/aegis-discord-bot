@@ -4,7 +4,7 @@ manifestVersion: 1
 # La cartella che contiene questo file deve chiamarsi esattamente così: è
 # anche il prefisso dei nomi dei container, e quindi di `APP_HOST` dentro
 # il compose.
-id: g-d-app-store-gd-angel2
+id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL

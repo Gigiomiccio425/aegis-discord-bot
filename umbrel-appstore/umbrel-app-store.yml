@@ -1,5 +1,5 @@
 # L'identificativo dello store. Ogni app di questa repository deve avere un
-# `id` che comincia con questo prefisso: `g-d-app-store-gd-angel2`, e così via.
+# `id` che comincia con questo prefisso: `g-d-app-store-gd-angel`, e così via.
 id: g-d-app-store
 
 # Come compare nell'elenco degli store dentro umbrelOS.
