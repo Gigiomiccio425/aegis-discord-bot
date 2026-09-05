@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  announceVersion(getRedis(), 'twitch');
+  void announceVersion(getRedis(), 'twitch');
   logger.info({ versione: runningVersion(), bot: botLogin }, 'ANGEL per Twitch');
 
   const motore = new Motore({

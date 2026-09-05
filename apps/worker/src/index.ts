@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   await prisma.$queryRaw`SELECT 1`;
   // Dichiara la propria versione: e l'unico modo di accorgersi che un
   // aggiornamento ha ricreato tre container su quattro.
-  announceVersion(connection, 'worker');
+  void announceVersion(connection, 'worker');
   logger.info({ versione: runningVersion() }, 'worker avviato');
 
   const workers = [

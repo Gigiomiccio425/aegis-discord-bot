@@ -282,7 +282,7 @@ async function main(): Promise<void> {
 
   const port = Number(process.env.API_PORT ?? 8080);
   await app.listen({ port, host: '0.0.0.0' });
-  announceVersion(getRedis(), 'api');
+  void announceVersion(getRedis(), 'api');
   logger.info(
     { port, publicUrl: process.env.PUBLIC_URL, versione: runningVersion() },
     'API avviata',

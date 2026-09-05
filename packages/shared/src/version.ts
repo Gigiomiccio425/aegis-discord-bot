@@ -33,25 +33,57 @@ interface RedisLike {
 }
 
 /**
+ * Quanto si aspetta la prima dichiarazione prima di proseguire.
+ *
+ * Serve un tetto perché con Redis irraggiungibile ioredis non fallisce: mette
+ * i comandi in coda e li tiene lì. Senza, l'attesa non finirebbe mai, e
+ * bloccherebbe l'avvio proprio quando conviene partire lo stesso per poter
+ * dire cosa non va.
+ */
+const PRIMA_ATTESA_MS = 2000;
+
+/** Una scrittura sola, che non solleva mai e non aspetta oltre il tetto. */
+async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number): Promise<void> {
+  const set = redis
+    .set(RedisKeys.serviceVersion(service), runningVersion(), 'EX', VERSION_TTL_SEC)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+
+  await Promise.race([
+    set,
+    new Promise<void>((risolvi) => {
+      const t = setTimeout(risolvi, attesaMs);
+      t.unref?.();
+    }),
+  ]);
+}
+
+/**
  * Dichiara la propria versione e continua a riaffermarla.
  *
  * Il battito serve perché la chiave scade: senza, un servizio spento
  * resterebbe nell'elenco per sempre e un container morto sembrerebbe vivo e
  * aggiornato — che è esattamente il contrario di ciò che questo meccanismo
  * deve dire.
+ *
+ * La prima scrittura si può attendere, e il bot lo fa. Prima non lo faceva, e
+ * il risultato era una diagnosi sbagliata: quando Discord rifiuta il token il
+ * processo chiama process.exit poche centinaia di millisecondi dopo, la
+ * scrittura non arriva mai a Redis, e il pannello scrive «bot: non risponde».
+ * Cioè «quel container non c'è», mentre c'è, gira la versione giusta, e non
+ * riesce solo a collegarsi. Sono due guasti diversi con due rimedi diversi:
+ * ricreare il container non serve a niente se il token è sbagliato.
  */
-export function announceVersion(redis: RedisLike, service: ServiceName): NodeJS.Timeout {
-  const write = (): void => {
-    void redis
-      .set(RedisKeys.serviceVersion(service), runningVersion(), 'EX', VERSION_TTL_SEC)
-      .catch(() => undefined);
-  };
-
-  write();
-  const timer = setInterval(write, VERSION_HEARTBEAT_SEC * 1000);
+export function announceVersion(redis: RedisLike, service: ServiceName): Promise<void> {
+  const timer = setInterval(() => {
+    void scrivi(redis, service, PRIMA_ATTESA_MS);
+  }, VERSION_HEARTBEAT_SEC * 1000);
   // Non deve tenere vivo il processo da solo.
   timer.unref?.();
-  return timer;
+
+  return scrivi(redis, service, PRIMA_ATTESA_MS);
 }
 
 export interface ServiceVersions {

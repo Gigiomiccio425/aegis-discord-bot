@@ -31,10 +31,13 @@ async function main(): Promise<void> {
   await prisma.$queryRaw`SELECT 1`;
   logger.info({ versione: runningVersion() }, 'database raggiungibile');
 
-  // Dichiarata prima di collegarsi a Discord: se il gateway rifiuta la
+  // Attesa, e prima di collegarsi a Discord: se il gateway rifiuta la
   // connessione, la versione di questo container si vede lo stesso dal
-  // pannello — ed è proprio il caso in cui serve saperla.
-  announceVersion(getRedis(), 'bot');
+  // pannello — ed è proprio il caso in cui serve saperla. Senza l'attesa non
+  // funzionava: al token rifiutato il processo esce dopo poche centinaia di
+  // millisecondi, la scrittura resta per strada, e il pannello dice «non
+  // risponde» a un container che invece c'è.
+  await announceVersion(getRedis(), 'bot');
 
   subscribeConfigInvalidation();
 
