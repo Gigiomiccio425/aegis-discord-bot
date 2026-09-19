@@ -34,7 +34,7 @@
 import { promises as fs, createWriteStream, type WriteStream } from 'node:fs';
 import path from 'node:path';
 import { getPrisma } from '@angel/db';
-import { RedisKeys } from '@angel/shared';
+import { inviaAlBot } from '@angel/shared';
 import { logger } from './logger.js';
 import { getRedis } from './redis.js';
 import type { Canale } from './stato.js';
@@ -230,25 +230,25 @@ export class Archivio {
         : registro.canaleRegistroId || registro.canaleAvvisiId;
     if (!canaleId) return;
 
+    // Dalla posta e non dal pub/sub: se il bot Discord si sta riavviando
+    // l'avviso aspetta in coda, invece di perdersi proprio mentre in chat
+    // succede qualcosa.
     try {
-      await getRedis().publish(
-        RedisKeys.commandChannel,
-        JSON.stringify({
-          action: 'twitch.log',
-          guildId,
-          channelId: canaleId,
-          canale: evento.canale.login,
-          tipo: evento.tipo,
-          modulo: evento.modulo ?? null,
-          gravita: evento.gravita ?? 0,
-          utente: evento.utenteLogin ?? null,
-          azione: evento.azione ?? null,
-          durataSec: evento.durataSec ?? null,
-          motivo: evento.motivo ?? null,
-          simulato: evento.simulato ?? false,
-          testo: registro.conservaTesto ? (evento.testo ?? null) : null,
-        }),
-      );
+      await inviaAlBot(getRedis(), {
+        action: 'twitch.log',
+        guildId,
+        channelId: canaleId,
+        canale: evento.canale.login,
+        tipo: evento.tipo,
+        modulo: evento.modulo ?? null,
+        gravita: evento.gravita ?? 0,
+        utente: evento.utenteLogin ?? null,
+        azione: evento.azione ?? null,
+        durataSec: evento.durataSec ?? null,
+        motivo: evento.motivo ?? null,
+        simulato: evento.simulato ?? false,
+        testo: registro.conservaTesto ? (evento.testo ?? null) : null,
+      });
     } catch (errore) {
       logger.debug({ err: errore }, 'avviso Discord non pubblicato');
     }

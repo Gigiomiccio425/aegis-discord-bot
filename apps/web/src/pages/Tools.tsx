@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { ChannelPicker, scordaInventario } from '../components/pickers.js';
 import { MentionInput } from '../components/MentionInput.js';
+import { EsitoAzione, useAzione } from '../components/azione.js';
 import {
   Badge,
   Button,
@@ -47,38 +48,24 @@ export function Tools() {
  */
 function ServerSetup() {
   const guildId = useGuildId();
-  const [stato, setStato] = useState<'pronto' | 'invio' | 'fatto'>('pronto');
-  const [error, setError] = useState<string | null>(null);
+  const azione = useAzione(guildId);
 
-  const avvia = async () => {
-    setStato('invio');
-    setError(null);
-    try {
-      await api.post(`/api/guilds/${guildId}/actions/setup`);
+  const avvia = () =>
+    void azione.esegui(() => api.post(`/api/guilds/${guildId}/actions/setup`), {
       // La predisposizione crea canali e ruoli: l'elenco che il pannello ha in
       // mano è appena diventato incompleto, e senza questo le tendine della
       // configurazione non mostrerebbero i canali appena creati.
-      scordaInventario(guildId);
-      setStato('fatto');
-      setTimeout(() => setStato('pronto'), 8000);
-    } catch (err) {
-      setError((err as Error).message);
-      setStato('pronto');
-    }
-  };
+      dopo: () => scordaInventario(guildId),
+    });
 
   return (
     <Card
       title="Prepara il server"
       subtitle="Crea ruoli, canali di servizio, assistenza e verifica, e compila la configurazione. Crea solo ciò che manca."
     >
-      {error && <ErrorBox message={error} />}
-      {stato === 'fatto' && (
-        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
-          Richiesta inviata. Il risultato compare nel registro fra qualche secondo, con l&apos;elenco
-          di ciò che è stato creato.
-        </div>
-      )}
+      <div className="mb-3">
+        <EsitoAzione guildId={guildId} stato={azione.stato} onChiudi={azione.azzera} />
+      </div>
 
       <ul className="mb-4 space-y-1 text-sm text-neutral-400">
         <li>• sei ruoli: quarantena, verificato, allerta, staff, in diretta, partecipa</li>
@@ -95,8 +82,8 @@ function ServerSetup() {
       </ul>
 
       <div className="flex items-center gap-3">
-        <Button variant="primary" disabled={stato === 'invio'} onClick={() => void avvia()}>
-          {stato === 'invio' ? 'In corso…' : 'Prepara il server'}
+        <Button variant="primary" disabled={azione.occupato} onClick={avvia}>
+          {azione.occupato ? 'In corso…' : 'Prepara il server'}
         </Button>
         <span className="text-xs text-neutral-500">
           Si può premere più volte: verifica cosa esiste già e completa solo i passaggi mancanti.
@@ -370,17 +357,21 @@ function WatchedUsers() {
       await api.post(`/api/guilds/${guildId}/users/${userId.trim()}/watch`, { reason, hours });
       setUserId('');
       setReason('');
-      // Il bot riceve il comando via Redis e scrive nel database: un istante
-      // dopo. Ricaricare subito mostrerebbe l'elenco di prima.
-      setTimeout(load, 800);
+      // La risposta arriva a lavoro finito: il bot ha già scritto nel
+      // database, e l'elenco si può ricaricare subito. Prima si aspettavano
+      // 800 millisecondi a occhio, e con il bot lento l'elenco restava vecchio.
+      load();
     } catch (err) {
       setError((err as Error).message);
     }
   };
 
   const remove = async (target: string) => {
-    await api.delete(`/api/guilds/${guildId}/users/${target}/watch`).catch(() => undefined);
-    setTimeout(load, 800);
+    setError(null);
+    await api
+      .delete(`/api/guilds/${guildId}/users/${target}/watch`)
+      .catch((err: Error) => setError(err.message));
+    load();
   };
 
   return (

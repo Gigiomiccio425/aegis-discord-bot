@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { GuildConfigSchema, RedisKeys } from '@angel/shared';
+import { GuildConfigSchema, inviaAlBot } from '@angel/shared';
 import { getRedis } from '../redis.js';
 import { childLogger } from '../logger.js';
 
@@ -55,9 +55,10 @@ export async function securityAuditProcessor(_job: Job): Promise<void> {
     const claimed = await redis.set(key, Date.now().toString(), 'EX', hours * 3600, 'NX');
     if (claimed === null) continue;
 
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({ action: 'security.audit', guildId: guild.id }),
+    await inviaAlBot(
+      redis,
+      { action: 'security.audit', guildId: guild.id },
+      { chiave: `security.audit:${guild.id}` },
     );
     requested++;
   }

@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis';
-import { RedisKeys } from '@angel/shared';
+import { inviaAlBot, type ComandoBot, type Consegna } from '@angel/shared';
 import { logger } from './logger.js';
 
 let client: Redis | null = null;
@@ -36,11 +36,58 @@ export async function closeRedis(): Promise<void> {
 /**
  * Invia un comando al bot.
  *
- * Il pannello non parla mai direttamente con il gateway Discord: pubblica
- * un'intenzione, il bot la esegue. Un solo processo connesso a Discord
- * significa rate limit gestiti in un punto solo e pannello riavviabile senza
- * far cadere la connessione.
+ * Il pannello non parla mai direttamente con il gateway Discord: chiede, e il
+ * bot esegue. Passa dalla posta (`@angel/shared`), non più dal pub/sub: il
+ * comando resta in coda se il bot è giù, e l'esito torna indietro.
+ *
+ * Con `attendiMs` aspetta l'esito; senza, ritorna appena il comando è in coda.
  */
-export async function sendBotCommand(command: Record<string, unknown>): Promise<void> {
-  await getRedis().publish(RedisKeys.commandChannel, JSON.stringify(command));
+export async function sendBotCommand(
+  command: ComandoBot,
+  opzioni: { attendiMs?: number; chiave?: string } = {},
+): Promise<Consegna> {
+  return inviaAlBot(getRedis(), command, opzioni);
+}
+
+/** Quanto il pannello aspetta l'esito prima di rispondere «in corso». */
+export const ATTESA_PANNELLO_MS = 12_000;
+
+/**
+ * Da una consegna alla risposta HTTP.
+ *
+ * Un comando fallito risponde con un errore e il motivo scritto dal bot, che
+ * il pannello mostra così com'è: «manca Gestisci ruoli» vale più di qualunque
+ * codice. Uno non ancora finito risponde 202 con l'identificativo, per
+ * chiederne l'esito dopo.
+ */
+export function rispostaDaConsegna(consegna: Consegna): {
+  codice: number;
+  corpo: Record<string, unknown>;
+} {
+  const esito = consegna.esito;
+  if (esito?.stato === 'fatto') {
+    return {
+      codice: 200,
+      corpo: { ok: true, stato: 'fatto', messaggio: esito.messaggio, dati: esito.dati ?? null },
+    };
+  }
+  if (esito?.stato === 'scaduto') {
+    return { codice: 504, corpo: { error: esito.messaggio, stato: 'scaduto' } };
+  }
+  if (esito?.stato === 'fallito') {
+    return { codice: 502, corpo: { error: esito.messaggio, stato: 'fallito' } };
+  }
+  return {
+    codice: 202,
+    corpo: {
+      ok: true,
+      stato: 'in-corso',
+      id: consegna.id,
+      botInLinea: consegna.botInLinea,
+      messaggio: consegna.botInLinea
+        ? 'Il bot ci sta lavorando.'
+        : 'Il bot non è collegato a Discord in questo momento: il comando è in coda e parte ' +
+          'appena torna, se entro qualche minuto.',
+    },
+  };
 }

@@ -9,6 +9,31 @@ import {
 import { requireGuild } from '../guard.js';
 import { sendBotCommand } from '../redis.js';
 
+/**
+ * Chiede al bot di ripubblicare i comandi su Discord, e dice com'è andata.
+ *
+ * Salvare nel database non basta: un comando slash esiste per Discord solo
+ * dopo la pubblicazione, e Discord può rifiutarla — un nome già usato, una
+ * descrizione troppo lunga. Prima quel rifiuto finiva nei log del bot e il
+ * pannello mostrava il comando come salvato e funzionante.
+ *
+ * Con la chiave, dieci modifiche in fila producono una pubblicazione sola:
+ * quella in attesa legge comunque lo stato più recente del database.
+ */
+async function ripubblicaComandi(guildId: string): Promise<{ stato: string; messaggio: string }> {
+  const consegna = await sendBotCommand(
+    { action: 'commands.reload', guildId },
+    { attendiMs: 8_000, chiave: `commands.reload:${guildId}` },
+  );
+  if (consegna.esito) return { stato: consegna.esito.stato, messaggio: consegna.esito.messaggio };
+  return {
+    stato: 'in-corso',
+    messaggio: consegna.botInLinea
+      ? 'Pubblicazione su Discord in corso.'
+      : 'Salvato. Il bot non è collegato: pubblicherà i comandi appena torna.',
+  };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    BUILDER DI COMANDI E PERSONAS
 
@@ -197,8 +222,8 @@ export async function builderRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(409).send({ error: 'Esiste già un comando con questo nome.' });
       }
 
-      await sendBotCommand({ action: 'commands.reload', guildId: context.guildId });
-      return created;
+      const pubblicazione = await ripubblicaComandi(context.guildId);
+      return { ...created, pubblicazione };
     },
   );
 
@@ -241,8 +266,8 @@ export async function builderRoutes(app: FastifyInstance): Promise<void> {
         },
       });
 
-      await sendBotCommand({ action: 'commands.reload', guildId: context.guildId });
-      return updated;
+      const pubblicazione = await ripubblicaComandi(context.guildId);
+      return { ...updated, pubblicazione };
     },
   );
 
@@ -261,8 +286,8 @@ export async function builderRoutes(app: FastifyInstance): Promise<void> {
       }
 
       await prisma.customCommand.delete({ where: { id: existing.id } });
-      await sendBotCommand({ action: 'commands.reload', guildId: context.guildId });
-      return { ok: true };
+      const pubblicazione = await ripubblicaComandi(context.guildId);
+      return { ok: true, pubblicazione };
     },
   );
 }

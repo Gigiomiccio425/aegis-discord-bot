@@ -2,7 +2,7 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { GuildConfigSchema, RedisKeys, type LogCategory } from '@angel/shared';
+import { GuildConfigSchema, inviaAlBot, type LogCategory } from '@angel/shared';
 import { childLogger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import { recordWorkerEvent, timeoutMember, unbanMember } from '../discord.js';
@@ -92,34 +92,31 @@ export async function retentionProcessor(_job: Job): Promise<void> {
     // moderatore. La riprofilazione la esegue il bot, che ha la cache dei
     // membri; qui si limita a chiederla.
     if (config.security.accountGuard.enabled && config.security.accountGuard.rescanIntervalHours > 0) {
-      await getRedis()
-        .publish(
-          RedisKeys.commandChannel,
-          JSON.stringify({ action: 'accounts.rescan', guildId: guild.id }),
-        )
-        .catch(() => undefined);
+      await inviaAlBot(
+        getRedis(),
+        { action: 'accounts.rescan', guildId: guild.id },
+        { chiave: `accounts.rescan:${guild.id}` },
+      ).catch(() => undefined);
     }
 
     /* ── File di log scaduti ────────────────────────────────────────── */
     // Con retention 0 il bot non cancella nulla: è il caso normale quando lo
     // spazio non è il vincolo, ed è il motivo per cui si scrive su disco.
     if (config.logging.fileSink.enabled && config.logging.fileSink.retentionDays > 0) {
-      await getRedis()
-        .publish(
-          RedisKeys.commandChannel,
-          JSON.stringify({ action: 'logs.prune', guildId: guild.id }),
-        )
-        .catch(() => undefined);
+      await inviaAlBot(
+        getRedis(),
+        { action: 'logs.prune', guildId: guild.id },
+        { chiave: `logs.prune:${guild.id}` },
+      ).catch(() => undefined);
     }
 
     /* ── Ticket dimenticati ─────────────────────────────────────────── */
     if (config.integrations.tickets.enabled && config.integrations.tickets.autoCloseHours > 0) {
-      await getRedis()
-        .publish(
-          RedisKeys.commandChannel,
-          JSON.stringify({ action: 'tickets.autoclose', guildId: guild.id }),
-        )
-        .catch(() => undefined);
+      await inviaAlBot(
+        getRedis(),
+        { action: 'tickets.autoclose', guildId: guild.id },
+        { chiave: `tickets.autoclose:${guild.id}` },
+      ).catch(() => undefined);
     }
   }
 

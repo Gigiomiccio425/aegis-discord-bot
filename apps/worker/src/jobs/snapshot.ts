@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { RedisKeys } from '@angel/shared';
+import { inviaAlBot } from '@angel/shared';
 import { getRedis } from '../redis.js';
 import { childLogger } from '../logger.js';
 
@@ -37,9 +37,10 @@ export async function snapshotProcessor(_job: Job): Promise<void> {
     });
     if (recent) continue;
 
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({ action: 'snapshot.create', guildId: guild.id, actorId: 'system' }),
+    await inviaAlBot(
+      redis,
+      { action: 'snapshot.create', guildId: guild.id, actorId: 'system', kind: 'SCHEDULED' },
+      { chiave: `snapshot.scheduled:${guild.id}` },
     );
   }
 

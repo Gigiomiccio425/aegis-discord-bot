@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import { EsitoAzione, useAzione } from '../components/azione.js';
 
 interface Snapshot {
   id: string;
@@ -24,7 +25,6 @@ export function Backups() {
   const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null);
   const [diff, setDiff] = useState<{ id: string; data: Diff } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = () => {
     api
@@ -35,19 +35,12 @@ export function Backups() {
 
   useEffect(load, [guildId]);
 
-  const createBackup = async () => {
-    setBusy(true);
-    try {
-      await api.post(`/api/guilds/${guildId}/backups`);
-      // Il bot esegue lo snapshot in modo asincrono: si attende qualche istante
-      // prima di rileggere l'elenco.
-      setTimeout(load, 2500);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const azione = useAzione(guildId);
+
+  // La risposta arriva a backup salvato, non a richiesta spedita: l'elenco si
+  // rilegge subito invece di aspettare due secondi e mezzo sperando bastino.
+  const createBackup = () =>
+    void azione.esegui(() => api.post(`/api/guilds/${guildId}/backups`), { dopo: load });
 
   if (error) return <ErrorBox message={error} />;
   if (!snapshots) return <Loading />;
@@ -56,10 +49,12 @@ export function Backups() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Backup</h1>
-        <Button variant="primary" disabled={busy} onClick={() => void createBackup()}>
+        <Button variant="primary" disabled={azione.occupato} onClick={createBackup}>
           Crea backup ora
         </Button>
       </div>
+
+      <EsitoAzione guildId={guildId} stato={azione.stato} onChiudi={azione.azzera} />
 
       <Card>
         <p className="text-sm leading-relaxed text-neutral-300">

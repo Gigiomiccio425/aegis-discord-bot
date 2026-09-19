@@ -1,15 +1,16 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
-import { announceVersion, RedisKeys, runningVersion } from '@angel/shared';
+import { Events } from 'discord.js';
+import { announceVersion, runningVersion } from '@angel/shared';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
-import { closeRedis, getRedis, getSubscriber } from './core/redis.js';
+import { closeRedis, getRedis } from './core/redis.js';
 import { subscribeConfigInvalidation } from './core/config.js';
 import { registerAllEvents } from './events/index.js';
 import { flushBatches } from './logging/auditLogger.js';
 import { closeFileSink } from './logging/fileSink.js';
 import { invalidateCustomCommands } from './personas/customCommands.js';
-import { handlePanelCommand } from './core/panelCommands.js';
+import { avviaPosta } from './core/posta.js';
 
 /**
  * Avvio del bot.
@@ -44,20 +45,26 @@ async function main(): Promise<void> {
   const client = createClient();
   registerAllEvents(client);
 
-  // Canale di comando dal pannello: lockdown, ricarica comandi, emergenza.
-  const subscriber = getSubscriber();
-  await subscriber.subscribe(RedisKeys.commandChannel);
-  subscriber.on('message', (channel: string, message: string) => {
-    if (channel !== RedisKeys.commandChannel) return;
-    void handlePanelCommand(client, message).catch((error) =>
-      logger.error({ err: error }, 'comando dal pannello fallito'),
-    );
+  /*
+   * La posta: i comandi del pannello, del worker e del bot Twitch.
+   *
+   * Si apre solo a collegamento avvenuto. Prima l'elenco dei server è vuoto,
+   * e un comando arrivato in quei secondi falliva con «server sconosciuto» —
+   * anzi, con il vecchio pub/sub veniva scartato senza dirlo a nessuno.
+   * Adesso resta nello stream e lo si legge appena il bot è pronto.
+   */
+  let fermaPosta: (() => Promise<void>) | null = null;
+  client.once(Events.ClientReady, () => {
+    fermaPosta = avviaPosta(client);
   });
 
   await login(client, token);
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'spegnimento in corso');
+    // La posta si chiude per prima: i comandi a metà finiscono, e quelli non
+    // ancora cominciati restano nello stream per il prossimo avvio.
+    await (fermaPosta as (() => Promise<void>) | null)?.().catch(() => undefined);
     // Le code di log in sospeso vengono svuotate prima di chiudere: gli eventi
     // degli ultimi secondi sono spesso i più interessanti.
     await flushBatches(client).catch(() => undefined);

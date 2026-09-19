@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type CaseRecord } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import { EsitoAzione, useAzione } from '../components/azione.js';
 
 const TONE: Record<string, 'neutral' | 'warning' | 'danger' | 'success'> = {
   NOTE: 'neutral',
@@ -52,23 +53,20 @@ export function Cases() {
 
   useEffect(load, [guildId, status]);
 
-  const resolveAppeal = async (caseId: string, accepted: boolean) => {
-    try {
-      await api.post(`/api/guilds/${guildId}/cases/${caseId}/appeal`, { accepted });
-      load();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
+  const azione = useAzione(guildId);
 
-  const revoke = async (caseId: string) => {
-    try {
-      await api.post(`/api/guilds/${guildId}/cases/${caseId}/revoke`);
-      load();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
+  // L'esito arriva dal bot: un appello accolto su un ban che Discord rifiuta
+  // di togliere non viene chiuso, e qui compare il perché.
+  const resolveAppeal = (caseId: string, accepted: boolean) =>
+    void azione.esegui(
+      () => api.post(`/api/guilds/${guildId}/cases/${caseId}/appeal`, { accepted }),
+      { riuscita: accepted ? 'Appello accolto.' : 'Appello respinto.', dopo: load },
+    );
+
+  const revoke = (caseId: string) =>
+    void azione.esegui(() => api.post(`/api/guilds/${guildId}/cases/${caseId}/revoke`), {
+      dopo: load,
+    });
 
   return (
     <div className="space-y-5">
@@ -87,6 +85,7 @@ export function Cases() {
       </div>
 
       {error && <ErrorBox message={error} />}
+      <EsitoAzione guildId={guildId} stato={azione.stato} onChiudi={azione.azzera} />
 
       {appeals.length > 0 && (
         <Card

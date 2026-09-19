@@ -106,6 +106,11 @@ export async function saveGuildConfig(
   await invalidateGuildConfig(guildId);
 }
 
+/** Dimentica la copia in memoria: la prossima lettura passa da Redis o dal database. */
+export function forgetGuildConfig(guildId: string): void {
+  memory.delete(guildId);
+}
+
 export async function invalidateGuildConfig(guildId: string): Promise<void> {
   memory.delete(guildId);
   const redis = getRedis();

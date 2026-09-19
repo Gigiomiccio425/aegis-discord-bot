@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -11,43 +11,71 @@ import {
 import { api, openLiveFeed, type LogEvent, type Stats } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, ErrorBox, Empty, Loading, Stat, formatDate, severityTone } from '../components/ui.js';
+import { EsitoAzione, useAzione } from '../components/azione.js';
+
+interface StatoLockdown {
+  attivo: boolean;
+  motivo: string | null;
+  dal: number | null;
+  scade: number | null;
+  canali: number;
+  ruoli: number;
+  falliti: { canaleId: string; nome: string; motivo: string }[];
+  botInLinea: boolean;
+}
 
 export function Dashboard() {
   const guildId = useGuildId();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [lockdown, setLockdown] = useState<StatoLockdown | null>(null);
   const [live, setLive] = useState<LogEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const azione = useAzione(guildId);
 
-  useEffect(() => {
-    setStats(null);
-    api
+  const aggiorna = useCallback(() => {
+    void api
       .get<Stats>(`/api/guilds/${guildId}/stats`)
       .then(setStats)
       .catch((err: Error) => setError(err.message));
-
-    // Il feed live è ciò che rende la dashboard utile *durante* un attacco:
-    // senza, si vedrebbe la situazione solo ricaricando la pagina.
-    const close = openLiveFeed(guildId, (event) => {
-      setLive((previous) => [event, ...previous].slice(0, 40));
-    });
-    return close;
+    void api
+      .get<StatoLockdown>(`/api/guilds/${guildId}/lockdown`)
+      .then(setLockdown)
+      .catch(() => undefined);
   }, [guildId]);
 
-  const runAction = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    try {
-      await action();
-      const fresh = await api.get<Stats>(`/api/guilds/${guildId}/stats`);
-      setStats(fresh);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  useEffect(() => {
+    setStats(null);
+    setLockdown(null);
+    aggiorna();
 
-  if (error) return <ErrorBox message={error} />;
+    // Il feed live è ciò che rende la dashboard utile *durante* un attacco:
+    // senza, si vedrebbe la situazione solo ricaricando la pagina. Un
+    // lockdown partito da Discord o dall'anti-raid deve comparire anche qui.
+    const close = openLiveFeed(guildId, (event) => {
+      setLive((previous) => [event, ...previous].slice(0, 40));
+      if (event.type.startsWith('SECURITY_LOCKDOWN')) aggiorna();
+    });
+    // Lo stato del lockdown cambia anche senza eventi — una scadenza, il bot
+    // che si ricollega — e chi guarda la dashboard deve vederlo senza ricaricare.
+    const timer = setInterval(() => {
+      void api
+        .get<StatoLockdown>(`/api/guilds/${guildId}/lockdown`)
+        .then(setLockdown)
+        .catch(() => undefined);
+    }, 15_000);
+    return () => {
+      close();
+      clearInterval(timer);
+    };
+  }, [guildId, aggiorna]);
+
+  const esegui = (richiesta: () => Promise<unknown>) =>
+    void azione.esegui(richiesta, { dopo: aggiorna });
+
+  // Un'azione fallita non sostituisce più la pagina con un errore: prima un
+  // lockdown rifiutato faceva sparire la dashboard intera, proprio durante
+  // l'attacco. L'esito resta accanto ai pulsanti.
+  if (error && !stats) return <ErrorBox message={error} />;
   if (!stats) return <Loading />;
 
   const chartData = stats.joinSeries.map((point) => ({
@@ -59,12 +87,12 @@ export function Dashboard() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Dashboard</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="danger"
-            disabled={busy}
+            disabled={azione.occupato || lockdown?.attivo === true}
             onClick={() =>
-              void runAction(() =>
+              esegui(() =>
                 api.post(`/api/guilds/${guildId}/actions/lockdown`, {
                   reason: 'Lockdown attivato dal pannello',
                   minutes: 15,
@@ -75,19 +103,90 @@ export function Dashboard() {
             🔒 Lockdown 15 min
           </Button>
           <Button
-            disabled={busy}
-            onClick={() => void runAction(() => api.delete(`/api/guilds/${guildId}/actions/lockdown`))}
+            disabled={azione.occupato}
+            onClick={() => esegui(() => api.delete(`/api/guilds/${guildId}/actions/lockdown`))}
           >
             🔓 Revoca lockdown
           </Button>
           <Button
-            disabled={busy}
-            onClick={() => void runAction(() => api.post(`/api/guilds/${guildId}/backups`))}
+            disabled={azione.occupato}
+            onClick={() => esegui(() => api.post(`/api/guilds/${guildId}/backups`))}
           >
             💾 Backup ora
           </Button>
         </div>
       </header>
+
+      <EsitoAzione guildId={guildId} stato={azione.stato} onChiudi={azione.azzera} />
+
+      {lockdown && !lockdown.botInLinea && (
+        <div className="rounded-lg border border-[var(--color-warning,#d8b45f)]/40 bg-[var(--color-warning,#d8b45f)]/10 p-3 text-sm text-[#ecd9a3]">
+          Il bot non è collegato a Discord in questo momento. I comandi dal pannello restano in
+          coda e partono appena torna — un lockdown solo entro tre minuti, perché dopo non
+          sarebbe più quello che hai chiesto.
+        </div>
+      )}
+
+      {lockdown?.attivo && (
+        <Card
+          title="🔒 Lockdown attivo"
+          subtitle={
+            (lockdown.dal ? `Dalle ${new Date(lockdown.dal).toLocaleTimeString('it-IT')}` : '') +
+            (lockdown.scade
+              ? ` · revoca automatica alle ${new Date(lockdown.scade).toLocaleTimeString('it-IT')}`
+              : ' · revoca solo manuale')
+          }
+        >
+          <div className="space-y-2 text-sm text-neutral-300">
+            {lockdown.motivo && <p>{lockdown.motivo}</p>}
+            <p>
+              Canali chiusi: <strong>{lockdown.canali}</strong>
+              {lockdown.ruoli > 0 && (
+                <>
+                  {' '}
+                  · permessi di ruoli sospesi: <strong>{lockdown.ruoli}</strong>
+                </>
+              )}
+            </p>
+            {lockdown.falliti.length > 0 && (
+              <div className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-2 text-[#f2a3ad]">
+                <p className="font-medium">
+                  {lockdown.falliti.length} non chiusi — lì si può ancora scrivere:
+                </p>
+                <ul className="mt-1 list-inside list-disc">
+                  {lockdown.falliti.slice(0, 10).map((f) => (
+                    <li key={`${f.canaleId}-${f.motivo}`}>
+                      #{f.nome} — {f.motivo.replace(/<@&\d+>/g, 'un ruolo')}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {lockdown && !lockdown.attivo && azione.stato?.testo.includes('non risulta attivo') && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+          <span>I canali risultano comunque chiusi?</span>
+          <Button
+            variant="ghost"
+            disabled={azione.occupato}
+            onClick={() => {
+              const conferma = window.confirm(
+                'Riapre ogni canale che nega la scrittura a @everyone, compresi quelli che ' +
+                  'lo staff aveva messo in sola lettura, come gli annunci: andranno richiusi a ' +
+                  'mano. Procedere?',
+              );
+              if (conferma) {
+                esegui(() => api.delete(`/api/guilds/${guildId}/actions/lockdown?forza=1`));
+              }
+            }}
+          >
+            Forza la riapertura
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat
@@ -210,8 +309,9 @@ export function Dashboard() {
                     </span>
                     <Button
                       variant="ghost"
+                      disabled={azione.occupato}
                       onClick={() =>
-                        void runAction(() =>
+                        esegui(() =>
                           api.post(`/api/guilds/${guildId}/incidents/${incident.id}/release`),
                         )
                       }

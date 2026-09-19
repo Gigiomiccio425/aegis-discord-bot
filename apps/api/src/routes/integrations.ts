@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getPrisma } from '@angel/db';
 import { requireGuild } from '../guard.js';
-import { sendBotCommand } from '../redis.js';
+import { ATTESA_PANNELLO_MS, rispostaDaConsegna, sendBotCommand } from '../redis.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    SONDAGGI E GIVEAWAY — lettura e comandi dal pannello
@@ -69,12 +69,12 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
       }
       if (poll.closedAt) return reply.code(409).send({ error: 'sondaggio già chiuso' });
 
-      await sendBotCommand({
-        action: 'poll.close',
-        guildId: context.guildId,
-        pollId: poll.id,
-      });
-      return { ok: true };
+      const consegna = await sendBotCommand(
+        { action: 'poll.close', guildId: context.guildId, pollId: poll.id },
+        { attendiMs: ATTESA_PANNELLO_MS, chiave: `poll.close:${poll.id}` },
+      );
+      const risposta = rispostaDaConsegna(consegna);
+      return reply.code(risposta.codice).send(risposta.corpo);
     },
   );
 
@@ -122,12 +122,12 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(404).send({ error: 'giveaway non trovato' });
       }
 
-      await sendBotCommand({
-        action: 'giveaway.draw',
-        guildId: context.guildId,
-        giveawayId: giveaway.id,
-      });
-      return { ok: true };
+      const consegna = await sendBotCommand(
+        { action: 'giveaway.draw', guildId: context.guildId, giveawayId: giveaway.id },
+        { attendiMs: ATTESA_PANNELLO_MS, chiave: `giveaway.draw:${giveaway.id}` },
+      );
+      const risposta = rispostaDaConsegna(consegna);
+      return reply.code(risposta.codice).send(risposta.corpo);
     },
   );
 

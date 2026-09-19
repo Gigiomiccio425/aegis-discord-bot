@@ -19,6 +19,7 @@ import { childLogger } from './logger.js';
 import { getRedis } from './redis.js';
 import { canActOn, dangerousRoles } from './permissions.js';
 import { createCase } from './cases.js';
+import { descriviErroreDiscord } from './erroriDiscord.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { humanDuration, t } from './i18n.js';
 import { unverifiedRoleId } from '@angel/shared';
@@ -252,7 +253,24 @@ export async function quarantineMember(
     },
   });
 
-  await member.roles.set([roleId], truncateReason(reason));
+  // I ruoli gestiti — il booster, quelli delle integrazioni — restano: il bot
+  // non può toglierli, e includerli è ciò che distingue una sostituzione che
+  // Discord accetta da una che rifiuta per intero.
+  const gestiti = member.roles.cache.filter((role) => role.managed).map((role) => role.id);
+  try {
+    await member.roles.set([roleId, ...gestiti], truncateReason(reason));
+  } catch (error) {
+    // Il profilo non deve dire «in quarantena» di chi non lo è: il pannello
+    // lo elencherebbe fra gli isolati e il pulsante di revoca non avrebbe
+    // niente da revocare.
+    await prisma.userProfile
+      .update({
+        where: { guildId_userId: { guildId: ctx.guild.id, userId: member.id } },
+        data: { quarantinedAt: null, quarantineReason: null, rolesBeforeQuarantine: [] },
+      })
+      .catch(() => undefined);
+    throw error;
+  }
   await notifyMember(ctx, 'mod.quarantined', reason);
   if (decision) await openCase(ctx, 'QUARANTINE', reason, decision);
 
@@ -277,16 +295,44 @@ export async function liftQuarantine(
   userId: string,
   actorId: string,
 ): Promise<boolean> {
+  return (await revocaQuarantena(client, guild, userId, actorId)).ok;
+}
+
+/**
+ * Come `liftQuarantine`, ma dice perché quando non riesce.
+ *
+ * Prima un rifiuto di Discord — il ruolo del bot sotto quello della persona,
+ * per esempio — finiva in un `catch` vuoto: il profilo veniva segnato «non
+ * più in quarantena», il registro diceva «ruoli ripristinati», e la persona
+ * restava isolata. Il pannello rispondeva «fatto» e nessuno sapeva perché
+ * lei continuasse a non vedere i canali.
+ */
+export async function revocaQuarantena(
+  client: Client,
+  guild: Guild,
+  userId: string,
+  actorId: string,
+): Promise<{ ok: boolean; motivo?: string }> {
   const prisma = getPrisma();
   const profile = await prisma.userProfile.findUnique({
     where: { guildId_userId: { guildId: guild.id, userId } },
   });
-  if (!profile?.quarantinedAt) return false;
+  if (!profile?.quarantinedAt) return { ok: false, motivo: 'non risulta in quarantena' };
 
   const member = await guild.members.fetch(userId).catch(() => null);
   if (member) {
-    const restorable = profile.rolesBeforeQuarantine.filter((roleId) => guild.roles.cache.has(roleId));
-    await member.roles.set(restorable, 'Quarantena revocata').catch(() => undefined);
+    const restorable = profile.rolesBeforeQuarantine.filter((roleId) => {
+      const role = guild.roles.cache.get(roleId);
+      return role !== undefined && !role.managed;
+    });
+    // I ruoli gestiti che ha adesso restano: il bot non può toglierli, e
+    // ometterli farebbe rifiutare a Discord l'intera sostituzione.
+    const gestiti = member.roles.cache.filter((role) => role.managed).map((role) => role.id);
+    try {
+      await member.roles.set([...new Set([...restorable, ...gestiti])], 'Quarantena revocata');
+    } catch (error) {
+      return { ok: false, motivo: descriviErroreDiscord(error) };
+    }
   }
 
   await prisma.userProfile.update({
@@ -299,9 +345,11 @@ export async function liftQuarantine(
     type: 'SECURITY_QUARANTINE_LIFTED',
     actorId,
     targetId: userId,
-    summary: 'Quarantena revocata, ruoli precedenti ripristinati',
+    summary: member
+      ? 'Quarantena revocata, ruoli precedenti ripristinati'
+      : 'Quarantena revocata: la persona non è più nel server, al rientro non risulterà isolata',
   });
-  return true;
+  return { ok: true };
 }
 
 /**

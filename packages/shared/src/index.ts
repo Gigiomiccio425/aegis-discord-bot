@@ -8,6 +8,7 @@ export * from './util/template.js';
 // In fondo alle altre: importa RedisKeys, definito più sotto in questo file.
 export * from './version.js';
 export * from './env.js';
+export * from './posta.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
 export const RedisKeys = {
@@ -23,8 +24,6 @@ export const RedisKeys = {
   guildInventory: (guildId: string) => `inv:${guildId}`,
   /** Canale pub/sub su cui il pannello annuncia i cambi di configurazione. */
   configChannel: 'aegis:config',
-  /** Canale pub/sub per i comandi dal pannello al bot (lockdown, panic…). */
-  commandChannel: 'aegis:command',
   /** Canale pub/sub per il feed live verso il pannello. */
   eventChannel: 'aegis:events',
 

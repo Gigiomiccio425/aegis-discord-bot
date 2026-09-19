@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getPrisma } from '@angel/db';
 import { requireGuild } from '../guard.js';
-import { sendBotCommand } from '../redis.js';
+import { ATTESA_PANNELLO_MS, rispostaDaConsegna, sendBotCommand } from '../redis.js';
 
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { guildId: string } }>(
@@ -108,12 +108,12 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
       if (!context) return;
 
-      await sendBotCommand({
-        action: 'snapshot.create',
-        guildId: context.guildId,
-        actorId: context.user.id,
-      });
-      return { ok: true, note: 'Backup richiesto: comparirà nell\'elenco fra qualche secondo.' };
+      const consegna = await sendBotCommand(
+        { action: 'snapshot.create', guildId: context.guildId, actorId: context.user.id },
+        { attendiMs: ATTESA_PANNELLO_MS },
+      );
+      const risposta = rispostaDaConsegna(consegna);
+      return reply.code(risposta.codice).send(risposta.corpo);
     },
   );
 }

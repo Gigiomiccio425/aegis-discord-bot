@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { getPrisma } from '@angel/db';
-import { GuildConfigSchema, RedisKeys } from '@angel/shared';
+import { GuildConfigSchema, inviaAlBot } from '@angel/shared';
 import { getRedis } from '../redis.js';
 import { childLogger } from '../logger.js';
 
@@ -27,10 +27,14 @@ export async function integrationsProcessor(_job: Job): Promise<void> {
     take: 50,
   });
 
+  // La chiave evita i doppioni: con il bot giù per un'ora, questo giro
+  // passa sessanta volte sullo stesso sondaggio scaduto, e senza chiave
+  // sessanta «chiudilo» identici aspetterebbero in coda il suo rientro.
   for (const poll of duePolls) {
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({ action: 'poll.close', guildId: poll.guildId, pollId: poll.id }),
+    await inviaAlBot(
+      redis,
+      { action: 'poll.close', guildId: poll.guildId, pollId: poll.id },
+      { chiave: `poll.close:${poll.id}` },
     );
   }
 
@@ -41,13 +45,10 @@ export async function integrationsProcessor(_job: Job): Promise<void> {
   });
 
   for (const giveaway of dueGiveaways) {
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({
-        action: 'giveaway.draw',
-        guildId: giveaway.guildId,
-        giveawayId: giveaway.id,
-      }),
+    await inviaAlBot(
+      redis,
+      { action: 'giveaway.draw', guildId: giveaway.guildId, giveawayId: giveaway.id },
+      { chiave: `giveaway.draw:${giveaway.id}` },
     );
   }
 
@@ -66,9 +67,10 @@ export async function integrationsProcessor(_job: Job): Promise<void> {
     if (!config.data.integrations.events.enabled) continue;
     if (config.data.integrations.events.reminderMinutes.length === 0) continue;
 
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({ action: 'events.reminders', guildId: guild.id }),
+    await inviaAlBot(
+      redis,
+      { action: 'events.reminders', guildId: guild.id },
+      { chiave: `events.reminders:${guild.id}` },
     );
     reminderChecks++;
   }

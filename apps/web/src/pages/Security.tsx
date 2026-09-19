@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, type RiskyUser, type SecurityInventory } from '../api.js';
 import { useGuildId } from '../App.js';
 import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import { EsitoAzione, useAzione } from '../components/azione.js';
 
 interface ThreatSignature {
   id: string;
@@ -26,6 +27,7 @@ export function Security() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newThreat, setNewThreat] = useState({ kind: 'DOMAIN', value: '', severity: 80 });
+  const azione = useAzione(guildId);
 
   const load = () => {
     Promise.all([
@@ -68,6 +70,8 @@ export function Security() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Sicurezza</h1>
+
+      <EsitoAzione guildId={guildId} stato={azione.stato} onChiudi={azione.azzera} />
 
       {inventory.invitesAtRisk.length > 0 && (
         <Card title="🚨 Codici invito a rischio dirottamento">
@@ -200,10 +204,15 @@ export function Security() {
                       {user.quarantinedAt && (
                         <Button
                           variant="ghost"
+                          disabled={azione.occupato}
                           onClick={() =>
-                            void api
-                              .post(`/api/guilds/${guildId}/users/${user.userId}/quarantine/lift`)
-                              .then(load)
+                            void azione.esegui(
+                              () =>
+                                api.post(
+                                  `/api/guilds/${guildId}/users/${user.userId}/quarantine/lift`,
+                                ),
+                              { dopo: load },
+                            )
                           }
                         >
                           Libera
