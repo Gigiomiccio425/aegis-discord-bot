@@ -3,6 +3,9 @@ import {
   defaultGuildConfig,
   GuildConfigSchema,
   RedisKeys,
+  invalidaConfigurazione,
+  leggiRevisione,
+  salvaSeInvariata,
   withMasterSwitch,
   type GuildConfig,
 } from '@angel/shared';
@@ -26,6 +29,21 @@ const MEMORY_TTL_MS = 30_000;
 const REDIS_TTL_SEC = 600;
 
 /**
+ * Generazione locale per server, incrementata a ogni invalidazione.
+ *
+ * Protegge la copia in memoria dalla stessa corsa che la revisione in Redis
+ * evita per la cache condivisa: una lettura partita prima di un salvataggio
+ * e finita dopo non deve rimettere in memoria i valori vecchi per trenta
+ * secondi, proprio dopo che l'annuncio del pannello li aveva cancellati.
+ */
+const generazioni = new Map<string, number>();
+
+function nuovaGenerazione(guildId: string): void {
+  generazioni.set(guildId, (generazioni.get(guildId) ?? 0) + 1);
+  memory.delete(guildId);
+}
+
+/**
  * Configurazione così come la vede il bot: con l'interruttore generale già
  * applicato, quindi tutti i moduli spenti se qualcuno lo ha abbassato.
  *
@@ -37,12 +55,23 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
   const cached = memory.get(guildId);
   if (cached && cached.expiresAt > Date.now()) return cached.config;
 
+  const generazione = generazioni.get(guildId) ?? 0;
+  const ricorda = (config: GuildConfig): void => {
+    // Solo se nessuna invalidazione è arrivata mentre si leggeva.
+    if ((generazioni.get(guildId) ?? 0) !== generazione) return;
+    memory.set(guildId, { config, expiresAt: Date.now() + MEMORY_TTL_MS });
+  };
+
   const redis = getRedis();
+  // La revisione si legge **prima** di tutto il resto: è la fotografia contro
+  // cui si verificherà, alla fine, che nessuno abbia salvato nel frattempo.
+  const revisione = await leggiRevisione(redis, guildId).catch(() => null);
+
   const raw = await redis.get(RedisKeys.guildConfig(guildId)).catch(() => null);
   if (raw) {
     try {
       const parsed = withMasterSwitch(GuildConfigSchema.parse(JSON.parse(raw)));
-      memory.set(guildId, { config: parsed, expiresAt: Date.now() + MEMORY_TTL_MS });
+      ricorda(parsed);
       return parsed;
     } catch {
       // Cache corrotta o schema cambiato: si riparte dal database.
@@ -52,12 +81,15 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
 
   const stored = await loadFromDatabase(guildId);
   const config = withMasterSwitch(stored);
-  memory.set(guildId, { config, expiresAt: Date.now() + MEMORY_TTL_MS });
+  ricorda(config);
   // In Redis va la configurazione **originale**: la cache è condivisa con gli
-  // altri processi, e uno di essi potrebbe averne bisogno intatta.
-  await redis
-    .set(RedisKeys.guildConfig(guildId), JSON.stringify(stored), 'EX', REDIS_TTL_SEC)
-    .catch(() => undefined);
+  // altri processi, e uno di essi potrebbe averne bisogno intatta. E ci va
+  // solo se la revisione non è cambiata: il perché è in `cacheConfig.ts`.
+  if (revisione !== null) {
+    await salvaSeInvariata(redis, guildId, JSON.stringify(stored), revisione, REDIS_TTL_SEC).catch(
+      () => undefined,
+    );
+  }
   return config;
 }
 
@@ -108,14 +140,14 @@ export async function saveGuildConfig(
 
 /** Dimentica la copia in memoria: la prossima lettura passa da Redis o dal database. */
 export function forgetGuildConfig(guildId: string): void {
-  memory.delete(guildId);
+  nuovaGenerazione(guildId);
 }
 
 export async function invalidateGuildConfig(guildId: string): Promise<void> {
-  memory.delete(guildId);
-  const redis = getRedis();
-  await redis.del(RedisKeys.guildConfig(guildId)).catch(() => undefined);
-  await redis.publish(RedisKeys.configChannel, guildId).catch(() => undefined);
+  nuovaGenerazione(guildId);
+  await invalidaConfigurazione(getRedis(), guildId).catch((error: unknown) =>
+    log.warn({ err: error, guildId }, 'invalidazione della configurazione non riuscita'),
+  );
 }
 
 /** Resta in ascolto delle invalidazioni pubblicate dagli altri processi. */
@@ -126,7 +158,7 @@ export function subscribeConfigInvalidation(): void {
   });
   sub.on('message', (channel: string, message: string) => {
     if (channel !== RedisKeys.configChannel) return;
-    memory.delete(message);
+    nuovaGenerazione(message);
     log.debug({ guildId: message }, 'configurazione invalidata');
   });
 }

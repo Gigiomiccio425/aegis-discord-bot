@@ -9,6 +9,7 @@ export * from './util/template.js';
 export * from './version.js';
 export * from './env.js';
 export * from './posta.js';
+export * from './cacheConfig.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
 export const RedisKeys = {

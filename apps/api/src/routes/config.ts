@@ -6,7 +6,7 @@ import {
   objectArrayPaths,
   objectArrayTemplates,
   parseGuildConfig,
-  RedisKeys,
+  invalidaConfigurazione,
   type GuildConfig,
 } from '@angel/shared';
 import { requireGuild } from '../guard.js';
@@ -80,10 +80,9 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
       });
 
       // Invalidazione immediata: senza, il bot userebbe la vecchia
-      // configurazione fino alla scadenza della cache.
-      const redis = getRedis();
-      await redis.del(RedisKeys.guildConfig(context.guildId));
-      await redis.publish(RedisKeys.configChannel, context.guildId);
+      // configurazione fino alla scadenza della cache. Con la revisione, e
+      // non solo cancellando: il perché è in `cacheConfig.ts`.
+      await invalidaConfigurazione(getRedis(), context.guildId);
 
       await prisma.auditEvent.create({
         data: {
@@ -146,9 +145,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
         data: { config: parsed.value as unknown as object },
       });
 
-      const redis = getRedis();
-      await redis.del(RedisKeys.guildConfig(context.guildId));
-      await redis.publish(RedisKeys.configChannel, context.guildId);
+      await invalidaConfigurazione(getRedis(), context.guildId);
       await sendBotCommand({ action: 'config.reloaded', guildId: context.guildId });
 
       return { ok: true };
