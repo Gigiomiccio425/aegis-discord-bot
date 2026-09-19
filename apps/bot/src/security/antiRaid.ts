@@ -205,22 +205,31 @@ async function triggerRaid(
     payload: { incidentId: incident.id, userIds: info.userIds.slice(0, 100) },
   });
 
+  // La modalità prova vale anche qui. Prima il lockdown e il cancello di
+  // verifica partivano davvero anche con la prova accesa, perché questo ramo
+  // chiama le azioni direttamente invece di passare dall'esecutore — cioè il
+  // periodo in cui si tarano le soglie, pensato per sbagliare senza danni,
+  // poteva chiudere il server per un falso positivo.
+  const prova = config.general.dryRun;
+
   switch (config.security.antiRaid.responseLevel) {
     case 'LOCKDOWN':
-      await enableLockdown(
-        client,
-        guild,
-        config,
-        `Raid: ${info.reason}`,
-        config.security.antiRaid.autoLiftAfterSec,
-      );
+      if (!prova) {
+        await enableLockdown(
+          client,
+          guild,
+          config,
+          `Raid: ${info.reason}`,
+          config.security.antiRaid.autoLiftAfterSec,
+        );
+      }
       await handleRaiders(client, guild, config, info.userIds);
       break;
     case 'QUARANTINE':
       await handleRaiders(client, guild, config, info.userIds);
       break;
     case 'VERIFY':
-      await applyVerificationGate(guild, config, info.userIds);
+      if (!prova) await applyVerificationGate(guild, config, info.userIds);
       break;
     case 'MONITOR':
       break;
@@ -292,13 +301,23 @@ async function applyVerificationGate(
   config: GuildConfig,
   userIds: string[],
 ): Promise<void> {
-  const roleId =
-    config.general.quarantineRoleId ?? unverifiedRoleId(config);
+  // Prima il ruolo di chi deve ancora verificare, e solo in mancanza quello
+  // di quarantena: «verifica di nuovo» è una richiesta, non una sanzione, e il
+  // pulsante di verifica sa togliere il primo ma non il secondo.
+  const roleId = unverifiedRoleId(config) ?? config.general.quarantineRoleId;
   if (!roleId) return;
+  const verificato = config.security.verification.verifiedRoleId;
 
   for (const userId of userIds) {
     const member = await guild.members.fetch(userId).catch(() => null);
-    await member?.roles.add(roleId, 'Anti-raid: verifica richiesta').catch(() => undefined);
+    if (!member) continue;
+    await member.roles.add(roleId, 'Anti-raid: verifica richiesta').catch(() => undefined);
+    // Il ruolo dei verificati va tolto, non solo affiancato: Discord somma i
+    // permessi dei ruoli e le concessioni vincono sui divieti, quindi chi ha
+    // entrambi continua a vedere tutto e il cancello non chiude niente.
+    if (verificato && member.roles.cache.has(verificato)) {
+      await member.roles.remove(verificato, 'Anti-raid: verifica richiesta').catch(() => undefined);
+    }
   }
 }
 

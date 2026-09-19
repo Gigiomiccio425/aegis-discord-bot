@@ -8,6 +8,8 @@ import { getPrisma } from '@angel/db';
 import { scanContent } from '@angel/scanner';
 import type { Command } from './types.js';
 import {
+  descriviBlocco,
+  descriviSblocco,
   disableLockdown,
   enableLockdown,
   readLockdownState,
@@ -71,10 +73,17 @@ const lockdown: Command = {
         return;
       }
       const da = Math.round((Date.now() - state.startedAt) / 60000);
+      const falliti = state.falliti ?? [];
       await interaction.editReply(
         `🔒 Lockdown **attivo** da ${da} minuti.\n` +
           `Motivo: ${state.reason}\n` +
           `Canali chiusi: ${state.channels.length}\n` +
+          ((state.ruoli?.length ?? 0) > 0
+            ? `Permessi di ruoli sospesi: ${state.ruoli!.length}\n`
+            : '') +
+          (falliti.length > 0
+            ? `⚠️ Non chiusi: ${falliti.map((f) => `<#${f.canaleId}>`).join(', ')}\n`
+            : '') +
           (state.expiresAt
             ? `Revoca automatica: <t:${Math.floor(state.expiresAt / 1000)}:R>`
             : 'Revoca: solo manuale'),
@@ -92,14 +101,7 @@ const lockdown: Command = {
         `${reason} (da ${interaction.user.tag})`,
         minutes * 60,
       );
-      if (result.alreadyActive) {
-        await interaction.editReply('Il lockdown era già attivo: nessuna modifica.');
-        return;
-      }
-      await interaction.editReply(
-        `🔒 Server bloccato. Canali chiusi: ${result.locked}.` +
-          (minutes > 0 ? ` Sblocco automatico fra ${minutes} minuti.` : ''),
-      );
+      await interaction.editReply(descriviBlocco(result, minutes));
       return;
     }
 
@@ -111,14 +113,9 @@ const lockdown: Command = {
       { force, config },
     );
 
-    if (!result.hadState && !force) {
-      await interaction.editReply(
-        'Il lockdown non risulta attivo.\n' +
-          '-# Se i canali sono comunque chiusi, ripeti con `forza:true`: riapre tutto ciò che nega la scrittura a @everyone.',
-      );
-      return;
-    }
-    await interaction.editReply(`🔓 Lockdown revocato. Canali riaperti: ${result.unlocked}.`);
+    await interaction.editReply(
+      descriviSblocco(result, force).replace('ripeti forzando', 'ripeti con `forza:true`'),
+    );
   },
 };
 
@@ -154,15 +151,23 @@ const panic: Command = {
       summary: `🆘 **Emergenza attivata da <@${interaction.user.id}>**\n${reason}`,
     });
 
-    const [snapshotId] = await Promise.all([
-      createSnapshot(guild, 'EMERGENCY', interaction.user.id),
+    const [snapshotId, blocco] = await Promise.all([
+      createSnapshot(guild, 'EMERGENCY', interaction.user.id).catch(() => null),
       enableLockdown(client, guild, config, `Emergenza: ${reason}`, 0),
     ]);
 
+    // Ogni voce dice com'è andata davvero. In emergenza un «fatto» scritto per
+    // abitudine è peggio di un errore: chi legge smette di controllare.
     await interaction.editReply(
       '🆘 Emergenza attivata.\n' +
-        '• Server bloccato (canali in sola lettura, inviti in pausa)\n' +
-        `• Backup salvato: \`${snapshotId}\`\n` +
+        descriviBlocco(blocco)
+          .split('\n')
+          .map((riga) => `• ${riga}`)
+          .join('\n') +
+        '\n' +
+        (snapshotId
+          ? `• Backup salvato: \`${snapshotId}\`\n`
+          : '• ⚠️ Backup **non** salvato: controlla i log del bot\n') +
         '• Staff avvisato\n\n' +
         'Quando la situazione è sotto controllo: `/lockdown revoca`',
     );
