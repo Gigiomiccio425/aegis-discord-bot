@@ -115,4 +115,30 @@ describe('il Dockerfile e i workspace', () => {
 
     expect(pacchetti.filter((nome) => !controllati.includes(nome))).toEqual([]);
   });
+
+  /*
+   * Il supervisore importa altri file da `docker/`, e ognuno va copiato
+   * nell'immagine da una riga sua.
+   *
+   * Dimenticarne uno non si vede costruendo l'immagine: si vede all'avvio,
+   * con il container che muore su `ERR_MODULE_NOT_FOUND` prima di scrivere
+   * qualunque altra cosa — cioè un container che riparte in ciclo senza dire
+   * niente di utile. È la stessa forma del guasto per cui esiste questo file.
+   */
+  it('copia i moduli che il supervisore importa', () => {
+    const avvio = readFileSync(path.join(RADICE, 'docker/avvio.mjs'), 'utf8');
+    const importati = [...avvio.matchAll(/from '\.\/([\w.-]+\.mjs)'/g)].map((voce) => voce[1]!);
+
+    // La controprova: senza, un'espressione sbagliata non troverebbe niente
+    // e il test passerebbe sempre.
+    expect(importati, 'nessun import trovato in avvio.mjs').toContain('segreti.mjs');
+
+    const righeCopy = dockerfile
+      .split('\n')
+      .filter((riga) => riga.startsWith('COPY '));
+    const mancanti = importati.filter(
+      (nome) => !righeCopy.some((riga) => riga.includes(`docker/${nome}`)),
+    );
+    expect(mancanti, 'moduli importati dal supervisore e non copiati').toEqual([]);
+  });
 });

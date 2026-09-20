@@ -65,17 +65,20 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Prima versione pubblicata su questo store.
+  I segreti non si rimettono più a ogni aggiornamento.
 
 
-  - Ruoli unificati: un ruolo per concetto, che cambia nome e permessi con lo
-    stile scelto invece di essere affiancato da un secondo. `/ripara-ruoli`
-    sistema i server costruiti prima.
+  - Token, chiavi e password vanno in
+    `app-data/…/data/storage/segreti.env`, dentro i dati dell'app: il compose
+    viene riscritto a ogni aggiornamento, quel file no. Nei log compaiono i
+    nomi letti — mai i valori — e l'elenco di quelli che mancano ancora.
 
-  - Bot di chat Twitch completo, con pannello separato sulla porta 781.
+  - Il bot Twitch senza credenziali non viene più riavviato ogni trenta
+    secondi: si spegne e basta. Prima riempiva i log di avvisi, e sembrava
+    che fosse rotto tutto mentre il bot Discord era collegato.
 
-  - Copia di sicurezza rileggibile e kit di trasloco, con i valori da riportare
-    scritti in chiaro dentro la cartella.
+  - Se la cartella dei backup non è scrivibile, ora il log dice quale comando
+    la sistema invece del solo codice EACCES.
 
 submitter: Gigiomiccio425
 submission: https://github.com/Gigiomiccio425/aegis-discord-bot

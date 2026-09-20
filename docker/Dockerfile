@@ -67,6 +67,7 @@ COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/apps ./apps
 COPY --chown=node:node docker/avvio.mjs ./docker/avvio.mjs
+COPY --chown=node:node docker/segreti.mjs ./docker/segreti.mjs
 USER node
 
 # Un solo container fa partire tutto: migrazione, bot, worker e pannello.

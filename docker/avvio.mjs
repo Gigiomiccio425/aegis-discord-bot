@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { caricaSegreti, FILE_SEGRETI } from './segreti.mjs';
 
 /** I processi di lunga durata. La migrazione è a parte: finisce e basta. */
 const SERVIZI = [
@@ -124,6 +125,22 @@ function avvia(servizio) {
   processo.on('exit', (codice, segnale) => {
     figli.delete(servizio.nome);
     if (inChiusura) return;
+
+    /*
+     * Uscita pulita: si è spento da solo, e non va rilanciato.
+     *
+     * È il caso del bot Twitch senza le credenziali dell'account: esce con
+     * codice 0 perché non ha niente da fare. Riavviarlo ogni trenta secondi
+     * per sempre riempiva i log della stessa riga — con il risultato che chi
+     * li apriva vedeva scorrere un messaggio d'avviso e concludeva che
+     * l'intero ANGEL fosse rotto, mentre il bot Discord era collegato.
+     *
+     * Si riavvia solo chi è **caduto**: codice diverso da zero, o un segnale.
+     */
+    if (codice === 0 && !segnale) {
+      log(`${servizio.nome} si è spento da solo: non lo riavvio`);
+      return;
+    }
 
     servizio.fallimenti = (servizio.fallimenti ?? 0) + 1;
     const attesa = Math.min(RIAVVIO_MIN_MS * 2 ** (servizio.fallimenti - 1), RIAVVIO_MAX_MS);
@@ -273,8 +290,17 @@ async function registraVersione() {
       return true;
     }
   } catch (errore) {
-    // La cartella di backup non è montata: non è un motivo per non partire.
+    // La cartella di backup non è montata, o è di qualcun altro: non è un
+    // motivo per non partire. Ma va detto cosa fare, perché il sintomo — una
+    // copia notturna che non c'è — si scopre il giorno in cui serve.
     log(`cartella di backup non disponibile (${errore.code ?? errore.message})`);
+    if (errore.code === 'EACCES' || errore.code === 'EPERM') {
+      log(
+        `la cartella esiste ma appartiene a root: ANGEL gira con un altro utente e non può ` +
+          `scriverci. Le copie di sicurezza resteranno vuote finché non gliela dai — sulla ` +
+          `macchina, una volta sola: sudo chown -R 1000:1000 <cartella dei dati dell'app>`,
+      );
+    }
   }
   return false;
 }
@@ -345,6 +371,23 @@ async function ripristinaSeChiesto() {
 }
 
 log(`ANGEL ${process.env.ANGEL_VERSION ?? 'sviluppo'} — avvio`);
+
+/*
+ * I segreti, se stanno in un file dentro i dati dell'app.
+ *
+ * Prima di tutto il resto, perché tutto il resto — la migrazione compresa —
+ * usa DATABASE_URL. Il perché di questo file sta in `segreti.mjs`: su
+ * umbrelOS il compose viene riscritto a ogni aggiornamento, quello no.
+ */
+const segreti = await caricaSegreti(process.env.STORAGE_DIR ?? '/data/storage');
+if (segreti.presente) {
+  // I nomi sì, i valori mai: un segreto che finisce in un log ci resta.
+  log(`${FILE_SEGRETI}: letti ${segreti.nomi.join(', ') || 'nessun valore'}`);
+  for (const avviso of segreti.avvisi) log(`attenzione: ${avviso}`);
+}
+if (segreti.mancanti.length > 0) {
+  log(`ancora da compilare: ${segreti.mancanti.join(', ')} — mettili in ${segreti.percorso}`);
+}
 
 if (!verificaFile()) process.exit(1);
 
