@@ -1,0 +1,64 @@
+name: Malfunzionamento
+description: Qualcosa non fa quello che dovrebbe
+labels: ["malfunzionamento"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Se hai trovato una **vulnerabilità**, chiudi questa pagina e usa
+        [le segnalazioni private](https://github.com/Gigiomiccio425/aegis-discord-bot/security/advisories/new).
+        Una issue pubblica su come aggirare ANGEL resta leggibile a chiunque finché non c'è una correzione.
+
+  - type: input
+    id: versione
+    attributes:
+      label: Versione
+      description: La trovi con `/versione`, o in fondo al pannello.
+      placeholder: "1.29.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dove
+    attributes:
+      label: Dove gira
+      options:
+        - umbrelOS, dallo store
+        - umbrelOS, a mano via SSH
+        - ZimaOS
+        - Docker, altrove
+        - In sviluppo, in locale
+    validations:
+      required: true
+
+  - type: textarea
+    id: atteso
+    attributes:
+      label: Cosa ti aspettavi
+    validations:
+      required: true
+
+  - type: textarea
+    id: successo
+    attributes:
+      label: Cosa è successo invece
+    validations:
+      required: true
+
+  - type: textarea
+    id: passaggi
+    attributes:
+      label: Come riprodurlo
+      description: I passaggi minimi. Se succede da solo, di' quando.
+      placeholder: |
+        1. Dal pannello, …
+        2. …
+        3. Il canale resta aperto
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        Le righe intorno al problema. **Togli token, chiavi e ID di server** prima di incollarle.
+      render: text

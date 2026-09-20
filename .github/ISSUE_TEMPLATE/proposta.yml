@@ -1,0 +1,27 @@
+name: Proposta
+description: Qualcosa che ANGEL dovrebbe saper fare
+labels: ["proposta"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Che problema risolve
+      description: |
+        Il problema, non la soluzione. «Serve un pulsante X» dice cosa vuoi;
+        «quando succede Y devo fare Z a mano ogni volta» dice perché — ed è quello
+        che permette di trovare una soluzione migliore di quella che avevi in mente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Come te lo immagini
+    validations:
+      required: false
+
+  - type: textarea
+    id: oggi
+    attributes:
+      label: Come lo risolvi oggi
+      description: Anche «non lo risolvo» è una risposta utile.
