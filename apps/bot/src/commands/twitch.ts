@@ -33,7 +33,8 @@ import {
   type TextChannel,
 } from 'discord.js';
 import { getPrisma } from '@angel/db';
-import { TwitchChannelConfigSchema } from '@angel/shared';
+import { RedisKeys, TwitchChannelConfigSchema } from '@angel/shared';
+import { getRedis } from '../core/redis.js';
 import { childLogger } from '../core/logger.js';
 
 const log = childLogger('twitch-bot');
@@ -243,6 +244,13 @@ async function impostaRegistro(
   config.registro.suDiscord = true;
 
   await getPrisma().twitchChannel.update({ where: { id: canale.id }, data: { config } });
+
+  // Il processo Twitch tiene la configurazione in memoria: senza avvisarlo,
+  // la scelta fatta qui arrivava là solo al suo riavvio — e prima di allora
+  // un `!angel livello` in chat l'avrebbe sovrascritta con la copia vecchia.
+  await getRedis()
+    .publish(RedisKeys.twitchConfigChannel, canale.id)
+    .catch(() => undefined);
 
   /*
    * Una prova di scrittura subito, non alla prima sanzione.

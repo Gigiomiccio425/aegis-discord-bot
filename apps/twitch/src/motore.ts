@@ -506,6 +506,16 @@ export class Motore {
    * cambia una volta al mese.
    */
   private async cicloLento(): Promise<void> {
+    // Prima di tutto il resto: le decisioni del giro devono usare la
+    // configurazione che c'è nel database, non quella di cinque minuti fa.
+    const riallineati = await this.registro.riallinea().catch((errore: unknown) => {
+      logger.debug({ err: errore }, 'riallineamento con il database non riuscito');
+      return 0;
+    });
+    if (riallineati > 0) {
+      logger.info({ canali: riallineati }, 'configurazione cambiata fuori da qui: riallineata');
+    }
+
     for (const canale of this.registro.tutti()) {
       await this.registro.salvaSpettatori(canale).catch((errore: unknown) =>
         logger.debug({ err: errore, canale: canale.login }, 'spettatori non salvati'),

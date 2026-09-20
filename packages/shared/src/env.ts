@@ -38,6 +38,17 @@ const EnvSchema = z.object({
     .transform((value) => value === 'true'),
 
   API_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+
+  /**
+   * Da chi accettare l'indirizzo del visitatore scritto in X-Forwarded-For.
+   *
+   * Vuota: dai soli proxy su rete privata — il proxy di Umbrel, un tunnel
+   * sulla stessa macchina. Prima era `true`, cioè da chiunque: su un pannello
+   * esposto a Internet chiunque poteva scrivere un indirizzo a caso in
+   * quell'intestazione, e ogni richiesta contava come un visitatore nuovo per
+   * il limite di frequenza. `true` resta possibile per chi sa di averne bisogno.
+   */
+  TRUST_PROXY: z.string().optional(),
   PUBLIC_URL: z.string().url().default('http://localhost:8080'),
   WEB_DEV_ORIGIN: z.string().url().optional(),
   SESSION_SECRET: z.string().min(32).optional(),

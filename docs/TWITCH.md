@@ -202,7 +202,7 @@ microsecondi — ma quello che le sta attorno:
 `TWITCH_PUBLIC_URL` + `/api/auth/callback`. Copia client ID e secret nel compose.
 
 **2. L'account del bot.** Crea un account Twitch normale con il nome che vuoi dare al bot. Poi metti
-una parola qualsiasi in `TWITCH_SETUP_KEY`, riavvia, e **dal browser in cui hai fatto l'accesso con
+almeno 16 caratteri in `TWITCH_SETUP_KEY` (`openssl rand -hex 16`: una chiave più corta viene ignorata, e la rotta resta chiusa), riavvia, e **dal browser in cui hai fatto l'accesso con
 quell'account** apri:
 
 ```

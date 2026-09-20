@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
-import { RedisKeys } from '@angel/shared';
+import { RedisKeys, origineAccettata } from '@angel/shared';
 import { getPanelRole, getSessionUser, hasAtLeast } from './auth.js';
 import { getSubscriber } from './redis.js';
 import { logger } from './logger.js';
@@ -31,6 +31,13 @@ export async function registerLiveFeed(app: FastifyInstance): Promise<void> {
     '/api/guilds/:guildId/live',
     { websocket: true },
     async (socket, request) => {
+      if (
+        !origineAccettata(request.headers.origin, request.headers.host, process.env.PUBLIC_URL)
+      ) {
+        socket.close(4403, 'origine non ammessa');
+        return;
+      }
+
       const user = await getSessionUser(request);
       if (!user) {
         socket.close(4401, 'non autenticato');

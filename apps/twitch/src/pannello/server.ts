@@ -26,7 +26,7 @@
    degli altri è il primo passo per farlo senza accorgersene.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -40,6 +40,8 @@ import {
   TwitchChannelConfigSchema,
   applicaLivello,
   defaultTwitchConfig,
+  proxyFidati,
+  richiestaDaAltraOrigine,
 } from '@angel/shared';
 import { AMBITI_CANALE, scambiaCodice, urlAutorizzazione, revoca } from '../deps.js';
 import { riversaFile } from '../archivio.js';
@@ -47,6 +49,7 @@ import { encrypt } from '../crypto.js';
 import { logger } from '../logger.js';
 import { getRedis } from '../redis.js';
 import type { Motore } from '../motore.js';
+import { installaParserJson } from './parser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -184,12 +187,54 @@ function paginaToken(
 </main></body></html>`;
 }
 
+/**
+ * La chiave di installazione è quella giusta?
+ *
+ * Il compose suggeriva di metterci «una parola», e una parola si indovina: la
+ * rotta risponde a chiunque su Internet. Sotto i sedici caratteri la chiave
+ * non vale — la rotta resta chiusa e nei log compare il perché — e il
+ * confronto è a tempo costante, per non dire a chi prova quanti caratteri ha
+ * indovinato.
+ */
+function chiaveDiSetupValida(proposta: string | undefined): boolean {
+  const attesa = process.env.TWITCH_SETUP_KEY?.trim();
+  if (!attesa || !proposta) return false;
+  if (attesa.length < 16) {
+    logger.warn(
+      'TWITCH_SETUP_KEY è più corta di 16 caratteri: la rotta dei token resta chiusa. ' +
+        'Generane una con: openssl rand -hex 16',
+    );
+    return false;
+  }
+  const a = Buffer.from(attesa);
+  const b = Buffer.from(proposta);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /* ── Server ───────────────────────────────────────────────────────────── */
 
 export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, trustProxy: true, bodyLimit: 256 * 1024 });
+  // I proxy fidati sono quelli su rete privata: questo pannello è fatto per
+  // stare su Internet, e con `true` chiunque avrebbe potuto dichiarare il
+  // proprio indirizzo in X-Forwarded-For e aggirare il limite di frequenza.
+  const app = Fastify({
+    logger: false,
+    trustProxy: proxyFidati(process.env.TRUST_PROXY),
+    bodyLimit: 256 * 1024,
+  });
+
+  installaParserJson(app);
 
   await app.register(cookie);
+
+  // Richieste forgiate dall'altra porta della stessa macchina: il perché è
+  // in `richiestaDaAltraOrigine`.
+  app.addHook('onRequest', async (request, reply) => {
+    if (!request.url.startsWith('/api/')) return;
+    if (richiestaDaAltraOrigine(request.method, request.headers['sec-fetch-site'])) {
+      await reply.code(403).send({ error: 'richiesta da un’altra origine rifiutata' });
+    }
+  });
 
   /*
    * Limite di frequenza con Redis.
@@ -233,8 +278,7 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
    * incollano nel compose, e la chiave di installazione si toglie.
    */
   app.get<{ Querystring: { chiave?: string } }>('/api/auth/bot', async (request, reply) => {
-    const attesa = process.env.TWITCH_SETUP_KEY;
-    if (!attesa || request.query.chiave !== attesa) {
+    if (!chiaveDiSetupValida(request.query.chiave)) {
       return reply.code(404).send({ error: 'endpoint non trovato' });
     }
 
@@ -575,13 +619,18 @@ export async function avviaPannello(opzioni: OpzioniPannello): Promise<FastifyIn
     if (!ruolo) return reply.code(404).send({ error: 'canale non trovato' });
 
     const quanti = Math.min(200, Math.max(1, Number(request.query.quanti) || 50));
+    // Una data che non si legge diventava un errore 500 del database.
+    const prima = request.query.prima ? new Date(request.query.prima) : null;
+    if (prima && Number.isNaN(prima.getTime())) {
+      return reply.code(400).send({ error: 'data non valida' });
+    }
 
     const eventi = await getPrisma().twitchEvent.findMany({
       where: {
         channelId: request.params.id,
         ...(request.query.tipo ? { type: request.query.tipo } : {}),
         ...(request.query.modulo ? { module: request.query.modulo } : {}),
-        ...(request.query.prima ? { createdAt: { lt: new Date(request.query.prima) } } : {}),
+        ...(prima ? { createdAt: { lt: prima } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: quanti,

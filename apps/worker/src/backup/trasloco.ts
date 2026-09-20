@@ -80,7 +80,7 @@ export const GRUPPI: { titolo: string; nota: string; segrete: boolean; nomi: str
       'di Discord con /api/auth/callback in fondo. Se non combaciano, l’accesso al\n' +
       'pannello fallisce con «stato non valido» e non c’è nient’altro che lo spieghi.',
     segrete: false,
-    nomi: ['PUBLIC_URL', 'API_PORT'],
+    nomi: ['PUBLIC_URL', 'API_PORT', 'TRUST_PROXY'],
   },
   {
     titolo: 'DATABASE E CODE',

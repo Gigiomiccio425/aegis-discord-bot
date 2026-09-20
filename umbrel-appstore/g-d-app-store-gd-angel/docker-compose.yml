@@ -115,7 +115,7 @@ services:
       # L'account da cui il bot parla in chat. Senza, il bot Twitch resta
       # spento e non disturba nessuno — tutto il resto funziona lo stesso.
       #
-      # Per ottenerli: metti una parola in TWITCH_SETUP_KEY, riavvia l'app,
+      # Per ottenerli: metti in TWITCH_SETUP_KEY almeno 16 caratteri (openssl rand -hex 16), riavvia l'app,
       # e dal browser in cui hai fatto l'accesso con l'account bot apri
       #     http://umbrel.local:781/api/auth/bot?chiave=LA_PAROLA
       # La pagina che torna li mostra pronti. Poi svuota TWITCH_SETUP_KEY.
