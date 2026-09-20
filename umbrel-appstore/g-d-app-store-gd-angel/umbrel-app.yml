@@ -86,6 +86,13 @@ releaseNotes: >
     quella cartella in sola lettura.
 
 
+  - Correzione della 1.29.1: su un'installazione nuova Postgres non partiva,
+    e diceva `/segreti/postgres_password: No such file or directory`. Le
+    cartelle di bind-mount le crea Docker di root, e ANGEL gira con uid
+    1000: non poteva scrivere la password. Adesso un container sistema il
+    proprietario al primo avvio, e non c'è nessun comando da dare a mano.
+
+
   Aggiornando da una versione precedente: se avevi già un `segreti.env` in
   `data/storage` viene letto lo stesso, e nei log trovi il comando per
   spostarlo. Se invece i valori erano solo nel compose, travasali **prima** di
