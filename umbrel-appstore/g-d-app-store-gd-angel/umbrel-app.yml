@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.27.2"
+version: "1.28.0"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,17 +65,27 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Prima versione pubblicata su questo store.
+  Il lockdown funziona davvero, e il pannello dice cosa è successo.
 
 
-  - Ruoli unificati: un ruolo per concetto, che cambia nome e permessi con lo
-    stile scelto invece di essere affiancato da un secondo. `/ripara-ruoli`
-    sistema i server costruiti prima.
+  - Il lockdown chiude anche le chat testuali delle vocali e dei palchi, e
+    sospende i permessi di scrittura dati ai singoli ruoli — che prima
+    scavalcavano il blocco. I canali che non riesce a chiudere ora li elenca
+    con il motivo, invece di rispondere «chiusi: 0».
 
-  - Bot di chat Twitch completo, con pannello separato sulla porta 781.
+  - I comandi dal pannello non si perdono più se il bot si sta riavviando:
+    restano in coda, e l'esito — fatto, fallito e perché — torna indietro.
+    La dashboard mostra se il lockdown è attivo e se il bot è collegato.
 
-  - Copia di sicurezza rileggibile e kit di trasloco, con i valori da riportare
-    scritti in chiaro dentro la cartella.
+  - Un secondo modello di server, «yuyu»: stessa struttura, nomi e simboli
+    diversi, e i verificati si chiamano come la community.
+
+  - Sicurezza: i due pannelli non si fidano più l'uno dell'altro (stesso sito,
+    porte diverse), l'accesso concesso automaticamente si revoca quando su
+    Discord sparisce il permesso, e lo scanner non segue più i link verso la
+    rete interna della macchina.
+
+  - In modalità prova l'anti-raid non blocca più il server per davvero.
 
 submitter: Gigiomiccio425
 submission: https://github.com/Gigiomiccio425/aegis-discord-bot
