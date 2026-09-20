@@ -11,6 +11,7 @@ export * from './env.js';
 export * from './posta.js';
 export * from './cacheConfig.js';
 export * from './sicurezzaWeb.js';
+export * from './segreti.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
 export const RedisKeys = {

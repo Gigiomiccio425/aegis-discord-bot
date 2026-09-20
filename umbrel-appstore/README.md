@@ -54,40 +54,56 @@ riscrivere questo file.
 
 Vale identico per `Gigio-dany-appstore`: la protezione è attiva su tutte le repository pubbliche.
 
-### Quindi: una modifica, una volta
+### Quindi: un file dei segreti, scritto una volta sola
 
-Dopo aver installato l'app da umbrelOS:
+I valori **non vanno nel compose**: umbrelOS lo riscrive dal repository a ogni
+aggiornamento dell'app, e quello che ci scrivi sparisce.
+
+Vanno in un file dentro i dati dell'app, che nessun aggiornamento tocca:
 
 ```bash
 ssh umbrel@umbrel.local
-nano ~/umbrel/app-data/g-d-app-store-gd-angel/docker-compose.yml
+mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage
+nano ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
 ```
 
-Sostituisci i sei segnaposto:
+Una riga per valore, senza virgolette:
 
-| Segnaposto | Dove si prende |
+```
+DISCORD_TOKEN=il.tuo.token
+DISCORD_CLIENT_SECRET=il-tuo-client-secret
+SESSION_SECRET=quello-di-openssl-rand-hex-32
+ENCRYPTION_KEY=un-altro-di-openssl-rand-hex-32
+DATABASE_URL=postgresql://angel:LA_TUA_PASSWORD@postgres:5432/angel?schema=public
+```
+
+Poi chiudilo agli altri, e riavvia l'app da umbrelOS:
+
+```bash
+chmod 600 ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
+```
+
+| | |
 |---|---|
-| `METTI_QUI_IL_TOKEN` | Developer Portal → Bot → Reset Token |
-| `METTI_QUI_IL_CLIENT_SECRET` | Developer Portal → OAuth2 → Client Secret |
-| `METTI_QUI_openssl_rand_hex_32` | `openssl rand -hex 32` |
-| `METTI_QUI_UN_ALTRO_openssl_rand_hex_32` | `openssl rand -hex 32` — **diverso dal precedente** |
-| `METTI_QUI_UNA_PASSWORD` (×2) | inventala. Sta in **due punti** e devono coincidere |
+| Chi vince | Il file. Un valore che sta lì rende irrilevante il segnaposto nel compose |
+| Cosa finisce nei log | I **nomi** letti, mai i valori, più l'elenco di quelli che mancano |
+| Agli aggiornamenti | Niente da rifare: il compose cambia, il file resta |
 
-Poi riavvia l'app dall'interfaccia di umbrelOS.
+La password del database va scritta **solo** dentro `DATABASE_URL`.
+`POSTGRES_PASSWORD` nel compose può restare un segnaposto per sempre: Postgres
+la usa soltanto alla primissima inizializzazione del volume e poi la ignora,
+quindi dopo la prima installazione conta solo quella con cui ANGEL si collega.
 
-Finché i segnaposto sono lì il bot parte e non riesce a collegarsi: nei log compare un errore di
-autenticazione di Discord, che è il modo giusto di dire «mancano le credenziali» invece di restare
-in silenzio.
+Finché manca qualcosa il bot parte lo stesso e lo dice: nei log compare
+`ancora da compilare: DISCORD_TOKEN, …`, e il pannello resta raggiungibile per
+poterlo leggere.
 
-### E agli aggiornamenti?
+### E l'alternativa: ricopiare il compose vecchio?
 
-umbrelOS riscrive quel file dalla repository quando aggiorni l'app, e i valori vanno rimessi. Sono
-sei righe, e succede solo quando cambi versione — ma è la ragione per cui esiste anche l'altra
-strada.
-
-**Se la cosa ti dà fastidio, usa il compose a mano**: nessun segnaposto, i valori in un `.env`
-accanto al file, nessuna sovrascrittura mai. Si perde la casella nell'elenco delle app, si guadagna
-un'installazione che non si tocca più. Sta in [`umbrel/`](../umbrel/LEGGIMI.md).
+Funziona, ma va rifatta ogni volta. umbrelOS sovrascrive il compose a ogni
+aggiornamento, quindi «copio il vecchio e cambio la versione» significa
+rifarlo a ogni versione, e ricordarsi quali righe. Il file dei segreti si
+scrive una volta e basta.
 
 ---
 
