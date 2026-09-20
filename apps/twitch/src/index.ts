@@ -75,7 +75,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  void announceVersion(getRedis(), 'twitch');
+  void announceVersion(getRedis(), 'twitch', (problema) => {
+    // Il pannello mostra «fermo» quando questa chiave manca. Se manca per un
+    // guasto invece che perché il processo è giù, la differenza si vede solo qui.
+    if (problema.tipo === 'scrittura') {
+      logger.error({ err: problema.errore }, 'versione non dichiarata: Redis ha rifiutato');
+    } else if (problema.tipo === 'lenta') {
+      logger.warn(
+        { attesaMs: problema.attesaMs },
+        'versione non ancora dichiarata: Redis non risponde, il comando resta in coda',
+      );
+    } else {
+      logger.error(
+        { letto: problema.letto, atteso: problema.atteso },
+        'versione scritta ma non rileggibile: il pannello dirà che questo processo è fermo',
+      );
+    }
+  });
   logger.info({ versione: runningVersion(), bot: botLogin }, 'ANGEL per Twitch');
 
   const motore = new Motore({

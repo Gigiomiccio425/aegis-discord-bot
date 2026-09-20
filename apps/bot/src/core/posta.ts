@@ -92,9 +92,37 @@ export function consumaPosta({
   let inVolo = 0;
   const code = new Map<string, Promise<void>>();
 
+  /*
+   * Il battito, e perché i suoi errori non si ingoiano.
+   *
+   * Questa chiave è l'unica cosa che dice al pannello «il bot è collegato a
+   * Discord adesso». Se la scrittura fallisce, il pannello scrive «il bot non
+   * è collegato» di un bot collegato e funzionante, e i comandi sembrano non
+   * partire quando invece partono. Con `.catch(() => undefined)` non restava
+   * una riga da nessuna parte: si poteva solo indovinare.
+   *
+   * Si segnala una volta sola per ogni cambio di stato, non a ogni battito:
+   * ogni quindici secondi la stessa riga sarebbe rumore, e il rumore nasconde
+   * proprio la riga che serve.
+   */
+  let battitoRotto = false;
   const battito = async (): Promise<void> => {
     if (!pronto()) return;
-    await redis.set(Posta.pronto, String(Date.now()), 'EX', 45).catch(() => undefined);
+    try {
+      await redis.set(Posta.pronto, String(Date.now()), 'EX', 45);
+      if (battitoRotto) {
+        battitoRotto = false;
+        log.info('battito ripreso: il pannello torna a vedere il bot collegato');
+      }
+    } catch (errore) {
+      if (battitoRotto) return;
+      battitoRotto = true;
+      log.error(
+        { err: errore },
+        'battito non scritto: il pannello dirà che il bot non è collegato, e gli esiti ' +
+          'dei comandi non gli torneranno indietro',
+      );
+    }
   };
   void battito();
   const timerBattito = setInterval(() => void battito(), BATTITO_MS);
@@ -157,9 +185,22 @@ export function consumaPosta({
       action: busta.comando?.action ?? 'sconosciuta',
       finitoIl: Date.now(),
     };
-    await redis
-      .set(Posta.esito(busta.id), JSON.stringify(salvato), 'EX', ESITO_TTL_SEC)
-      .catch(() => undefined);
+    /*
+     * L'esito è la risposta al pannello. Se non si scrive, chi ha premuto il
+     * pulsante vede «non eseguito» per un comando che **è stato eseguito** —
+     * e lo ripete, che su un lockdown significa rifarlo due volte.
+     *
+     * Non si rilancia: il comando è già stato fatto, e fallire qui lo
+     * rimetterebbe in coda. Si dice, e si va avanti.
+     */
+    try {
+      await redis.set(Posta.esito(busta.id), JSON.stringify(salvato), 'EX', ESITO_TTL_SEC);
+    } catch (errore) {
+      log.error(
+        { err: errore, action: salvato.action, stato: salvato.stato },
+        'esito non salvato: il comando è stato eseguito ma il pannello non lo saprà',
+      );
+    }
 
     // La chiave anti-doppione si toglie solo se è ancora la sua: un comando
     // uguale arrivato dopo ne ha scritta una sua, e toglierla la lascerebbe

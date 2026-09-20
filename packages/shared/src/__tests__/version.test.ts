@@ -106,3 +106,79 @@ describe('versioni dei servizi', () => {
     ).resolves.toBeUndefined();
   }, 6000);
 });
+
+/*
+ * QUANDO LA DICHIARAZIONE NON ARRIVA
+ *
+ * Il pannello scriveva «bot: fermo» per un bot collegato e funzionante, e non
+ * c’era una riga da nessuna parte che dicesse perché: la scrittura aveva
+ * `() => undefined` su entrambi i rami, quindi un rifiuto di Redis spariva.
+ *
+ * Adesso ogni modo di fallire ha un nome. Non ripara la causa — che può
+ * stare fuori dal processo — ma la rende leggibile, e senza questi tre casi
+ * si torna a indovinare.
+ */
+describe('quando la versione non si dichiara', () => {
+  it("dice quando Redis rifiuta la scrittura", async () => {
+    const problemi: unknown[] = [];
+    const redis = {
+      set: async () => { throw new Error('READONLY finto'); },
+      get: async () => null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    expect(problemi.map((p) => (p as { tipo: string }).tipo)).toContain('scrittura');
+  });
+
+  /*
+   * Il caso che inganna di più: con Redis irraggiungibile ioredis non
+   * fallisce, accoda. La promessa non si risolve né si rifiuta, quindi
+   * «nessun errore» non vuol dire «scritto».
+   */
+  it("dice quando Redis non risponde affatto", async () => {
+    const problemi: unknown[] = [];
+    const redis = {
+      set: () => new Promise<void>(() => undefined),
+      get: async () => null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    expect(problemi.map((p) => (p as { tipo: string }).tipo)).toContain('lenta');
+  }, 6000);
+
+  /*
+   * Il caso visto in produzione: la scrittura non dà errore, e la chiave non
+   * c’è. Scritta su un altro Redis, scaduta subito, tolta da qualcuno: da
+   * dentro il processo non si distinguono, e nessuno dei tre si vedeva.
+   */
+  it("dice quando la scrive senza errori e rileggendola non c’è", async () => {
+    const problemi: unknown[] = [];
+    const redis = {
+      set: async () => 'OK',
+      get: async () => null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    const rilettura = problemi.find((p) => (p as { tipo: string }).tipo === "rilettura");
+    expect(rilettura, 'una scrittura che non si rilegge deve essere segnalata').toBeTruthy();
+    expect((rilettura as { letto: string | null }).letto).toBeNull();
+  });
+
+  it("quando tutto funziona non segnala niente", async () => {
+    const problemi: unknown[] = [];
+    const memoria = new Map<string, string>();
+    const redis = {
+      set: async (chiave: string, valore: string) => { memoria.set(chiave, valore); return 'OK'; },
+      get: async (chiave: string) => memoria.get(chiave) ?? null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    // La controprova: la chiave c’è davvero, quindi il silenzio è quello buono.
+    expect(memoria.get('version:bot')).toBeTruthy();
+    expect(problemi).toEqual([]);
+  });
+});

@@ -37,7 +37,23 @@ async function main(): Promise<void> {
   // funzionava: al token rifiutato il processo esce dopo poche centinaia di
   // millisecondi, la scrittura resta per strada, e il pannello dice «non
   // risponde» a un container che invece c'è.
-  await announceVersion(getRedis(), 'bot');
+  await announceVersion(getRedis(), 'bot', (problema) => {
+    // Il pannello mostra «fermo» quando questa chiave manca. Se manca per un
+    // guasto invece che perché il processo è giù, la differenza si vede solo qui.
+    if (problema.tipo === 'scrittura') {
+      logger.error({ err: problema.errore }, 'versione non dichiarata: Redis ha rifiutato');
+    } else if (problema.tipo === 'lenta') {
+      logger.warn(
+        { attesaMs: problema.attesaMs },
+        'versione non ancora dichiarata: Redis non risponde, il comando resta in coda',
+      );
+    } else {
+      logger.error(
+        { letto: problema.letto, atteso: problema.atteso },
+        'versione scritta ma non rileggibile: il pannello dirà che questo processo è fermo',
+      );
+    }
+  });
 
   subscribeConfigInvalidation();
 

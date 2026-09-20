@@ -42,13 +42,41 @@ interface RedisLike {
  */
 const PRIMA_ATTESA_MS = 2000;
 
-/** Una scrittura sola, che non solleva mai e non aspetta oltre il tetto. */
-async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number): Promise<void> {
+/**
+ * Cosa può andare storto in una dichiarazione, detto a parole.
+ *
+ * Prima non lo diceva nessuno: la scrittura aveva `() => undefined` su
+ * entrambi i rami, quindi un rifiuto di Redis spariva. Il sintomo era il
+ * pannello che scriveva «bot: fermo» per un processo vivo e funzionante, e
+ * nessuna riga da nessuna parte che dicesse perché.
+ */
+export type ProblemaVersione =
+  | { tipo: 'scrittura'; errore: unknown }
+  | { tipo: 'lenta'; attesaMs: number }
+  | { tipo: 'rilettura'; letto: string | null; atteso: string };
+
+/**
+ * Una scrittura sola: non solleva mai, non aspetta oltre il tetto, e dice
+ * cosa è andato storto invece di ingoiarlo.
+ */
+async function scrivi(
+  redis: RedisLike,
+  service: ServiceName,
+  attesaMs: number,
+  segnala?: (problema: ProblemaVersione) => void,
+): Promise<void> {
+  let finita = false;
+
   const set = redis
     .set(RedisKeys.serviceVersion(service), runningVersion(), 'EX', VERSION_TTL_SEC)
     .then(
-      () => undefined,
-      () => undefined,
+      () => {
+        finita = true;
+      },
+      (errore: unknown) => {
+        finita = true;
+        segnala?.({ tipo: 'scrittura', errore });
+      },
     );
 
   await Promise.race([
@@ -58,6 +86,15 @@ async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number):
       t.unref?.();
     }),
   ]);
+
+  /*
+   * Con Redis irraggiungibile ioredis non fallisce: accoda e tiene lì. La
+   * promessa non si risolve né si rifiuta, quindi «nessun errore» non vuol
+   * dire «scritto». Se allo scadere del tetto non è ancora finita, è quello
+   * che sta succedendo — e va detto, perché da fuori si vede solo un
+   * processo che risulta fermo.
+   */
+  if (!finita) segnala?.({ tipo: 'lenta', attesaMs });
 }
 
 /**
@@ -76,14 +113,32 @@ async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number):
  * riesce solo a collegarsi. Sono due guasti diversi con due rimedi diversi:
  * ricreare il container non serve a niente se il token è sbagliato.
  */
-export function announceVersion(redis: RedisLike, service: ServiceName): Promise<void> {
+export function announceVersion(
+  redis: RedisLike,
+  service: ServiceName,
+  segnala?: (problema: ProblemaVersione) => void,
+): Promise<void> {
   const timer = setInterval(() => {
-    void scrivi(redis, service, PRIMA_ATTESA_MS);
+    void scrivi(redis, service, PRIMA_ATTESA_MS, segnala);
   }, VERSION_HEARTBEAT_SEC * 1000);
   // Non deve tenere vivo il processo da solo.
   timer.unref?.();
 
-  return scrivi(redis, service, PRIMA_ATTESA_MS);
+  return scrivi(redis, service, PRIMA_ATTESA_MS, segnala).then(async () => {
+    /*
+     * La rilettura, solo la prima volta.
+     *
+     * Scrivere senza errori non prova che il valore ci sia: può essere stato
+     * accodato e mai partito, o scritto su un Redis diverso da quello che
+     * legge il pannello. Fin qui l'unico modo di accorgersene era il pannello
+     * che diceva «fermo» per un processo vivo, senza una riga che lo
+     * spiegasse. Un GET in più all'avvio lo trasforma in una riga di log.
+     */
+    if (!segnala) return;
+    const letto = await redis.get(RedisKeys.serviceVersion(service)).catch(() => null);
+    const atteso = runningVersion();
+    if (letto !== atteso) segnala({ tipo: 'rilettura', letto, atteso });
+  });
 }
 
 export interface ServiceVersions {
