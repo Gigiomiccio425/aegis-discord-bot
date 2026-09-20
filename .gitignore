@@ -12,6 +12,12 @@ build/
 *.local.yml
 *.local.yaml
 
+# Il file dei segreti, compilato. Va copiato sulla macchina che esegue
+# ANGEL, non lasciato qui dentro: GitHub rifiuterebbe comunque il push con
+# GH013, e Discord revoca i token che trova nelle repository pubbliche.
+segreti.env
+*.segreti.env
+
 # dati runtime (allegati archiviati, cache OCR, backup)
 data/
 storage/

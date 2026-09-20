@@ -152,6 +152,37 @@ describe('pacchetto per umbrelOS', () => {
     expect(compose).toContain('${APP_DATA_DIR}/data/segreti:/segreti:ro');
     expect(valore(compose, 'SEGRETI_DIR')).toBe('/segreti');
   });
+
+  /*
+   * Il container che sistema i permessi, e perché non è facoltativo.
+   *
+   * Le cartelle di bind-mount le crea Docker, e le crea di root. ANGEL gira
+   * con `USER node` (uid 1000): in una cartella di root non scrive, quindi
+   * `postgres_password` non nasce e Postgres esce a ripetizione con
+   * «No such file or directory». Sembra un guasto del database, e il
+   * database non c'entra niente — è successo davvero, alla 1.29.1.
+   *
+   * Togliere questo servizio rimette esattamente quel guasto, e non lo
+   * rimette subito: solo sulle installazioni nuove, dove la cartella non
+   * esiste ancora.
+   */
+  it('qualcuno sistema il proprietario della cartella dei segreti', () => {
+    const servizi = [...compose.matchAll(/^ {2}([a-z_][a-z0-9_-]*):$/gm)].map((riga) => riga[1]!);
+    expect(servizi, 'nessun servizio letto').toContain('angel');
+    expect(servizi).toContain('preparasegreti');
+
+    const blocco = compose.slice(
+      compose.indexOf('\n  preparasegreti:'),
+      compose.indexOf('\n  angel:'),
+    );
+
+    // L'uid di `node` dentro l'immagine di ANGEL. Un numero diverso qui
+    // significa una cartella che resta illeggibile a chi deve scriverci.
+    expect(blocco).toContain('chown -R 1000:1000 /segreti');
+    expect(blocco).toContain('${APP_DATA_DIR}/data/segreti:/segreti');
+    // Senza, il container ripartirebbe all'infinito dopo aver finito.
+    expect(valore(blocco, 'restart')).toBe('no');
+  });
   it('Redis si raggiunge per nome di servizio', () => {
     expect(new URL(valore(compose, 'REDIS_URL')!).hostname).toBe('redis');
   });

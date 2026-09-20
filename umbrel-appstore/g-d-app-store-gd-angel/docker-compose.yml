@@ -41,6 +41,33 @@ services:
       APP_PORT: 8080
 
   # ─────────────────────────────────────────────────────────
+  #  Un container che vive due secondi, e senza il quale non parte niente
+  #
+  #  Le cartelle di bind-mount le crea Docker, e le crea di `root`. ANGEL
+  #  gira con `USER node` (uid 1000) e in una cartella di root non scrive:
+  #  niente `postgres_password`, e Postgres esce a ripetizione con
+  #
+  #    /usr/local/bin/docker-entrypoint.sh: line 21:
+  #    /segreti/postgres_password: No such file or directory
+  #
+  #  che assomiglia a un guasto del database e non lo è.
+  #
+  #  Questo container gira come root — è l'impostazione predefinita, non una
+  #  concessione — sistema il proprietario, e finisce. Nessun `depends_on`
+  #  con condizioni: sia ANGEL sia Postgres riprovano già per conto loro,
+  #  quindi basta che il lavoro sia fatto entro qualche secondo.
+  # ─────────────────────────────────────────────────────────
+  preparasegreti:
+    image: alpine:3
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - mkdir -p /segreti && chown -R 1000:1000 /segreti && chmod 700 /segreti
+    volumes:
+      - ${APP_DATA_DIR}/data/segreti:/segreti
+
+  # ─────────────────────────────────────────────────────────
   #  ANGEL — un solo container per tutto
   #
   #  Dentro girano cinque cose: la migrazione del database, il bot
@@ -49,7 +76,7 @@ services:
   #  tentativo e l'altro.
   # ─────────────────────────────────────────────────────────
   angel:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.29.1
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.29.2
     restart: on-failure
     stop_grace_period: 1m
 
