@@ -35,10 +35,16 @@ suo indirizzo IP — nel compose, nel redirect e nel browser, tutti e tre uguali
 
 ## I segreti: perché non sono qui dentro
 
-Non è prudenza. **GitHub rifiuta il push.**
+Da ANGEL 1.29.0 nel compose **non c'è più nessun valore sensibile**, e non deve
+entrarcene. Due ragioni indipendenti, ognuna sufficiente.
 
-La protezione contro i segreti riconosce il formato di un token Discord e blocca con `GH013` prima
-ancora che il file arrivi nella repository:
+**La prima: sparirebbero comunque.** umbrelOS riscrive il compose dal repository
+a ogni aggiornamento. Quello che ci scrivi a mano dura fino al prossimo, poi
+torna com'era — e il bot riparte senza token, senza dire perché.
+
+**La seconda: GitHub rifiuta il push.** La protezione contro i segreti riconosce
+il formato di un token Discord e blocca con `GH013` prima ancora che il file
+arrivi nella repository:
 
 ```
 remote: - GITHUB PUSH PROTECTION
@@ -47,72 +53,82 @@ remote:   —— Discord Bot Token ——
 remote:      path: umbrel-appstore/g-d-app-store-gd-angel/docker-compose.yml:70
 ```
 
-Provato: rifiutato. E se anche si forzasse con il link di sblocco che GitHub offre, resterebbe il
-problema vero: Discord analizza GitHub in cerca di token e revoca quelli che trova. Il bot
-smetterebbe di collegarsi da solo, nel giro di ore, e la cura sarebbe rigenerare il token — cioè
-riscrivere questo file.
+Provato: rifiutato. E se anche si forzasse con il link di sblocco che GitHub
+offre, resterebbe il problema vero: Discord analizza GitHub in cerca di token e
+revoca quelli che trova. Il bot smetterebbe di collegarsi da solo, nel giro di
+ore. Vale identico per `Gigio-dany-appstore`: la protezione è attiva su tutte le
+repository pubbliche.
 
-Vale identico per `Gigio-dany-appstore`: la protezione è attiva su tutte le repository pubbliche.
+### Dove stanno invece
 
-### Quindi: un file dei segreti, scritto una volta sola
+In una cartella loro, dentro i dati dell'app, che nessun aggiornamento tocca:
 
-I valori **non vanno nel compose**: umbrelOS lo riscrive dal repository a ogni
-aggiornamento dell'app, e quello che ci scrivi sparisce.
+```
+~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti/
+  segreti.env         i valori, una riga per valore
+  postgres_password   la password del database, generata al primo avvio
+```
 
-Vanno in un file dentro i dati dell'app, che nessun aggiornamento tocca:
+La cartella è separata dai dati apposta: ha i permessi stretti, e il container di
+Postgres la monta **in sola lettura**, perché a lui serve leggere un file, non
+scriverci.
+
+### Cosa devi scrivere tu, e cosa no
+
+Solo quello che nessuno può indovinare:
 
 ```bash
 ssh umbrel@umbrel.local
-mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage
-nano ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
+mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti
+nano ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti/segreti.env
 ```
 
 Una riga per valore, senza virgolette:
 
 ```
 DISCORD_TOKEN=il.tuo.token
+DISCORD_CLIENT_ID=il-tuo-client-id
 DISCORD_CLIENT_SECRET=il-tuo-client-secret
-SESSION_SECRET=quello-di-openssl-rand-hex-32
-ENCRYPTION_KEY=un-altro-di-openssl-rand-hex-32
-DATABASE_URL=postgresql://angel:LA_TUA_PASSWORD@postgres:5432/angel?schema=public
+PUBLIC_URL=http://il-tuo-umbrel:780
+OWNER_IDS=il-tuo-id-discord
 ```
 
-Poi chiudilo agli altri, e riavvia l'app da umbrelOS:
+Poi chiudilo agli altri:
 
 ```bash
-chmod 600 ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
+chmod 600 ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti/segreti.env
 ```
+
+`SESSION_SECRET`, `ENCRYPTION_KEY`, la password del database e `DATABASE_URL`
+**non servono**: sono numeri casuali, ANGEL se li genera al primo avvio e se li
+salva lì dentro. Chiederteli sarebbe solo un modo di fartene sbagliare uno.
+
+`PUBLIC_URL` segreto non è, ma va scritto lì lo stesso: è l'indirizzo di questa
+macchina, e lasciato al compose tornerebbe a `umbrel.local` a ogni
+aggiornamento — con l'accesso al pannello che smette di funzionare dando
+«stato non valido», che non spiega niente. Stessa cosa per
+`TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781` se usi il bot Twitch.
+
+### Cosa succede se manca qualcosa
+
+Il container parte lo stesso, ma non fa partire il bot: **aspetta**.
 
 | | |
 |---|---|
-| Chi vince | Il file. Un valore che sta lì rende irrilevante il segnaposto nel compose |
-| Cosa finisce nei log | I **nomi** letti, mai i valori, più l'elenco di quelli che mancano |
-| Agli aggiornamenti | Niente da rifare: il compose cambia, il file resta |
+| Cosa parte subito | Solo il pannello, così puoi leggere cosa manca |
+| Ogni 15 secondi | Ricontrolla il file, e parte da solo appena i valori ci sono |
+| Ogni 2 minuti | Ripete nei log l'elenco di quello che manca e dove prenderlo |
+| Cosa finisce nei log | I **nomi**, mai i valori |
 
-Nello stesso file conviene mettere anche gli indirizzi, che segreti non sono ma
-sono tuoi:
+Non serve riavviare dopo aver scritto il file. Il supervisore se ne accorge.
 
-```
-PUBLIC_URL=http://il-tuo-umbrel:780
-TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781
-```
+Aspettare invece di partire è voluto: un bot senza token si riavvia in ciclo e
+riempie i log di errori che assomigliano a un guasto diverso da quello vero.
 
-Senza, a ogni aggiornamento tornano a `umbrel.local` e l'accesso al pannello
-smette di funzionare con un «stato non valido» che non spiega niente.
+### Il travaso dal vecchio container
 
-La password del database va scritta **solo** dentro `DATABASE_URL`.
-`POSTGRES_PASSWORD` nel compose può restare un segnaposto per sempre: Postgres
-la usa soltanto alla primissima inizializzazione del volume e poi la ignora,
-quindi dopo la prima installazione conta solo quella con cui ANGEL si collega.
-
-Finché manca qualcosa il bot parte lo stesso e lo dice: nei log compare
-`ancora da compilare: DISCORD_TOKEN, …`, e il pannello resta raggiungibile per
-poterlo leggere.
-
-### Il travaso, una volta sola
-
-Se i valori sono ancora nel container — cioè se non hai ancora aggiornato — non
-serve copiarli a mano:
+Se i valori sono ancora nel compose — cioè **prima** di aggiornare — non serve
+ricopiarli a mano:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/segreti.sh -o segreti.sh
@@ -123,20 +139,29 @@ Legge l'ambiente del container, scrive in `segreti.env` quello che trova, e dice
 cosa manca. Non sovrascrive un valore già presente nel file, non copia i
 segnaposto `METTI_QUI…`, e non stampa mai un valore — solo i nomi.
 
+Eseguilo prima di aggiornare. Dopo, nel container nuovo quei valori non ci sono
+più, e da lì non c'è più niente da prendere.
+
+Se avevi già un `segreti.env` nella vecchia posizione (`data/storage`), ANGEL lo
+legge lo stesso e ti dice nei log il comando per spostarlo. Nessun valore si
+perde nel passaggio.
+
 ### Se la password del database è andata persa
 
-Succede quando un aggiornamento riscrive il compose prima che esista il file dei
-segreti. Non si recupera, ma si **cambia**, e non si perde niente: il database
-resta dov'è con dentro tutto.
+Succede a chi aggiorna da una versione in cui la password stava nel compose:
+il database esiste già con quella vecchia, e ANGEL ne genera una nuova che non
+combacia. Non si recupera, ma si **cambia**, e non si perde niente — il database
+resta dov'è con dentro tutto:
 
 ```bash
-docker exec g-d-app-store-gd-angel_postgres_1 \
-  psql -U angel -d angel -c "ALTER USER angel PASSWORD 'quella-nuova'"
+docker exec g-d-app-store-gd-angel_postgres_1 psql -U angel -d angel \
+  -c "ALTER USER angel PASSWORD '$(cat ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti/postgres_password)'"
 ```
 
-Funziona senza password perché dal socket locale Postgres si fida — lo dice lui
-stesso al primo avvio: «enabling trust authentication for local connections».
-Poi la stessa password va dentro `DATABASE_URL` in `segreti.env`, e si riavvia.
+Cioè: dici a Postgres di accettare la password che ANGEL si è generato. Funziona
+senza conoscere quella vecchia perché dal socket locale Postgres si fida — lo
+dice lui stesso al primo avvio: «enabling trust authentication for local
+connections».
 
 `ENCRYPTION_KEY` invece non si cambia a cuor leggero: cifra i token salvati nel
 database, e una chiave nuova li rende illeggibili — i canali Twitch collegati
@@ -145,10 +170,9 @@ cifrati e non si toccano.
 
 ### E l'alternativa: ricopiare il compose vecchio?
 
-Funziona, ma va rifatta ogni volta. umbrelOS sovrascrive il compose a ogni
-aggiornamento, quindi «copio il vecchio e cambio la versione» significa
-rifarlo a ogni versione, e ricordarsi quali righe. Il file dei segreti si
-scrive una volta e basta.
+Non serve più, e non funzionerebbe: nel compose nuovo quei campi non esistono.
+Funzionava, ma andava rifatta a ogni versione ricordandosi quali righe. Il file
+dei segreti si scrive una volta e basta.
 
 ---
 

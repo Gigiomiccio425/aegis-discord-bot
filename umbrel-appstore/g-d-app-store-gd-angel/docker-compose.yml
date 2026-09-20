@@ -1,19 +1,17 @@
 # ─────────────────────────────────────────────────────────────
 #  ANGEL — app per umbrelOS
 #
-#  ⚠️ I SEGRETI NON STANNO QUI, E NON PER PRUDENZA.
+#  ⚠️ QUI DENTRO NON C'È NESSUN VALORE SENSIBILE, E NON DEVE ENTRARCI.
 #
-#     GitHub li rifiuta. La protezione contro i segreti riconosce il
-#     formato di un token Discord e blocca il push con GH013 prima ancora
-#     che il file arrivi nella repository. Provato: rifiutato.
+#     umbrelOS riscrive questo file dal repository a ogni aggiornamento:
+#     quello che ci si scriveva spariva, e andava rimesso ogni volta. E nel
+#     frattempo token e chiavi stavano in chiaro in un file leggibile da
+#     chiunque avesse accesso alla macchina.
 #
-#     E se anche si forzasse, Discord analizza GitHub in cerca di token e
-#     revoca quelli che trova — il bot smetterebbe di collegarsi da solo,
-#     nel giro di ore.
-#
-#     Quindi qui ci sono dei segnaposto, e si compilano una volta sulla
-#     macchina dopo l'installazione. Il README dice come, e quale variante
-#     sopravvive agli aggiornamenti dell'app.
+#     Stanno invece in  ${APP_DATA_DIR}/data/segreti/, che gli aggiornamenti
+#     non toccano. Quelli casuali ANGEL se li genera al primo avvio; gli
+#     altri si scrivono una volta e restano. Finché mancano, parte solo il
+#     pannello e il bot aspetta, ricontrollando ogni quindici secondi.
 #
 #  Differenze dal compose di ZimaOS, e non sono cosmetiche:
 #
@@ -51,7 +49,7 @@ services:
   #  tentativo e l'altro.
   # ─────────────────────────────────────────────────────────
   angel:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.28.1
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.29.0
     restart: on-failure
     stop_grace_period: 1m
 
@@ -61,100 +59,58 @@ services:
       TZ: Europe/Rome
 
       # ── Database e code ────────────────────────────────────
-      # I nomi qui sotto sono quelli dei servizi: dentro la rete dell'app
-      # si raggiungono così, senza indirizzi da scrivere da nessuna parte.
-      DATABASE_URL: postgresql://angel:METTI_QUI_UNA_PASSWORD@postgres:5432/angel?schema=public
+      # Il nome è quello del servizio: dentro la rete dell'app si raggiunge
+      # così. DATABASE_URL non c'è perché conterrebbe la password: la compone
+      # ANGEL dal file che trova in /segreti.
       REDIS_URL: redis://redis:6379
 
-      # ── Discord ────────────────────────────────────────────
+      # ── Dove stanno i valori ───────────────────────────────
       #
-      # ⚠️ NON compilare i segnaposto qui dentro: umbrelOS riscrive questo
-      #    file dal repository a ogni aggiornamento, e quello che ci scrivi
-      #    sparisce.
+      # Qui dentro non ce n’è nessuno, ed è la differenza principale
+      # rispetto a prima. umbrelOS riscrive questo file dal repository a
+      # ogni aggiornamento: quello che ci si scriveva spariva, e nel
+      # frattempo stava in chiaro in un file leggibile da chiunque avesse
+      # accesso alla macchina.
       #
-      # I valori veri vanno in un file che sta **nei dati dell'app**, che
-      # nessun aggiornamento tocca:
+      # Adesso stanno in  ${APP_DATA_DIR}/data/segreti/segreti.env,
+      # che gli aggiornamenti non toccano. ANGEL li legge all’avvio.
       #
-      #   nano ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
-      #   chmod 600 ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
-      #
-      # Una riga per valore, senza virgolette:
+      # Quelli casuali se li genera da solo al primo avvio — il segreto di
+      # sessione, la chiave di cifratura, la password del database — e li
+      # salva lì. Restano da dare solo quelli che nessuno può indovinare:
       #
       #   DISCORD_TOKEN=…
+      #   DISCORD_CLIENT_ID=…
       #   DISCORD_CLIENT_SECRET=…
-      #   SESSION_SECRET=…
-      #   ENCRYPTION_KEY=…
-      #   DATABASE_URL=postgresql://angel:LA_TUA_PASSWORD@postgres:5432/angel?schema=public
+      #   PUBLIC_URL=http://il-tuo-umbrel:780
+      #   OWNER_IDS=il-tuo-id-discord
       #
-      # ANGEL lo legge all'avvio e quel che trova vince su questo file. Nei
-      # log compaiono i nomi letti — mai i valori — e l'elenco di quelli che
-      # restano da compilare.
-      #
-      # POSTGRES_PASSWORD più in basso può restare un segnaposto per sempre:
-      # la password del database la decide la **prima** installazione, dopo
-      # Postgres la ignora, e conta solo quella dentro DATABASE_URL.
-      DISCORD_TOKEN: METTI_QUI_IL_TOKEN
-      DISCORD_CLIENT_ID: "1536428461663453284"
-      DISCORD_CLIENT_SECRET: METTI_QUI_IL_CLIENT_SECRET
-      OWNER_IDS: "586922655349866536"
-      DEV_GUILD_ID: ""
+      # Finché mancano, parte **solo il pannello** e il bot aspetta:
+      # ricontrolla ogni quindici secondi e parte da solo appena ci sono.
+      # Nei log compaiono i nomi letti, mai i valori.
+      SEGRETI_DIR: /segreti
 
-      # Riserva il pannello agli ID qui sopra. Con 'false' entra chiunque
-      # abbia «Gestisci server» dove il bot è presente.
+      # Riserva il pannello agli ID in OWNER_IDS. Con 'false' entra
+      # chiunque abbia «Gestisci server» dove il bot è presente.
       PANEL_OWNERS_ONLY: "true"
-
-      # ⚠️ Deve combaciare **esattamente** con l'indirizzo che digiti nel
-      #    browser, porta compresa, e va registrato come redirect OAuth2
-      #    su Discord con /api/auth/callback in fondo. Se il tuo Umbrel non
-      #    risponde a `umbrel.local`, mettici il suo indirizzo IP o il suo
-      #    nome — qui, nel redirect e nel browser, tutti e tre uguali.
-      #
-      #    Anche questo conviene metterlo in `segreti.env`: non è un segreto,
-      #    ma è tuo, e da lì sopravvive agli aggiornamenti invece di tornare
-      #    a `umbrel.local` — con l'accesso al pannello che smette di
-      #    funzionare e l'errore «stato non valido» a spiegarlo male.
-      #
-      #      PUBLIC_URL=http://il-tuo-umbrel:780
-      #      TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781
-      PUBLIC_URL: http://umbrel.local:780
       API_PORT: "8080"
 
-      # ── Segreti ────────────────────────────────────────────
-      # Il primo firma i cookie del pannello. Il secondo cifra i token
-      # dentro il database: cambiarlo rende illeggibile quello che c'è già.
-      SESSION_SECRET: METTI_QUI_openssl_rand_hex_32
-      ENCRYPTION_KEY: METTI_QUI_UN_ALTRO_openssl_rand_hex_32
-
       # ── Scanner ────────────────────────────────────────────
-      # Senza chiave restano le blocklist locali, che sono già centinaia
-      # di migliaia di domini aggiornati ogni sei ore.
-      GOOGLE_SAFE_BROWSING_KEY: ""
-      ABUSECH_AUTH_KEY: ""
+      # Le chiavi facoltative (GOOGLE_SAFE_BROWSING_KEY, ABUSECH_AUTH_KEY)
+      # vanno nel file dei segreti. Senza, restano le blocklist locali: già
+      # centinaia di migliaia di domini, aggiornate ogni sei ore.
       THREAT_FEEDS_ENABLED: "true"
       THREAT_FEED_MAX: "150000"
 
       # ── Twitch ─────────────────────────────────────────────
-      TWITCH_CLIENT_ID: ""
-      TWITCH_CLIENT_SECRET: ""
-      TWITCH_EVENTSUB_SECRET: ""
-
-      # L'account da cui il bot parla in chat. Senza, il bot Twitch resta
-      # spento e non disturba nessuno — tutto il resto funziona lo stesso.
+      # Le credenziali stanno nel file dei segreti, come le altre. Senza,
+      # il bot Twitch resta spento e non disturba nessuno.
       #
-      # Per ottenerli: metti in TWITCH_SETUP_KEY almeno 16 caratteri (openssl rand -hex 16), riavvia l'app,
-      # e dal browser in cui hai fatto l'accesso con l'account bot apri
-      #     http://umbrel.local:781/api/auth/bot?chiave=LA_PAROLA
-      # La pagina che torna li mostra pronti. Poi svuota TWITCH_SETUP_KEY.
-      TWITCH_SETUP_KEY: ""
-      TWITCH_BOT_USER_ID: ""
-      TWITCH_BOT_LOGIN: ""
-      TWITCH_BOT_ACCESS_TOKEN: ""
-      TWITCH_BOT_REFRESH_TOKEN: ""
-
-      # Il pannello degli streamer. A differenza di quello Discord è fatto
-      # per stare su Internet: è lì che gli streamer collegano il proprio
-      # canale. Mettici il dominio vero quando avrai un tunnel con HTTPS.
-      TWITCH_PUBLIC_URL: http://umbrel.local:781
+      #   TWITCH_CLIENT_ID=…
+      #   TWITCH_CLIENT_SECRET=…
+      #   TWITCH_BOT_USER_ID=…  TWITCH_BOT_LOGIN=…
+      #   TWITCH_BOT_ACCESS_TOKEN=…  TWITCH_BOT_REFRESH_TOKEN=…
+      #   TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781
       TWITCH_PANEL_PORT: "781"
 
       # ── Percorsi e copie ───────────────────────────────────
@@ -171,6 +127,8 @@ services:
       # RESTORE_OVERWRITE: "1"
 
     volumes:
+      # I segreti: cartella loro, separata dai dati, con i permessi stretti.
+      - ${APP_DATA_DIR}/data/segreti:/segreti
       - ${APP_DATA_DIR}/data/storage:/data/storage
       # ⚠️ Su umbrelOS questa cartella vive dentro i dati dell'app, e
       #    disinstallando l'app sparisce insieme a tutto il resto. È il
@@ -201,12 +159,15 @@ services:
     environment:
       POSTGRES_USER: angel
       POSTGRES_DB: angel
-      # Stessa password che sta dentro DATABASE_URL qui sopra. Sono lo
-      # stesso valore scritto in due punti: se non coincidono, Postgres
-      # rifiuta l'autenticazione senza dire quale dei due è quello buono.
-      POSTGRES_PASSWORD: METTI_QUI_UNA_PASSWORD
+      # La password la legge dal file che ANGEL genera al primo avvio: è
+      # l'unico modo che ha questa immagine di riceverla senza che stia
+      # scritta qui dentro. Se il file non c'è ancora, Postgres esce e
+      # riprova finché non compare — qualche riga di log e poi parte.
+      POSTGRES_PASSWORD_FILE: /segreti/postgres_password
 
     volumes:
+      # In sola lettura: a Postgres serve leggere un file, non scriverci.
+      - ${APP_DATA_DIR}/data/segreti:/segreti:ro
       - ${APP_DATA_DIR}/data/postgres:/var/lib/postgresql/data
 
   redis:

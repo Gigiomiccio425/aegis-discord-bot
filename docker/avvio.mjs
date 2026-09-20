@@ -24,7 +24,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { caricaSegreti, FILE_SEGRETI } from './segreti.mjs';
+import { assicuraSegreti, cartellaSegreti, istruzioni, FILE_SEGRETI } from './segreti.mjs';
 
 /** I processi di lunga durata. La migrazione è a parte: finisce e basta. */
 const SERVIZI = [
@@ -373,22 +373,39 @@ async function ripristinaSeChiesto() {
 log(`ANGEL ${process.env.ANGEL_VERSION ?? 'sviluppo'} — avvio`);
 
 /*
- * I segreti, se stanno in un file dentro i dati dell'app.
+ * I segreti, dalla cartella che gli aggiornamenti non toccano.
  *
  * Prima di tutto il resto, perché tutto il resto — la migrazione compresa —
- * usa DATABASE_URL. Il perché di questo file sta in `segreti.mjs`: su
- * umbrelOS il compose viene riscritto a ogni aggiornamento, quello no.
+ * usa DATABASE_URL, che di qui viene composta. Il perché sta in `segreti.mjs`.
  */
-const segreti = await caricaSegreti(process.env.STORAGE_DIR ?? '/data/storage');
-if (segreti.presente) {
-  // I nomi sì, i valori mai: un segreto che finisce in un log ci resta.
-  log(`${FILE_SEGRETI}: letti ${segreti.nomi.join(', ') || 'nessun valore'}`);
-  for (const avviso of segreti.avvisi) log(`attenzione: ${avviso}`);
-}
-if (segreti.mancanti.length > 0) {
-  log(`ancora da compilare: ${segreti.mancanti.join(', ')} — mettili in ${segreti.percorso}`);
+const CARTELLA_SEGRETI = cartellaSegreti();
+
+/*
+ * Quello che è già stato detto non si ridice.
+ *
+ * Questa funzione gira anche ogni quindici secondi, durante l'attesa. Senza
+ * memoria ripeterebbe l'elenco dei nomi letti quattro volte al minuto: rumore
+ * che nasconde la riga che dice davvero cosa fare.
+ */
+const giaDetto = new Set();
+function unaVoltaSola(riga) {
+  if (giaDetto.has(riga)) return;
+  giaDetto.add(riga);
+  log(riga);
 }
 
+async function preparaSegreti() {
+  const esito = await assicuraSegreti(CARTELLA_SEGRETI);
+  // I nomi sì, i valori mai: un segreto che finisce in un log ci resta.
+  if (esito.letti.length > 0) unaVoltaSola(`${FILE_SEGRETI}: letti ${esito.letti.join(', ')}`);
+  if (esito.generati.length > 0) {
+    unaVoltaSola(`generati e salvati in ${esito.cartella}: ${esito.generati.join(', ')}`);
+  }
+  for (const avviso of esito.avvisi) unaVoltaSola(`attenzione: ${avviso}`);
+  return esito;
+}
+
+let segreti = await preparaSegreti();
 if (!verificaFile()) process.exit(1);
 
 const aggiornato = await registraVersione();
@@ -429,11 +446,61 @@ if (databasePronto && !(await ripristinaSeChiesto())) {
   process.exit(1);
 }
 
-const daAvviare = databasePronto ? SERVIZI : SERVIZI.filter((servizio) => servizio.nome === 'api');
+/*
+ * Cosa può partire adesso.
+ *
+ * Il pannello parte sempre: è quello che spiega cosa manca. Il bot, il worker
+ * e il bot Twitch no, finché non ci sono il token e l'indirizzo — un bot senza
+ * token non si collega, e rilanciarlo ogni trenta secondi riempie i log senza
+ * avvicinare la soluzione di un millimetro.
+ */
+const avviati = new Set();
 
-for (const servizio of daAvviare) {
-  log(`avvio ${servizio.nome}`);
-  avvia(servizio);
+function avviaSeServe(nomi) {
+  for (const servizio of SERVIZI) {
+    if (!nomi.includes(servizio.nome) || avviati.has(servizio.nome)) continue;
+    avviati.add(servizio.nome);
+    log(`avvio ${servizio.nome}`);
+    avvia(servizio);
+  }
+}
+
+const TUTTI = SERVIZI.map((servizio) => servizio.nome);
+const pronto = () => databasePronto && segreti.mancanti.length === 0;
+
+avviaSeServe(['api']);
+if (pronto()) avviaSeServe(TUTTI);
+else if (segreti.mancanti.length > 0) log(istruzioni(segreti));
+
+/*
+ * L'attesa.
+ *
+ * Ogni quindici secondi si rilegge la cartella: appena i valori compaiono, i
+ * servizi partono senza che nessuno debba riavviare niente. Il promemoria nei
+ * log però si ripete ogni due minuti, non a ogni giro: una riga identica
+ * quattro volte al minuto è rumore, e il rumore nasconde proprio la riga che
+ * dice cosa fare.
+ */
+if (segreti.mancanti.length > 0) {
+  let giri = 0;
+  const attesa = setInterval(() => {
+    void preparaSegreti()
+      .then((nuovo) => {
+        const comparsi = segreti.mancanti.filter((nome) => !nuovo.mancanti.includes(nome));
+        segreti = nuovo;
+        if (comparsi.length > 0) log(`arrivati: ${comparsi.join(', ')}`);
+
+        if (nuovo.mancanti.length === 0) {
+          clearInterval(attesa);
+          log('non manca più niente');
+          if (databasePronto) avviaSeServe(TUTTI);
+          return;
+        }
+        if (++giri % 8 === 0) log(istruzioni(nuovo));
+      })
+      .catch(() => undefined);
+  }, 15_000);
+  attesa.unref?.();
 }
 
 if (!databasePronto) {
@@ -447,12 +514,11 @@ if (!databasePronto) {
       .then(() => {
         clearInterval(riprova);
         delete process.env.ANGEL_DEGRADATO;
-        log('database tornato disponibile: avvio i servizi rimanenti');
-        for (const servizio of SERVIZI) {
-          if (servizio.nome === 'api') continue;
-          log(`avvio ${servizio.nome}`);
-          avvia(servizio);
-        }
+        databasePronto = true;
+        log('database tornato disponibile');
+        // Solo se nel frattempo i segreti ci sono: altrimenti ci pensa
+        // l'attesa, che gira per conto suo.
+        if (segreti.mancanti.length === 0) avviaSeServe(TUTTI);
       })
       .catch(() => log('database ancora irraggiungibile, continuo a riprovare'));
   }, 30_000);

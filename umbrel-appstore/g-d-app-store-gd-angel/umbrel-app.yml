@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.28.1"
+version: "1.29.0"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,20 +65,32 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  I segreti non si rimettono più a ogni aggiornamento.
+  Nel compose non c'è più nessun dato sensibile.
 
 
-  - Token, chiavi e password vanno in
-    `app-data/…/data/storage/segreti.env`, dentro i dati dell'app: il compose
-    viene riscritto a ogni aggiornamento, quel file no. Nei log compaiono i
-    nomi letti — mai i valori — e l'elenco di quelli che mancano ancora.
+  - Token, chiavi e password vivono in `app-data/…/data/segreti/`, una
+    cartella con i permessi stretti che gli aggiornamenti non toccano. Il
+    compose viene riscritto dal repository a ogni aggiornamento, e adesso non
+    c'è più niente da rimettere: contiene solo dove trovare i valori.
 
-  - Il bot Twitch senza credenziali non viene più riavviato ogni trenta
-    secondi: si spegne e basta. Prima riempiva i log di avvisi, e sembrava
-    che fosse rotto tutto mentre il bot Discord era collegato.
+  - Da scrivere a mano restano cinque righe — token, applicazione Discord,
+    indirizzo del pannello, il tuo ID. Segreto di sessione, chiave di
+    cifratura e password del database ANGEL se li genera al primo avvio.
 
-  - Se la cartella dei backup non è scrivibile, ora il log dice quale comando
-    la sistema invece del solo codice EACCES.
+  - Se manca qualcosa, il bot non si riavvia in ciclo: parte solo il pannello
+    e il resto **aspetta**, ricontrollando ogni quindici secondi. Appena i
+    valori ci sono parte da solo, senza riavviare l'app. Nei log compaiono i
+    nomi, mai i valori.
+
+  - Postgres riceve la password da un file (`POSTGRES_PASSWORD_FILE`) e monta
+    quella cartella in sola lettura.
+
+
+  Aggiornando da una versione precedente: se avevi già un `segreti.env` in
+  `data/storage` viene letto lo stesso, e nei log trovi il comando per
+  spostarlo. Se invece i valori erano solo nel compose, travasali **prima** di
+  aggiornare con lo script `docker/segreti.sh` — le istruzioni sono nel
+  README dello store.
 
 submitter: Gigiomiccio425
 submission: https://github.com/Gigiomiccio425/aegis-discord-bot

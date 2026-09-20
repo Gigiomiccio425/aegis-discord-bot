@@ -63,18 +63,50 @@ export function leggiSegreti(testo: string): Map<string, string> {
 }
 
 /**
- * I segreti senza i quali ANGEL non lavora, per il riepilogo all'avvio.
+ * Quelli che il supervisore si genera da solo.
  *
- * Serve a dire «il file c'è ma DISCORD_TOKEN non c'è dentro» invece di
- * lasciare che il bot fallisca il collegamento e lo si scopra dai log.
+ * Sono numeri casuali: nessuno deve inventarli, nessuno deve custodirli
+ * altrove, e chiederli a chi installa significherebbe solo dargli il modo di
+ * sbagliarli. Si generano una volta, finiscono nel file, e restano lì.
+ *
+ * `ENCRYPTION_KEY` cifra i token dentro il database: generarla è sicuro
+ * finché il database è nuovo. Chi riporta un database da un'altra macchina
+ * deve portarsi dietro anche la sua, o quei token diventano illeggibili — ed
+ * è l'unico caso in cui questo valore si scrive a mano.
  */
-export const SEGRETI_ATTESI = [
+export const SEGRETI_GENERABILI = ['SESSION_SECRET', 'ENCRYPTION_KEY'] as const;
+
+/**
+ * Quelli che **deve** dare una persona, e senza cui il bot non parte.
+ *
+ * Il token lo dà Discord, l'indirizzo dipende dalla macchina: non c'è modo
+ * di indovinarli. Finché mancano, il supervisore aspetta invece di far
+ * ripartire in ciclo un bot che non può collegarsi.
+ */
+export const SEGRETI_RICHIESTI = [
   'DISCORD_TOKEN',
+  'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
-  'SESSION_SECRET',
-  'ENCRYPTION_KEY',
+  'PUBLIC_URL',
+  'OWNER_IDS',
+] as const;
+
+/** Tutti quelli che il riepilogo all'avvio guarda. */
+export const SEGRETI_ATTESI = [
+  ...SEGRETI_RICHIESTI,
+  ...SEGRETI_GENERABILI,
   'DATABASE_URL',
 ] as const;
+
+/** Un valore c'è davvero, o è vuoto, o è un segnaposto lasciato dal compose? */
+export function valoreMancante(valore: string | undefined): boolean {
+  return !valore || valore.trim() === '' || valore.startsWith('METTI_QUI');
+}
+
+/** Cosa manca ancora, fra quelli che deve dare una persona. */
+export function segretiDaCompilare(ambiente: Record<string, string | undefined>): string[] {
+  return SEGRETI_RICHIESTI.filter((nome) => valoreMancante(ambiente[nome]));
+}
 
 /**
  * Mette i valori letti nell'ambiente, e dice cosa resta scoperto.
@@ -90,10 +122,7 @@ export function applicaSegreti(
   const valori = leggiSegreti(testo);
   for (const [nome, valore] of valori) ambiente[nome] = valore;
 
-  const mancanti = SEGRETI_ATTESI.filter((nome) => {
-    const valore = ambiente[nome];
-    return !valore || valore.startsWith('METTI_QUI');
-  });
+  const mancanti = SEGRETI_ATTESI.filter((nome) => valoreMancante(ambiente[nome]));
 
   return { nomi: [...valori.keys()], mancanti: [...mancanti] };
 }

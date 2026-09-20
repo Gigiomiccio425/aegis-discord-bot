@@ -7,11 +7,16 @@
 #  Su umbrelOS il `docker-compose.yml` dell'app appartiene al repository: a
 #  ogni aggiornamento viene riscritto da lì, e i valori messi a mano —
 #  token, chiavi, password, indirizzo del pannello — tornano ai segnaposto.
-#  Da ANGEL 1.28.1 quei valori si leggono da `segreti.env`, che sta dentro i
-#  dati dell'app e che nessun aggiornamento tocca.
+#  Da ANGEL 1.29.0 nel compose non ce n'è più nessuno: si leggono tutti da
+#  `data/segreti/segreti.env`, dentro i dati dell'app, che nessun
+#  aggiornamento tocca.
 #
 #  Questo script fa il travaso una volta sola: prende dal container quello
 #  che c'è ancora, lo scrive nel file, e dice cosa manca.
+#
+#  Va eseguito PRIMA di aggiornare, finché i valori sono ancora
+#  nell'ambiente del container vecchio. Dopo, l'ambiente è già quello nuovo
+#  e da lì non c'è più niente da prendere.
 #
 #  Cosa NON fa, di proposito:
 #
@@ -25,7 +30,7 @@
 set -eu
 
 CONTENITORE="${1:-g-d-app-store-gd-angel_angel_1}"
-DATI="${2:-$HOME/umbrel/app-data/g-d-app-store-gd-angel/data/storage}"
+DATI="${2:-$HOME/umbrel/app-data/g-d-app-store-gd-angel/data/segreti}"
 FILE="$DATI/segreti.env"
 
 # Quelle che vale la pena portarsi dietro: i segreti veri, più le due che
@@ -95,15 +100,21 @@ if [ -n "$MANCANTI" ]; then
 	echo ""
 	echo "Una riga per valore, senza virgolette. Dove prenderli:"
 	echo "  DISCORD_TOKEN, DISCORD_CLIENT_SECRET  Developer Portal di Discord"
-	echo "  SESSION_SECRET, ENCRYPTION_KEY        openssl rand -hex 32"
-	echo "  DATABASE_URL                          se non ricordi la password, si cambia"
-	echo "                                        senza perdere niente: il comando è nel"
-	echo "                                        README dello store"
+	echo "  DISCORD_CLIENT_ID                     Developer Portal, General Information"
+	echo "  PUBLIC_URL                            l'indirizzo con cui apri il pannello"
+	echo "  OWNER_IDS                             il tuo ID Discord"
 	echo ""
-	echo "ENCRYPTION_KEY merita una riga a parte: se ne metti una nuova, i token"
-	echo "cifrati nel database diventano illeggibili — i canali Twitch collegati"
-	echo "vanno riautorizzati. Tutto il resto (registro, provvedimenti, archivio,"
-	echo "configurazione) non è cifrato e non si tocca."
+	echo "SESSION_SECRET ed ENCRYPTION_KEY non servono: se mancano, ANGEL se li"
+	echo "genera al primo avvio e se li salva da solo."
+	echo ""
+	echo "ENCRYPTION_KEY ha però un caso suo. Cifra i token salvati nel database:"
+	echo "se il database è quello di prima e la chiave di prima è andata persa, i"
+	echo "canali Twitch collegati vanno riautorizzati. Registro, provvedimenti,"
+	echo "archivio e configurazione non sono cifrati e non si toccano."
+	echo ""
+	echo "DATABASE_URL uguale: se non c'è, ANGEL lo compone dalla password che"
+	echo "genera lui. Su un database già esistente quella password non è quella"
+	echo "giusta — allinearle è un comando solo, sta nel README dello store."
 fi
 
 echo ""
