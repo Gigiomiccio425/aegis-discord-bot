@@ -9,7 +9,6 @@ import { subscribeConfigInvalidation } from './core/config.js';
 import { registerAllEvents } from './events/index.js';
 import { flushBatches } from './logging/auditLogger.js';
 import { closeFileSink } from './logging/fileSink.js';
-import { invalidateCustomCommands } from './personas/customCommands.js';
 import { avviaPosta } from './core/posta.js';
 
 /**
@@ -86,8 +85,6 @@ async function main(): Promise<void> {
     // Non si esce: un errore in un singolo handler non deve spegnere le difese
     // dell'intero server. Gli errori restano registrati e visibili nel pannello.
   });
-
-  void invalidateCustomCommands;
 }
 
 /**

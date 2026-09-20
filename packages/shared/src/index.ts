@@ -81,7 +81,6 @@ export const Queues = {
   threatFeeds: 'threat-feeds',
   twitch: 'twitch',
   retention: 'retention',
-  logDelivery: 'log-delivery',
   /** Scadenze di sondaggi e giveaway: richiede precisione al minuto. */
   integrations: 'integrations',
   /** Revisione periodica di webhook e bot, con intervallo per server. */

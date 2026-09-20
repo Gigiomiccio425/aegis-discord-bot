@@ -1,3 +1,4 @@
+import { destinazioneAmmessa } from './rete.js';
 /* ═══════════════════════════════════════════════════════════════════════
    REPUTAZIONE DEGLI URL
 
@@ -191,6 +192,12 @@ export async function expandUrl(
   let current = url;
 
   for (let i = 0; i < maxRedirects; i++) {
+    // Dove si sta andando, prima di andarci: il link lo ha scritto un
+    // estraneo, e senza questo controllo bastava scriverlo per far battere
+    // un colpo al bot dentro la rete della macchina. Il perché in `rete.ts`.
+    const ammessa = await destinazioneAmmessa(current);
+    if (!ammessa.ok) break;
+
     try {
       const response = await fetch(current, {
         method: 'HEAD',

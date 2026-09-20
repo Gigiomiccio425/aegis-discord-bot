@@ -9,14 +9,12 @@ import {
 } from 'discord.js';
 import { getPrisma, type CaseType } from '@angel/db';
 import {
-  RedisKeys,
   type Decision,
   type DecisionAction,
   type GuildConfig,
   type LogEventType,
 } from '@angel/shared';
 import { childLogger } from './logger.js';
-import { getRedis } from './redis.js';
 import { canActOn, dangerousRoles } from './permissions.js';
 import { createCase } from './cases.js';
 import { descriviErroreDiscord } from './erroriDiscord.js';
