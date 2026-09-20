@@ -2,7 +2,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { EVENT_CATEGORY, LogEventType } from '../types/events.js';
+import {
+  EVENT_CATEGORY,
+  EVENTI_MINACCIA,
+  EVENTI_RISPOSTA,
+  LogEventType,
+} from '../types/events.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
    COPERTURA DEL REGISTRO
@@ -77,5 +82,59 @@ describe('copertura del catalogo eventi', () => {
     const declared = new Set<string>(LogEventType.options);
     const extra = Object.keys(EVENT_CATEGORY).filter((type) => !declared.has(type));
     expect(extra).toEqual([]);
+  });
+});
+
+/*
+ * MINACCE E RISPOSTE
+ *
+ * Il contatore della dashboard diceva «512 minacce oggi» e le minacce erano
+ * zero: contava tutta la categoria `SECURITY`, dentro cui stanno anche gli
+ * snapshot che ANGEL si fa da solo. Un numero che parte da cinquecento e sale
+ * per conto suo non fa notare niente.
+ *
+ * Adesso le due liste lo decidono. Il guasto che questo test impedisce è che
+ * un tipo nuovo non finisca in nessuna delle due: non darebbe errore, e
+ * sparirebbe dal conteggio in silenzio — cioè una minaccia che non si vede.
+ */
+describe('minacce e risposte', () => {
+  const sicurezza = LogEventType.options.filter(
+    (tipo) => EVENT_CATEGORY[tipo] === 'SECURITY',
+  );
+
+  it('ogni evento di sicurezza è o una minaccia o una risposta', () => {
+    const classificati = new Set<string>([...EVENTI_MINACCIA, ...EVENTI_RISPOSTA]);
+
+    // La controprova: senza, una lettura sbagliata non troverebbe nessun
+    // evento e il test passerebbe su un insieme vuoto.
+    expect(sicurezza.length, 'nessun evento di sicurezza letto').toBeGreaterThan(10);
+
+    const senzaPosto = sicurezza.filter((tipo) => !classificati.has(tipo));
+    expect(senzaPosto, 'eventi di sicurezza non classificati').toEqual([]);
+  });
+
+  it('nessun evento sta in tutte e due le liste', () => {
+    const doppi = EVENTI_MINACCIA.filter((tipo) =>
+      (EVENTI_RISPOSTA as readonly string[]).includes(tipo),
+    );
+    expect(doppi, 'contato due volte').toEqual([]);
+  });
+
+  /*
+   * Le liste contengono solo nomi di eventi che esistono davvero. Un refuso
+   * qui non darebbe errore: quel tipo semplicemente non verrebbe mai contato.
+   */
+  it('le due liste non nominano eventi inesistenti', () => {
+    const esistenti = new Set<string>(LogEventType.options);
+    const fantasmi = [...EVENTI_MINACCIA, ...EVENTI_RISPOSTA].filter(
+      (tipo) => !esistenti.has(tipo),
+    );
+    expect(fantasmi, 'nomi che non corrispondono a nessun evento').toEqual([]);
+  });
+
+  it('gli snapshot non sono minacce', () => {
+    // Il caso preciso da cui nasce tutto questo.
+    expect(EVENTI_MINACCIA as readonly string[]).not.toContain('SECURITY_SNAPSHOT_CREATED');
+    expect(EVENTI_RISPOSTA as readonly string[]).toContain('SECURITY_SNAPSHOT_CREATED');
   });
 });

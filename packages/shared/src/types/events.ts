@@ -196,6 +196,78 @@ export const LogEventType = z.enum([
 ]);
 export type LogEventType = z.infer<typeof LogEventType>;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   COSA È UNA MINACCIA, E COSA È ANGEL CHE LAVORA
+
+   La dashboard mostrava «512 minacce oggi». Di quelle, 512 erano
+   `SECURITY_SNAPSHOT_CREATED`: copie della struttura del server che ANGEL si
+   era fatto da solo. Zero minacce vere, e un numero rosso grande a dire il
+   contrario.
+
+   Non è un dettaglio estetico. Il senso di quel numero è far notare quando
+   cambia: un conteggio che parte da cinquecento e sale per conto suo non fa
+   notare niente, e una minaccia vera ci si perde dentro.
+
+   La categoria `SECURITY` non basta a distinguerli, perché ci stanno dentro
+   due cose diverse: quello che **è successo al server** e quello che **ANGEL
+   ha fatto** — chiudere i canali, mettere in quarantena, salvare una copia.
+   La seconda lista non è meno importante: è il registro dei provvedimenti, e
+   sta nel registro. Non nel contatore delle minacce.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Qualcosa è stato tentato contro il server, o contro chi ci sta dentro. */
+export const EVENTI_MINACCIA = [
+  'SECURITY_FLAME_DETECTED',
+  'SECURITY_RAID_DETECTED',
+  'SECURITY_NUKE_DETECTED',
+  'SECURITY_COMPROMISE_SUSPECTED',
+  'SECURITY_SCAM_BLOCKED',
+  'SECURITY_MALICIOUS_URL',
+  'SECURITY_MALICIOUS_QR',
+  'SECURITY_REMOTE_AUTH_QR',
+  'SECURITY_CLICKFIX_BLOCKED',
+  'SECURITY_MALICIOUS_FILE',
+  'SECURITY_IMPERSONATION',
+  'SECURITY_IP_GRABBER',
+  'SECURITY_GROOMING_SUSPECTED',
+  'SECURITY_ACCOUNT_FLAGGED',
+  /** Una persona ha segnalato qualcosa: è un indizio, e va contato. */
+  'SECURITY_REPORT_FILED',
+
+  /*
+   * Questi cinque non hanno il prefisso `SECURITY_` ma stanno in quella
+   * categoria, e sono minacce quanto gli altri. Li ha trovati il test di
+   * classificazione: scritta la lista a mano guardando i nomi, erano rimasti
+   * fuori tutti e cinque — cioè cinque minacce vere che non sarebbero mai
+   * comparse nel contatore, senza un errore da nessuna parte.
+   */
+  /** Un ruolo ha guadagnato permessi pericolosi: spesso il primo passo di un nuke. */
+  'ROLE_PERMISSIONS_ESCALATED',
+  'INVITE_BLOCKED',
+  /** Un codice vanity del server si è liberato: chiunque può rivendicarlo. */
+  'VANITY_AT_RISK',
+  'WEBHOOK_UNAUTHORIZED',
+  'BOT_PERMISSION_RISK',
+] as const;
+
+/**
+ * Quello che ANGEL fa, o la fine di un evento. Non si conta fra le minacce.
+ *
+ * `SECURITY_RAID_ENDED` sta qui e non fra le minacce perché il raid è già
+ * contato dal suo inizio: contarlo due volte raddoppierebbe ogni attacco.
+ */
+export const EVENTI_RISPOSTA = [
+  'SECURITY_RAID_ENDED',
+  'SECURITY_LOCKDOWN_ENABLED',
+  'SECURITY_LOCKDOWN_DISABLED',
+  'SECURITY_QUARANTINE_APPLIED',
+  'SECURITY_QUARANTINE_LIFTED',
+  'SECURITY_ROLES_STRIPPED',
+  'SECURITY_SNAPSHOT_CREATED',
+  'SECURITY_SNAPSHOT_RESTORED',
+  'SECURITY_PANIC',
+] as const;
+
 /** Categorie usate per il routing sui canali Discord e per la retention. */
 export const LogCategory = z.enum([
   'MESSAGE',

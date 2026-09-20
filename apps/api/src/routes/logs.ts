@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getPrisma, serializeBigInt } from '@angel/db';
 import { z } from 'zod';
+import { EVENTI_MINACCIA } from '@angel/shared';
 import { requireGuild } from '../guard.js';
 
 const LogQuery = z.object({
@@ -229,11 +230,28 @@ export async function logRoutes(app: FastifyInstance): Promise<void> {
 
       const [threatsToday, threatsWeek, joinsToday, activeCases, quarantined, topThreats, incidents] =
         await Promise.all([
+          /*
+           * Le minacce sono quelle, non tutta la categoria `SECURITY`.
+           *
+           * Dentro `SECURITY` ci stanno anche gli snapshot che ANGEL si fa da
+           * solo e i lockdown che ha applicato lui: contarli portava la
+           * dashboard a dire «512 minacce oggi» con zero minacce vere. Un
+           * numero che parte da cinquecento e sale per conto suo non fa
+           * notare niente — e una minaccia vera ci si perde dentro.
+           */
           prisma.auditEvent.count({
-            where: { guildId: context.guildId, category: 'SECURITY', createdAt: { gte: day } },
+            where: {
+              guildId: context.guildId,
+              type: { in: [...EVENTI_MINACCIA] },
+              createdAt: { gte: day },
+            },
           }),
           prisma.auditEvent.count({
-            where: { guildId: context.guildId, category: 'SECURITY', createdAt: { gte: week } },
+            where: {
+              guildId: context.guildId,
+              type: { in: [...EVENTI_MINACCIA] },
+              createdAt: { gte: week },
+            },
           }),
           prisma.auditEvent.count({
             where: { guildId: context.guildId, type: 'MEMBER_JOINED', createdAt: { gte: day } },
@@ -244,7 +262,13 @@ export async function logRoutes(app: FastifyInstance): Promise<void> {
           }),
           prisma.auditEvent.groupBy({
             by: ['type'],
-            where: { guildId: context.guildId, category: 'SECURITY', createdAt: { gte: week } },
+            // Stesso criterio del conteggio: il grafico delle minacce più
+            // frequenti mostrava «SECURITY_SNAPSHOT_CREATED 519» in cima.
+            where: {
+              guildId: context.guildId,
+              type: { in: [...EVENTI_MINACCIA] },
+              createdAt: { gte: week },
+            },
             _count: true,
             orderBy: { _count: { type: 'desc' } },
             take: 8,

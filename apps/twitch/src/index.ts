@@ -54,7 +54,9 @@ async function main(): Promise<void> {
     // il container all'infinito per una funzione che nessuno ha chiesto.
     logger.warn(
       'TWITCH_CLIENT_ID o TWITCH_CLIENT_SECRET mancanti: il bot Twitch resta spento. ' +
-        'Si accende compilandoli nel compose — le altre parti di ANGEL funzionano lo stesso.',
+        'Si accende scrivendoli nel file dei segreti (data/segreti/segreti.env), non nel ' +
+        'compose: quello viene riscritto a ogni aggiornamento. Le altre parti di ANGEL ' +
+        'funzionano lo stesso.',
     );
     return;
   }
