@@ -85,11 +85,16 @@ Un comando, una volta sola, prima di aprire il pannello:
 ```bash
 ssh umbrel@umbrel.local
 mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti
-sudo chown -R 1000:1000 ~/umbrel/app-data/g-d-app-store-gd-angel/data
+sudo chown -R 1000:1000 ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti
 ```
 
 Se te ne dimentichi non si rompe niente in silenzio: nei log ANGEL scrive
 esattamente questo comando.
+
+⚠️ **Solo `data/segreti`, non `data`.** Dentro `data` c'è anche `data/postgres`,
+che appartiene all'utente del container di Postgres (uid 999). Cambiargli
+proprietario fa rifiutare l'avvio a Postgres — «data directory has wrong
+ownership» — cioè esattamente il guasto che questo comando serve a evitare.
 
 ### Cosa devi scrivere tu, e cosa no
 
