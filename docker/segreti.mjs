@@ -156,9 +156,10 @@ export async function assicuraSegreti(cartella, ambiente = process.env) {
     } catch (errore) {
       esito.scrivibile = false;
       esito.avvisi.push(
-        `non riesco a scrivere in ${cartella} (${errore.code ?? errore.message}): ` +
-          'la cartella appartiene a qualcun altro. Sulla macchina, una volta sola: ' +
-          `sudo chown -R 1000:1000 ${cartella}`,
+        `non riesco a scrivere in ${cartella} (${errore.code ?? errore.message}). ` +
+          'Le cartelle di bind-mount le crea Docker, e le crea di root; io giro con ' +
+          'uid 1000. Senza questo file **Postgres non parte**: è lui a leggerlo. ' +
+          `Sulla macchina, una volta sola:  sudo chown -R 1000:1000 ${cartella}`,
       );
       passwordDb = null;
     }

@@ -73,13 +73,29 @@ La cartella è separata dai dati apposta: ha i permessi stretti, e il container 
 Postgres la monta **in sola lettura**, perché a lui serve leggere un file, non
 scriverci.
 
+### Passo zero: la cartella deve essere tua
+
+Le cartelle di bind-mount le crea Docker, e le crea di `root`. ANGEL gira con
+un utente normale (uid 1000): se la cartella resta di `root` non ci scrive, e
+la conseguenza non è piccola — senza `postgres_password` **Postgres non parte
+proprio**.
+
+Un comando, una volta sola, prima di aprire il pannello:
+
+```bash
+ssh umbrel@umbrel.local
+mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti
+sudo chown -R 1000:1000 ~/umbrel/app-data/g-d-app-store-gd-angel/data
+```
+
+Se te ne dimentichi non si rompe niente in silenzio: nei log ANGEL scrive
+esattamente questo comando.
+
 ### Cosa devi scrivere tu, e cosa no
 
 Solo quello che nessuno può indovinare:
 
 ```bash
-ssh umbrel@umbrel.local
-mkdir -p ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti
 nano ~/umbrel/app-data/g-d-app-store-gd-angel/data/segreti/segreti.env
 ```
 
