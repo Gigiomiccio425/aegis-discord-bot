@@ -109,6 +109,40 @@ Finché manca qualcosa il bot parte lo stesso e lo dice: nei log compare
 `ancora da compilare: DISCORD_TOKEN, …`, e il pannello resta raggiungibile per
 poterlo leggere.
 
+### Il travaso, una volta sola
+
+Se i valori sono ancora nel container — cioè se non hai ancora aggiornato — non
+serve copiarli a mano:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/segreti.sh -o segreti.sh
+sh segreti.sh
+```
+
+Legge l'ambiente del container, scrive in `segreti.env` quello che trova, e dice
+cosa manca. Non sovrascrive un valore già presente nel file, non copia i
+segnaposto `METTI_QUI…`, e non stampa mai un valore — solo i nomi.
+
+### Se la password del database è andata persa
+
+Succede quando un aggiornamento riscrive il compose prima che esista il file dei
+segreti. Non si recupera, ma si **cambia**, e non si perde niente: il database
+resta dov'è con dentro tutto.
+
+```bash
+docker exec g-d-app-store-gd-angel_postgres_1 \
+  psql -U angel -d angel -c "ALTER USER angel PASSWORD 'quella-nuova'"
+```
+
+Funziona senza password perché dal socket locale Postgres si fida — lo dice lui
+stesso al primo avvio: «enabling trust authentication for local connections».
+Poi la stessa password va dentro `DATABASE_URL` in `segreti.env`, e si riavvia.
+
+`ENCRYPTION_KEY` invece non si cambia a cuor leggero: cifra i token salvati nel
+database, e una chiave nuova li rende illeggibili — i canali Twitch collegati
+vanno riautorizzati. Registro, provvedimenti, archivio e configurazione non sono
+cifrati e non si toccano.
+
 ### E l'alternativa: ricopiare il compose vecchio?
 
 Funziona, ma va rifatta ogni volta. umbrelOS sovrascrive il compose a ogni
