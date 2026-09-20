@@ -75,44 +75,83 @@ describe('pacchetto per umbrelOS', () => {
     expect(servizio?.[1], 'il servizio angel non esiste nel compose').toBe('angel');
   });
 
+  /*
+   * `PUBLIC_URL` non sta più nel compose — sta nel file dei segreti, perché
+   * è l'indirizzo di quella macchina e un aggiornamento lo riportava a
+   * `umbrel.local`, rompendo l'accesso al pannello.
+   *
+   * Resta però scritto **due volte**: la porta che umbrelOS pubblica, e la
+   * porta dentro l'esempio che il compose dà a chi deve compilare il file.
+   * Cambiarne una sola significa dare istruzioni sbagliate a chi installa.
+   */
   it('la porta è la stessa ovunque', () => {
     const porta = valore(manifesto, 'port');
     expect(porta).toBe('780');
     expect(valore(compose, 'APP_PORT')).toBe(valore(compose, 'API_PORT'));
-    expect(valore(compose, 'PUBLIC_URL')).toContain(`:${porta}`);
+
+    const esempio = /PUBLIC_URL=http:\/\/[\w.-]+:(\d+)/.exec(compose)?.[1];
+    expect(esempio, "l'esempio di PUBLIC_URL non c'è più nel compose").toBe(porta);
   });
 
   it('il pannello Twitch è pubblicato sulla porta che dichiara', () => {
     const porta = valore(compose, 'TWITCH_PANEL_PORT');
     expect(porta).toBeTruthy();
-    expect(valore(compose, 'TWITCH_PUBLIC_URL')).toContain(`:${porta}`);
+
+    const esempio = /TWITCH_PUBLIC_URL=http:\/\/[\w.-]+:(\d+)/.exec(compose)?.[1];
+    expect(esempio, "l'esempio di TWITCH_PUBLIC_URL non c'è più nel compose").toBe(porta);
+
     // Direttamente e non attraverso app_proxy: quello chiede l'accesso a
     // umbrelOS, e gli streamer un account su quella macchina non ce l'hanno.
     expect(compose).toContain(`"${porta}:${porta}"`);
   });
 
   /*
-   * La password del database sta in due punti che devono coincidere:
-   * dentro l'URL di connessione e come variabile di Postgres. Le àncore
-   * YAML sanno copiare un valore intero, non inserirlo dentro una stringa
-   * più lunga — quindi si scrive due volte, e due volte si può sbagliare.
+   * Nel compose non deve finire niente di sensibile.
+   *
+   * Non è una raccomandazione: umbrelOS riscrive questo file dal
+   * repository a ogni aggiornamento, quindi un valore messo qui va perso —
+   * e finché ci sta, sta in chiaro in un file che chiunque abbia accesso
+   * alla macchina può leggere. I valori vivono nella cartella dei segreti;
+   * qui resta solo dove trovarla.
    */
-  it('la password del database combacia nei due punti in cui è scritta', () => {
-    const url = valore(compose, 'DATABASE_URL');
-    const dichiarata = valore(compose, 'POSTGRES_PASSWORD');
+  it('non contiene valori sensibili', () => {
+    const sensibili = [
+      'DISCORD_TOKEN',
+      'DISCORD_CLIENT_SECRET',
+      'SESSION_SECRET',
+      'ENCRYPTION_KEY',
+      'DATABASE_URL',
+      'POSTGRES_PASSWORD',
+      'TWITCH_CLIENT_SECRET',
+      'TWITCH_BOT_ACCESS_TOKEN',
+      'TWITCH_BOT_REFRESH_TOKEN',
+    ];
 
-    expect(url).toBeTruthy();
-    expect(dichiarata).toBeTruthy();
+    // Solo le righe vere: negli esempi dentro i commenti quei nomi ci
+    // sono, ed è giusto che ci siano.
+    const righe = compose.split('\n').filter((riga) => !riga.trim().startsWith('#'));
 
-    const dentro = new URL(url!);
-    expect(decodeURIComponent(dentro.password)).toBe(dichiarata);
-    expect(dentro.username).toBe(valore(compose, 'POSTGRES_USER'));
-    // L'host è il nome del servizio: dentro la rete dell'app si raggiunge
-    // così, e un indirizzo scritto a mano sarebbe sbagliato al primo
-    // riavvio.
-    expect(dentro.hostname).toBe('postgres');
+    // La controprova: senza, una lettura sbagliata non troverebbe niente
+    // e il test passerebbe su qualunque file.
+    expect(righe.some((riga) => riga.includes('REDIS_URL')), 'nessuna riga letta').toBe(true);
+
+    const trovati = sensibili.filter((nome) =>
+      righe.some((riga) => new RegExp(`^\\s*${nome}:`).test(riga)),
+    );
+    expect(trovati, 'valori sensibili rimasti nel compose').toEqual([]);
   });
 
+  /*
+   * La password del database la legge Postgres da un file, ed è l’unico
+   * modo che ha questa immagine di riceverla senza che stia scritta nel
+   * compose. Il file lo genera ANGEL al primo avvio, nella stessa cartella
+   * che Postgres monta in sola lettura.
+   */
+  it('Postgres prende la password dal file dei segreti', () => {
+    expect(valore(compose, 'POSTGRES_PASSWORD_FILE')).toBe('/segreti/postgres_password');
+    expect(compose).toContain('${APP_DATA_DIR}/data/segreti:/segreti:ro');
+    expect(valore(compose, 'SEGRETI_DIR')).toBe('/segreti');
+  });
   it('Redis si raggiunge per nome di servizio', () => {
     expect(new URL(valore(compose, 'REDIS_URL')!).hostname).toBe('redis');
   });
