@@ -7,6 +7,7 @@ import {
   leggiRisposta,
   scaduta,
   type Busta,
+  type ComandoBot,
   type Esito,
   type EsitoSalvato,
 } from '@angel/shared';
@@ -34,6 +35,28 @@ const BATTITO_MS = 15_000;
 const pausa = (ms: number): Promise<void> => new Promise((risolvi) => setTimeout(risolvi, ms));
 
 /**
+ * Quello che serve al ciclo, e nient'altro.
+ *
+ * Separato da `avviaPosta` perché il ciclo è la parte che si può sbagliare —
+ * un cursore che non avanza riesegue comandi veri — e senza dipendenze
+ * iniettabili si verifica solo in produzione, che è dove si è visto.
+ */
+export interface DipendenzePosta {
+  /** Scritture e conferme: la connessione normale. */
+  redis: {
+    call(comando: string, ...args: (string | number)[]): Promise<unknown>;
+    set(chiave: string, valore: string, modo: 'EX', secondi: number): Promise<unknown>;
+    get(chiave: string): Promise<string | null>;
+    del(chiave: string): Promise<unknown>;
+  };
+  /** Solo la lettura bloccante. */
+  lettore: { call(comando: string, ...args: (string | number)[]): Promise<unknown> };
+  esegui: (comando: ComandoBot) => Promise<Esito>;
+  /** Il bot è collegato a Discord? Il battito si scrive solo allora. */
+  pronto: () => boolean;
+}
+
+/**
  * Avvia la lettura della posta. Va chiamata **dopo** il collegamento a
  * Discord: prima l'elenco dei server è vuoto, e ogni comando fallirebbe con
  * «il bot non è in questo server».
@@ -48,12 +71,29 @@ export function avviaPosta(client: Client): () => Promise<void> {
   const lettore: Redis = redis.duplicate();
   lettore.on('error', (errore: Error) => log.warn({ err: errore }, 'connessione della posta'));
 
+  return consumaPosta({
+    redis,
+    lettore,
+    esegui: (comando) => eseguiComando(client, comando),
+    pronto: () => client.isReady(),
+    chiudi: () => lettore.disconnect(),
+  });
+}
+
+/** Il ciclo vero e proprio. `avviaPosta` lo collega a Discord e a Redis. */
+export function consumaPosta({
+  redis,
+  lettore,
+  esegui,
+  pronto,
+  chiudi,
+}: DipendenzePosta & { chiudi?: () => void }): () => Promise<void> {
   let fermata = false;
   let inVolo = 0;
   const code = new Map<string, Promise<void>>();
 
   const battito = async (): Promise<void> => {
-    if (!client.isReady()) return;
+    if (!pronto()) return;
     await redis.set(Posta.pronto, String(Date.now()), 'EX', 45).catch(() => undefined);
   };
   void battito();
@@ -67,6 +107,26 @@ export function avviaPosta(client: Client): () => Promise<void> {
         // Il gruppo esiste già: è il caso normale a ogni avvio dopo il primo.
         if (!String(errore.message).includes('BUSYGROUP')) throw errore;
       });
+  };
+
+  /**
+   * Conferma e cancella, qualunque cosa sia successa prima.
+   *
+   * Dopo l'esito, mai prima: un bot che muore fra le due ritrova il comando al
+   * riavvio invece di perderlo. Ma **sempre**, anche quando l'esecuzione è
+   * finita con un'eccezione — una voce che resta in sospeso viene riletta a
+   * ogni giro, e con lei tutte le altre in sospeso, che vengono rieseguite.
+   *
+   * Un errore qui si scrive nei log. Silenziato, il sintomo sarebbe uno
+   * snapshot creato ogni due secondi e nessuna riga che dica perché.
+   */
+  const conferma = async (voce: string): Promise<void> => {
+    try {
+      await redis.call('XACK', Posta.stream, Posta.gruppo, voce);
+      await redis.call('XDEL', Posta.stream, voce);
+    } catch (errore) {
+      log.error({ err: errore, voce }, 'comando non confermato: verrà riletto');
+    }
   };
 
   const consegna = async (busta: Busta): Promise<void> => {
@@ -84,7 +144,7 @@ export function avviaPosta(client: Client): () => Promise<void> {
       log.info({ action: busta.comando.action, secondi }, 'comando scaduto, non eseguito');
     } else {
       try {
-        esito = await eseguiComando(client, busta.comando);
+        esito = await esegui(busta.comando);
       } catch (errore) {
         log.error({ err: errore, action: busta.comando.action }, 'comando fallito');
         esito = { stato: 'fallito', messaggio: descriviErroreDiscord(errore) };
@@ -110,11 +170,6 @@ export function avviaPosta(client: Client): () => Promise<void> {
         await redis.del(attesa).catch(() => undefined);
       }
     }
-
-    // Conferma e cancellazione dopo l'esito, mai prima: un bot che muore fra
-    // le due ritrova il comando al riavvio invece di perderlo.
-    await redis.call('XACK', Posta.stream, Posta.gruppo, busta.voce).catch(() => undefined);
-    await redis.call('XDEL', Posta.stream, busta.voce).catch(() => undefined);
   };
 
   /**
@@ -132,6 +187,9 @@ export function avviaPosta(client: Client): () => Promise<void> {
     const dopo = prima
       .then(() => consegna(busta))
       .catch((errore: unknown) => log.error({ err: errore }, 'consegna non riuscita'))
+      // Sempre, anche dopo un errore: vedi `conferma`. Una voce lasciata in
+      // sospeso non si perde — si ripete, che è peggio.
+      .then(() => conferma(busta.voce))
       .finally(() => {
         inVolo -= 1;
         if (code.get(server) === dopo) code.delete(server);
@@ -187,16 +245,35 @@ export function avviaPosta(client: Client): () => Promise<void> {
       }
 
       const voci = leggiRisposta(risposta);
-      if (cursore === '0' && voci.length === 0) {
-        cursore = '>';
-        continue;
+
+      /*
+       * Il recupero avanza, non ricomincia.
+       *
+       * Con un identificativo esplicito XREADGROUP rilegge le voci di questo
+       * consumatore già ricevute e non confermate. Rileggere sempre da `'0'`
+       * sembra equivalente e non lo è: basta **una** voce che non si riesce a
+       * confermare perché la pagina non sia mai vuota, il cursore non passi
+       * mai a `'>'`, e ogni altra voce in sospeso venga riletta — e rieseguita
+       * — a ogni giro. È il guasto che produceva uno snapshot ogni due
+       * secondi: non un lavoro periodico impazzito, lo stesso comando
+       * consegnato all'infinito.
+       *
+       * Avanzando, una voce che non si conferma costa un giro in più e basta.
+       */
+      if (cursore !== '>') {
+        if (voci.length === 0) {
+          cursore = '>';
+          continue;
+        }
+        cursore = voci[voci.length - 1]!.voce;
       }
+
       for (const voce of voci) accoda(apriBusta(voce.voce, voce.campi));
 
-      // Con il cursore a '0' si rileggono le proprie in sospeso: prima di
-      // rileggere bisogna che quelle appena accodate siano confermate, o
-      // tornerebbero indietro una seconda volta.
-      if (cursore === '0') await Promise.allSettled([...code.values()]);
+      // Durante il recupero si aspetta che la pagina sia finita prima di
+      // chiedere la successiva: serve a non tenere in volo l'intero arretrato
+      // tutto insieme.
+      if (cursore !== '>') await Promise.allSettled([...code.values()]);
     }
   };
 
@@ -207,7 +284,7 @@ export function avviaPosta(client: Client): () => Promise<void> {
     fermata = true;
     clearInterval(timerBattito);
     await redis.del(Posta.pronto).catch(() => undefined);
-    lettore.disconnect();
+    chiudi?.();
     await Promise.allSettled([...code.values()]);
   };
 }
