@@ -742,19 +742,25 @@ Fino alla 1.26 erano due elenchi che non si conoscevano, e il risultato era che 
 avere `ANGEL · Staff` *e* `☾ Ali Guardiane`: uno perché il bot lo esentasse, l'altro perché si
 vedesse nella lista membri.
 
-| Ruolo | Con lo stile angelico | A chi va |
-|---|---|---|
-| `ANGEL · Non verificato` | `☁︎ In attesa` | a chiunque entri — lo mette il bot |
-| `ANGEL · Verificato` | `˚ʚ♡ɞ˚ Piumette` | a chi supera la verifica — lo mette il bot |
-| `ANGEL · Quarantena` | `⛆ Nube grigia` | provvedimento: legge ovunque, non scrive |
-| `ANGEL · Staff` | `☾ Ali Guardiane` | **ai moderatori veri.** Sei campi puntano qui |
-| `ANGEL · Guida` | `⋆｡°✩ Angelo Maggiore` | a te, e a chi divide la responsabilità del server |
-| `ANGEL · Aiutanti` | `✿ Piume` | a chi dà una mano e non deve poter bandire nessuno |
-| `ANGEL · Sostenitori` | `♡ Nuvola d'oro` | a chi ha potenziato il server |
-| `ANGEL · Allerta` | `⚡ Sveglia le ali` | a chi vuoi svegliare di notte per un raid |
-| `ANGEL · In diretta` | `✧ Luci accese` | allo streamer mentre trasmette — lo mette il bot |
-| `ANGEL · Partecipa` | `✿ Ci sarò` | a chi conferma un evento — lo mette il bot |
-| `ANGEL · Avviso diretta/video/eventi` | `⋆ ✦ ✧ Avviso …` | se li prendono da soli da «prendi-i-ruoli» |
+| Ruolo | Stile *nuvole* | Stile *yuyu* | A chi va |
+|---|---|---|---|
+| `ANGEL · Non verificato` | `☁︎ In attesa` | `⊹ senza ali` | a chiunque entri — lo mette il bot |
+| `ANGEL · Verificato` | `˚ʚ♡ɞ˚ Piumette` | `⋆｡˚ yuyu ˚｡⋆` | a chi supera la verifica — lo mette il bot |
+| `ANGEL · Quarantena` | `⛆ Nube grigia` | `༄ piuma spezzata` | provvedimento: legge ovunque, non scrive |
+| `ANGEL · Staff` | `☾ Ali Guardiane` | `✦ custodi` | **ai moderatori veri.** Sei campi puntano qui |
+| `ANGEL · Guida` | `⋆｡°✩ Angelo Maggiore` | `⟡ custode del cielo` | a te, e a chi divide la responsabilità del server |
+| `ANGEL · Aiutanti` | `✿ Piume` | `˖ ࣪ piccole ali` | a chi dà una mano e non deve poter bandire nessuno |
+| `ANGEL · Sostenitori` | `♡ Nuvola d'oro` | `ೀ yuyu d'oro` | a chi ha potenziato il server |
+| `ANGEL · Allerta` | `⚡ Sveglia le ali` | `⚡ sveglia le nuvole` | a chi vuoi svegliare di notte per un raid |
+| `ANGEL · In diretta` | `✧ Luci accese` | `⭑ ora in volo` | allo streamer mentre trasmette — lo mette il bot |
+| `ANGEL · Partecipa` | `✿ Ci sarò` | `⊹ presente` | a chi conferma un evento — lo mette il bot |
+| `ANGEL · Avviso diretta/video/eventi` | `⋆ ✦ ✧ Avviso …` | `☾ ✦ ⟡ …` | se li prendono da soli da «prendi-i-ruoli» |
+
+**Due modelli, due tavolozze.** `/crea-server modello:` sceglie fra *nuvole* — separatori grandi,
+maiuscole, l'angioletto bianco — e *yuyu*, tutto minuscolo con simboli minuti, dove i verificati si
+chiamano come la community di yayadoppia. Struttura e percorsi di configurazione sono identici:
+cambia solo la voce. Senza indicare niente si tiene quello già in uso, perché i canali si ritrovano
+per nome e passare da un modello all'altro non rinomina quelli che esistono — li affiancherebbe.
 
 I primi quattro della predisposizione (`Non verificato`, `Verificato`, `Quarantena`, `Staff`,
 più `Allerta`, `In diretta` e `Partecipa`) nascono con `/prepara-server`. Gli altri arrivano con

@@ -19,7 +19,7 @@ import { EmbedBuilder, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } 
 import type { Command } from './types.js';
 import { getGuildConfig } from '../core/config.js';
 import { provisionGuild } from '../security/provision.js';
-import { costruisciModello } from '../security/modello.js';
+import { MODELLI, costruisciModello, type NomeModello } from '../security/modello.js';
 import { riparaRuoli } from '../security/riparaRuoli.js';
 import { STILI, type StileRuoli } from '../security/ruoli.js';
 import { recordEvent } from '../logging/auditLogger.js';
@@ -28,6 +28,15 @@ const creaServer: Command = {
   data: new SlashCommandBuilder()
     .setName('crea-server')
     .setDescription('Costruisce il server: ruoli, canali, community, verifica, ticket')
+    .addStringOption((option) =>
+      option
+        .setName('modello')
+        .setDescription('Quale aspetto dare a categorie, canali e ruoli')
+        .addChoices(
+          { name: 'Nuvole — angioletto bianco, separatori grandi', value: 'ANGELICO' },
+          { name: 'Yuyu — tutto minuscolo, simboli minuti, community «yuyu»', value: 'YUYU' },
+        ),
+    )
     .addBooleanOption((option) =>
       option
         .setName('solo-modello')
@@ -43,9 +52,25 @@ const creaServer: Command = {
 
     const guild = interaction.guild!;
     const soloModello = interaction.options.getBoolean('solo-modello') ?? false;
-
     const config = await getGuildConfig(guild.id);
     const righe: string[] = [];
+
+    const scelto = interaction.options.getString('modello');
+    /*
+     * Senza scelta si tiene il modello già usato.
+     *
+     * Rilanciare il comando su un server costruito con «yuyu» e ritrovarlo
+     * pieno di categorie «nuvole» accanto alle altre sarebbe il contrario di
+     * un comando idempotente: i canali si cercano per nome, e con i nomi
+     * dell'altro modello nessuno viene ritrovato.
+     */
+    const modello: NomeModello =
+      scelto && scelto in MODELLI
+        ? (scelto as NomeModello)
+        : config.general.stileRuoli === 'YUYU'
+          ? 'YUYU'
+          : 'ANGELICO';
+
 
     if (!soloModello) {
       const base = await provisionGuild(client, guild, config);
@@ -61,7 +86,7 @@ const creaServer: Command = {
     // e canali, e il modello ha bisogno di quelli — in particolare dei ruoli
     // staff, che decidono chi vede la categoria riservata.
     const aggiornata = await getGuildConfig(guild.id);
-    const esito = await costruisciModello(client, guild, aggiornata, interaction.user.id);
+    const esito = await costruisciModello(client, guild, aggiornata, interaction.user.id, modello);
 
     righe.push(
       `**Modello** — ${esito.categorieCreate.length} categorie, ${esito.canaliCreati.length} canali` +
