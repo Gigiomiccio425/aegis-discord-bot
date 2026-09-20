@@ -89,6 +89,17 @@ chmod 600 ~/umbrel/app-data/g-d-app-store-gd-angel/data/storage/segreti.env
 | Cosa finisce nei log | I **nomi** letti, mai i valori, più l'elenco di quelli che mancano |
 | Agli aggiornamenti | Niente da rifare: il compose cambia, il file resta |
 
+Nello stesso file conviene mettere anche gli indirizzi, che segreti non sono ma
+sono tuoi:
+
+```
+PUBLIC_URL=http://il-tuo-umbrel:780
+TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781
+```
+
+Senza, a ogni aggiornamento tornano a `umbrel.local` e l'accesso al pannello
+smette di funzionare con un «stato non valido» che non spiega niente.
+
 La password del database va scritta **solo** dentro `DATABASE_URL`.
 `POSTGRES_PASSWORD` nel compose può restare un segnaposto per sempre: Postgres
 la usa soltanto alla primissima inizializzazione del volume e poi la ignora,

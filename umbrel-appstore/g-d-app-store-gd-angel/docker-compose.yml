@@ -106,8 +106,16 @@ services:
       # ⚠️ Deve combaciare **esattamente** con l'indirizzo che digiti nel
       #    browser, porta compresa, e va registrato come redirect OAuth2
       #    su Discord con /api/auth/callback in fondo. Se il tuo Umbrel non
-      #    risponde a `umbrel.local`, mettici il suo indirizzo IP — qui,
-      #    nel redirect e nel browser, tutti e tre uguali.
+      #    risponde a `umbrel.local`, mettici il suo indirizzo IP o il suo
+      #    nome — qui, nel redirect e nel browser, tutti e tre uguali.
+      #
+      #    Anche questo conviene metterlo in `segreti.env`: non è un segreto,
+      #    ma è tuo, e da lì sopravvive agli aggiornamenti invece di tornare
+      #    a `umbrel.local` — con l'accesso al pannello che smette di
+      #    funzionare e l'errore «stato non valido» a spiegarlo male.
+      #
+      #      PUBLIC_URL=http://il-tuo-umbrel:780
+      #      TWITCH_PUBLIC_URL=http://il-tuo-umbrel:781
       PUBLIC_URL: http://umbrel.local:780
       API_PORT: "8080"
 
