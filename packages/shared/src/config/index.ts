@@ -191,6 +191,43 @@ export const BotIdentityConfig = z
   .default({});
 export type BotIdentityConfig = z.infer<typeof BotIdentityConfig>;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   LA COPIA LEGGERA
+
+   La copia completa sta su disco, sulla stessa macchina che esegue ANGEL. È
+   la copia buona — contiene tutto — e ha un difetto che nessuna riga di
+   codice può togliere: se quella macchina si rompe, o l'app viene
+   disinstallata, sparisce insieme a ciò che proteggeva.
+
+   Questa è l'altra metà: ogni notte, dopo la copia su disco, ANGEL pubblica
+   in un canale Discord un file di testo con quello che costerebbe ore
+   rifare a mano. Discord non è la nostra macchina.
+
+   ── Il canale va scelto con attenzione ─────────────────────────────────
+
+   Quel file dice quali difese sono accese e con quali soglie. In un canale
+   che leggono tutti è una mappa per chi vuole aggirarle: ANGEL si rifiuta
+   di pubblicare dove `@everyone` può leggere, e lo dice invece di farlo in
+   silenzio.
+   ═══════════════════════════════════════════════════════════════════════ */
+export const CopiaLeggeraConfig = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Dove pubblicarla. Senza, non si pubblica niente. */
+    channelId: Snowflake.nullable().default(null),
+    /**
+     * Includere la configurazione, o solo gli elenchi.
+     *
+     * Acceso è il caso utile: la configurazione è la cosa che costa più
+     * tempo rifare. Spento serve a chi preferisce che le proprie soglie non
+     * stiano scritte da nessuna parte fuori dalla macchina, e accetta in
+     * cambio di doverle rimettere a mano.
+     */
+    includiConfigurazione: z.boolean().default(true),
+  })
+  .default({});
+export type CopiaLeggeraConfig = z.infer<typeof CopiaLeggeraConfig>;
+
 export const GeneralConfig = z
   .object({
     /**
@@ -258,6 +295,9 @@ export const GeneralConfig = z
      * nessun software distingue un deepfake vocale, una parola concordata sì.
      */
     staffCodeword: z.string().max(64).default(''),
+
+    /** La copia che sopravvive alla macchina. */
+    copiaLeggera: CopiaLeggeraConfig,
   })
   .default({});
 export type GeneralConfig = z.infer<typeof GeneralConfig>;

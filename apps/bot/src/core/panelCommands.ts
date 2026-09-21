@@ -28,6 +28,7 @@ import { pruneLogFiles } from '../logging/fileSink.js';
 import { unwatchUser, watchUser } from '../security/watchlist.js';
 import { provisionGuild } from '../security/provision.js';
 import { ensureOwnerRole } from '../security/ownerRole.js';
+import { pubblicaCopiaLeggera } from '../security/copiaLeggera.js';
 
 const log = childLogger('comandi');
 
@@ -53,6 +54,10 @@ const ComandoBot = z.discriminatedUnion('action', [
   // worker — che salta il giro se trova un SCHEDULED recente — non ne trovava
   // mai uno: a ogni passaggio partiva un backup nuovo, attribuito al pannello.
   z.object({ action: z.literal('snapshot.create'), guildId: z.string(), actorId: z.string(), kind: z.enum(['MANUAL', 'SCHEDULED']).default('MANUAL') }),
+  // La copia leggera pubblicata su Discord. La chiede il worker dopo quella su
+  // disco, e chi preme il pulsante dal pannello. Nessun parametro: cosa e dove
+  // pubblicare lo dice la configurazione del server, non chi chiede.
+  z.object({ action: z.literal('copia.leggera'), guildId: z.string() }),
   // Predisposizione a richiesta: crea solo ciò che manca, non duplica nulla.
   z.object({ action: z.literal('server.setup'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('quarantine.lift'), guildId: z.string(), actorId: z.string(), userId: z.string() }),
@@ -171,6 +176,16 @@ export async function eseguiComando(client: Client, grezzo: unknown): Promise<Es
       });
       return fatto(`Backup della struttura salvato: ${id}`, { id });
     }
+
+    /*
+     * La copia leggera, chiesta dal worker dopo quella su disco.
+     *
+     * Non lancia: un server che non ce la fa — canale sparito, permessi tolti
+     * — non deve impedire agli altri di avere la loro. Il motivo torna al
+     * mittente e finisce nei log.
+     */
+    case 'copia.leggera':
+      return pubblicaCopiaLeggera(client, comando.guildId);
 
     case 'server.setup': {
       const config = await getGuildConfig(comando.guildId);
