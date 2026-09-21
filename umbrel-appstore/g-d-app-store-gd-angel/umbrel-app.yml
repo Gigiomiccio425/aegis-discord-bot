@@ -86,6 +86,21 @@ releaseNotes: >
     quella cartella in sola lettura.
 
 
+  - Il pannello diceva «bot: fermo» e «il bot non è collegato» di un bot che
+    invece era collegato e funzionava, e i comandi risultavano non eseguiti.
+    È lo stesso guasto: il pannello non guarda il bot, guarda tre chiavi che
+    il bot scrive su Redis — versione, battito, esito dei comandi. Se una di
+    quelle scritture falliva, il fallimento spariva e restavano solo i
+    sintomi. Ora ogni modo di fallire finisce nei log, compreso quello che
+    inganna di più: Redis che non risponde e accoda il comando invece di
+    rifiutarlo, dove «nessun errore» non vuol dire «scritto».
+
+
+  - «512 minacce oggi» con zero minacce vere: il contatore prendeva tutta la
+    categoria SECURITY, dentro cui stanno anche gli snapshot che ANGEL si fa
+    da solo. Ora conta solo quello che è stato tentato contro il server.
+
+
   - Correzione della 1.29.2: nei log comparivano uno snapshot ogni due
     secondi e promemoria «scaduto» a ripetizione. Non era uno scheduler
     impazzito: erano gli stessi comandi, riconsegnati e rieseguiti per
