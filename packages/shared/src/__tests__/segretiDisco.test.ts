@@ -170,6 +170,51 @@ describe('preparazione dei segreti', () => {
     expect(ambiente.DISCORD_TOKEN).toBe('rigenerato');
   });
 
+  /*
+   * IL MODELLO NON DEVE MANGIARSI I VALORI DI CHI AGGIORNA
+   *
+   * Il file ora nasce già scritto, con i campi da riempire. Scritto nel
+   * momento sbagliato, però, i suoi campi **vuoti** vincono su quelli già
+   * compilati nella cartella di prima e li cancellano — e chi aggiorna si
+   * ritrova il bot che aspetta un token che aveva già messo.
+   *
+   * È successo mentre scrivevo questa funzione. Il test sotto è la ragione
+   * per cui non succederà di nuovo.
+   */
+  it('con un file vecchio compilato, i valori si copiano invece di sparire', async () => {
+    const vecchia = await cartellaNuova('vecchia-piena');
+    const nuova = await cartellaNuova('nuova-da-riempire');
+    await fs.writeFile(
+      path.join(vecchia, 'segreti.env'),
+      ['DISCORD_TOKEN=un.token.compilato', 'OWNER_IDS=586922655349866536', ''].join('\n'),
+    );
+
+    const ambiente: Record<string, string | undefined> = { STORAGE_DIR: vecchia };
+    const esito = await assicuraSegreti(nuova, ambiente);
+
+    expect(ambiente.DISCORD_TOKEN, 'il token non deve essere cancellato').toBe(
+      'un.token.compilato',
+    );
+    expect(ambiente.OWNER_IDS).toBe('586922655349866536');
+
+    // E il file nuovo contiene i valori, non il modello vuoto.
+    const scritto = await fs.readFile(path.join(nuova, 'segreti.env'), 'utf8');
+    expect(scritto).toContain('DISCORD_TOKEN=un.token.compilato');
+    expect(esito.creato, 'non e’ un file nuovo: e’ una copia').toBe(false);
+  });
+
+  it('senza niente da salvare, il file nasce con i campi da riempire', async () => {
+    const cartella = await cartellaNuova('modello');
+    const esito = await assicuraSegreti(cartella, ambienteVuoto());
+
+    expect(esito.creato).toBe(true);
+    const scritto = await fs.readFile(path.join(cartella, 'segreti.env'), 'utf8');
+    expect(scritto).toContain('DISCORD_TOKEN=');
+    expect(scritto).toContain('PUBLIC_URL=');
+    // I generati sono stati aggiunti in fondo allo stesso file.
+    expect(scritto).toMatch(/SESSION_SECRET=[0-9a-f]{64}/);
+  });
+
   it('non scrive mai un valore negli avvisi', async () => {
     const cartella = await cartellaNuova('silenzio');
     const ambiente = ambienteVuoto();

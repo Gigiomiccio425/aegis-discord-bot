@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applicaSegreti, leggiSegreti } from '../segreti.js';
+import {
+  applicaSegreti,
+  leggiSegreti,
+  modelloSegreti,
+  SEGRETI_RICHIESTI,
+  segretiDaCompilare,
+} from '../segreti.js';
 
 /*
  * I SEGRETI FUORI DAL COMPOSE
@@ -92,5 +98,73 @@ describe('applicazione all’ambiente', () => {
     const ambiente: Record<string, string | undefined> = { A: '1' };
     expect(applicaSegreti('', ambiente).nomi).toEqual([]);
     expect(ambiente.A).toBe('1');
+  });
+});
+
+/*
+ * IL FILE NASCE GIÀ SCRITTO
+ *
+ * Prima chi installava apriva un file vuoto e doveva ricordarsi i nomi
+ * esatti delle variabili. È il momento in cui si sbaglia una maiuscola e
+ * si passa mezz’ora a capire perché il token «non funziona».
+ *
+ * Due cose devono valere, e la seconda non è ovvia: il modello deve
+ * contenere tutti i campi obbligatori, e deve essere **rileggibile da sé
+ * stesso** — cioè il parser che legge i file compilati deve capire anche
+ * questo, altrimenti il primo avvio fallisce su un file che ha scritto ANGEL.
+ */
+describe('il modello del file dei segreti', () => {
+  it('contiene tutti i campi che una persona deve compilare', () => {
+    const modello = modelloSegreti();
+    for (const nome of SEGRETI_RICHIESTI) {
+      expect(modello, `manca ${nome}`).toContain(`
+${nome}=`);
+    }
+  });
+
+  /*
+   * Il modello passa dallo stesso parser dei file compilati. Se i due non
+   * fossero d’accordo, il primo avvio leggerebbe male un file scritto da
+   * ANGEL stesso — e nessun test se ne accorgerebbe.
+   */
+  it('si rilegge con il parser vero, e i campi risultano vuoti', () => {
+    const valori = leggiSegreti(modelloSegreti());
+
+    for (const nome of SEGRETI_RICHIESTI) {
+      expect(valori.has(nome), `${nome} non riletto`).toBe(true);
+      expect(valori.get(nome), `${nome} dovrebbe essere vuoto`).toBe('');
+    }
+  });
+
+  it('un file appena creato risulta tutto da compilare', () => {
+    const ambiente: Record<string, string | undefined> = {};
+    applicaSegreti(modelloSegreti(), ambiente);
+
+    // La controprova: se i campi vuoti passassero per «compilati», il bot
+    // partirebbe con un token vuoto invece di aspettare.
+    expect(segretiDaCompilare(ambiente).sort()).toEqual([...SEGRETI_RICHIESTI].sort());
+  });
+
+  /*
+   * I facoltativi stanno commentati apposta. Come righe vuote, un
+   * TWITCH_CLIENT_ID= senza valore sarebbe indistinguibile da uno
+   * dimenticato, e il bot Twitch direbbe «credenziali mancanti» a chi non
+   * le ha mai volute.
+   */
+  it('i facoltativi non risultano presenti ma vuoti', () => {
+    const valori = leggiSegreti(modelloSegreti());
+    expect(valori.has('TWITCH_CLIENT_ID')).toBe(false);
+    expect(valori.has('GOOGLE_SAFE_BROWSING_KEY')).toBe(false);
+    // Ma il nome c’è, commentato: chi lo cerca lo trova.
+    expect(modelloSegreti()).toContain('# TWITCH_CLIENT_ID=');
+  });
+
+  it('non contiene nessun valore', () => {
+    // Un modello che si porta dietro un valore sarebbe un segreto
+    // pubblicato nel repository.
+    const modello = modelloSegreti();
+    for (const [, valore] of leggiSegreti(modello)) {
+      expect(valore).toBe('');
+    }
   });
 });

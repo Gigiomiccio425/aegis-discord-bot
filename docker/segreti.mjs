@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   applicaSegreti,
   FILE_SEGRETI,
+  modelloSegreti,
   SEGRETI_GENERABILI,
   segretiDaCompilare,
   valoreMancante,
@@ -97,7 +98,10 @@ export async function assicuraSegreti(cartella, ambiente = process.env) {
     mancanti: [],
     avvisi: [],
     scrivibile: true,
+    /** Il file è stato creato adesso, con i campi da riempire? */
+    creato: false,
   };
+
 
   /*
    * Prima il vecchio, poi il nuovo: applicati in quest'ordine, un valore
@@ -114,6 +118,41 @@ export async function assicuraSegreti(cartella, ambiente = process.env) {
         esito.avvisi.push(
           `letti ${nomi.length} valori dal vecchio ${vecchio}. ` +
             `Spostalo quando puoi:  mv ${vecchio} ${percorso}`,
+        );
+      }
+    }
+  }
+
+  /*
+   * Il file nasce già scritto — ma solo quando non c'è niente da salvare.
+   *
+   * L'ordine qui è tutto, e sbagliarlo costa i dati di chi aggiorna: se il
+   * modello si scrivesse **prima** di leggere la cartella vecchia, i suoi
+   * campi vuoti vincerebbero sui valori già compilati e li cancellerebbero.
+   * È successo, e l'ha preso un test.
+   *
+   * Quindi: se c'è un file vecchio, lo si **copia** invece di inventarne uno
+   * nuovo. Chi aggiorna ritrova i suoi valori nella cartella nuova senza
+   * fare niente, e l'originale resta dov'è.
+   */
+  if ((await leggiFile(percorso)) === null) {
+    const daVecchio = vecchio ? await leggiFile(vecchio) : null;
+    try {
+      await fs.mkdir(cartella, { recursive: true });
+      // `wx`: fallisce se nel frattempo il file è comparso. Due processi che
+      // partono insieme non devono potersi sovrascrivere a vicenda.
+      await fs.writeFile(percorso, daVecchio ?? modelloSegreti(), { mode: 0o600, flag: 'wx' });
+      esito.creato = daVecchio === null;
+      if (daVecchio !== null) {
+        esito.avvisi.push(`valori copiati da ${vecchio} a ${percorso}: l'originale resta dov'è`);
+      }
+    } catch (errore) {
+      if (errore.code !== 'EEXIST') {
+        esito.scrivibile = false;
+        esito.avvisi.push(
+          `non riesco a creare ${percorso} (${errore.code ?? errore.message}): ` +
+            'va scritto a mano. Sulla macchina, una volta sola: ' +
+            `sudo chown -R 1000:1000 ${cartella}`,
         );
       }
     }
