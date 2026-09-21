@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Posta, type ComandoBot, type Esito } from '@angel/shared';
 import { consumaPosta, type DipendenzePosta } from '../posta.js';
 
@@ -235,5 +235,53 @@ describe('recupero dei comandi in sospeso', () => {
     await ferma();
 
     expect(finto.sospese.size, 'un errore non deve lasciare la voce in sospeso').toBe(0);
+  });
+});
+
+/*
+ * UNA CONSEGNA CHE NON FINISCE
+ *
+ * Il secondo guasto visto in produzione, e il più difficile da leggere: nei
+ * log non c'era niente. Un lockdown chiesto dal pannello restava in coda 73
+ * minuti e poi scadeva — «comando scaduto, non eseguito», con 4420 secondi di
+ * ritardo — mentre il bot era collegato e funzionante.
+ *
+ * `inVolo` conta le consegne in corso, e il lettore si ferma a IN_VOLO_MAX.
+ * Basta una consegna che non finisce mai — una chiamata a Discord che non
+ * torna — perché quel contatore non scenda più e il lettore smetta di
+ * leggere. Non rallenta: si ferma, e non riparte.
+ *
+ * Il tetto non annulla la chiamata, che è già partita. Fa ripartire la coda.
+ */
+describe('una consegna che non finisce', () => {
+  it('non impedisce di leggere i comandi che arrivano dopo', async () => {
+    vi.useFakeTimers();
+    try {
+      const eseguiti: string[] = [];
+      const finto = redisFinto([voce('1-0', { action: 'lockdown.enable', guildId: 'g1' })]);
+
+      finto.dipendenze.esegui = async (comando) => {
+        eseguiti.push(comando.action);
+        // Non finisce. Mai.
+        return new Promise<Esito>(() => undefined);
+      };
+
+      const ferma = consumaPosta(finto.dipendenze);
+
+      // Il tempo del tetto, più un margine.
+      await vi.advanceTimersByTimeAsync(130_000);
+
+      expect(eseguiti, 'il comando deve essere stato tentato').toEqual(['lockdown.enable']);
+      // La prova che conta: la voce è stata confermata lo stesso, quindi la
+      // coda è ripartita invece di restare ferma sul comando bloccato.
+      expect(
+        finto.sospese.size,
+        'una consegna bloccata non deve lasciare la coda ferma per sempre',
+      ).toBe(0);
+
+      await ferma();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

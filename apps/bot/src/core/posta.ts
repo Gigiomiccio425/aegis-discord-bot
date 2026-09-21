@@ -31,6 +31,15 @@ const CONSUMATORE = 'bot-principale';
 const IN_VOLO_MAX = 16;
 /** Ogni quanto il bot dice di essere collegato. */
 const BATTITO_MS = 15_000;
+/**
+ * Quanto si aspetta una singola consegna prima di rinunciare ad attenderla.
+ *
+ * Generoso apposta: un lockdown su un server grande tocca centinaia di canali
+ * e i limiti di frequenza di Discord lo rallentano. Il tetto non serve a
+ * interrompere il lavoro lungo, serve a impedire che quello *infinito* fermi
+ * tutta la coda.
+ */
+const TETTO_CONSEGNA_MS = 120_000;
 
 const pausa = (ms: number): Promise<void> => new Promise((risolvi) => setTimeout(risolvi, ms));
 
@@ -221,16 +230,63 @@ export function consumaPosta({
    * per ultimo. Fra server diversi invece non c'è niente da ordinare, e un
    * lockdown lungo su uno non deve far aspettare gli altri.
    */
+  /**
+   * Un comando che non finisce non deve fermare tutti gli altri.
+   *
+   * Il guasto, visto in produzione: `inVolo` conta le consegne in corso e il
+   * lettore si ferma a `IN_VOLO_MAX`. Se **una** consegna non finisce mai —
+   * una chiamata a Discord che non torna, una scrittura su una connessione
+   * bloccata — quel contatore non scende più, e il lettore smette di leggere.
+   * Per sempre, senza un errore. Da fuori si vede solo un lockdown che resta
+   * in coda finché non scade, e il pannello che non sa dire perché.
+   *
+   * Oltre il tetto si rinuncia ad aspettare e si va avanti. Il comando può
+   * ancora finire per conto suo — una chiamata già partita non si annulla —
+   * ma non tiene più in ostaggio la coda.
+   */
+  const conTetto = async (cosa: string, lavoro: Promise<void>): Promise<void> => {
+    let finito = false;
+    const fine = lavoro.then(
+      () => {
+        finito = true;
+      },
+      (errore: unknown) => {
+        finito = true;
+        throw errore;
+      },
+    );
+
+    await Promise.race([
+      fine,
+      new Promise<void>((risolvi) => {
+        const t = setTimeout(risolvi, TETTO_CONSEGNA_MS);
+        t.unref?.();
+      }),
+    ]);
+
+    if (!finito) {
+      log.error(
+        { cosa, tettoMs: TETTO_CONSEGNA_MS },
+        'consegna abbandonata: non è finita entro il tetto. Il comando può ancora ' +
+          'concludersi, ma la coda riparte invece di restare ferma per sempre',
+      );
+    }
+  };
+
   const accoda = (busta: Busta): void => {
     const server = busta.comando?.guildId ?? '-';
     inVolo += 1;
     const prima = code.get(server) ?? Promise.resolve();
+    const azione = busta.comando?.action ?? 'sconosciuta';
     const dopo = prima
-      .then(() => consegna(busta))
-      .catch((errore: unknown) => log.error({ err: errore }, 'consegna non riuscita'))
+      .then(() => conTetto(`esecuzione ${azione}`, consegna(busta)))
+      .catch((errore: unknown) => log.error({ err: errore, azione }, 'consegna non riuscita'))
       // Sempre, anche dopo un errore: vedi `conferma`. Una voce lasciata in
-      // sospeso non si perde — si ripete, che è peggio.
-      .then(() => conferma(busta.voce))
+      // sospeso non si perde — si ripete, che è peggio. Sotto tetto anche
+      // questa: se la conferma non torna, il contatore non scende e il
+      // lettore si ferma esattamente come prima.
+      .then(() => conTetto(`conferma ${azione}`, conferma(busta.voce)))
+      .catch((errore: unknown) => log.error({ err: errore, azione }, 'conferma non riuscita'))
       .finally(() => {
         inVolo -= 1;
         if (code.get(server) === dopo) code.delete(server);
