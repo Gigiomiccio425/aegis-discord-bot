@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.0"
+version: "1.31.1"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,37 +65,39 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Il file dei segreti nasce già scritto, e i comandi tornano alla strada che
-  funzionava.
+  Corretto il guasto per cui i comandi del pannello potevano non arrivare al
+  bot.
 
 
-  - **Non c'è più un file vuoto da compilare a memoria.** Al primo avvio ANGEL
-    scrive lui `segreti.env`, con i campi già presenti — uno per riga, e
-    accanto dove si prende quel valore. Restano da riempire i vuoti. I
-    facoltativi (Twitch, le chiavi dello scanner) stanno lì commentati: si
-    usano togliendo il cancelletto.
+  - **Il nome di Redis poteva portare al Redis di un'altra app.** Il compose
+    lo cercava come `redis`. Su umbrelOS tutte le app stanno sulla stessa
+    rete, e se un'altra app installata ha un servizio con quel nome — Immich,
+    Nextcloud e molte altre ce l'hanno — il nome risponde con due indirizzi e
+    ogni connessione ne prende uno a caso. Redis non ha password, quindi la
+    connessione a quello sbagliato riesce senza errori. Il pannello poteva
+    pubblicare i comandi su un Redis mentre il bot li aspettava su un altro:
+    «bot: fermo» detto di un bot collegato a Discord, e lockdown che
+    rispondevano «fatto» senza fare niente. Ora ANGEL usa il nome completo
+    del container, che è unico, come fanno le app ufficiali. Lo stesso per
+    Postgres.
 
-  - **Il file che hai già non viene toccato.** Il modello si scrive solo
-    quando non c'è niente da salvare. Se il tuo `segreti.env` sta ancora nella
-    cartella di prima, viene copiato in quella nuova invece che sostituito, e
-    l'originale resta dov'è.
+  - **Il pannello dice quando un comando non lo sente nessuno.** Redis
+    restituisce quanti hanno ricevuto un comando, e quel numero veniva
+    buttato via. Adesso, se sono zero, nei log c'è una riga che lo dice.
 
-  - **I comandi del pannello tornano al percorso delle versioni precedenti.**
-    Dalla 1.28 lockdown, backup e test passavano per un meccanismo nuovo, e da
-    lì in poi hanno smesso di arrivare al bot: il pannello diceva «ci sto
-    lavorando» e non succedeva niente. Questa versione riporta quel pezzo a
-    com'era quando funzionava. È un passo indietro fatto apposta, per capire
-    con certezza da dove viene il guasto.
+  - **Redis lento all'avvio non tiene più fermo il bot.** Il bot si collega a
+    Discord prima di mettersi in ascolto del pannello, e l'ascolto riprova da
+    solo finché non ci riesce.
 
-  - **Cosa manca, di conseguenza:** la copia leggera su Discord — il canale
-    dove il bot pubblicava i file di riepilogo — non c'è in questa versione.
-    Torna appena i comandi sono di nuovo affidabili. I backup sul server
-    restano.
+  - **Un link scritto in chat non può più far contattare al bot la tua rete
+    di casa.** Il bot segue i redirect dei link per vedere dove portano; ora
+    rifiuta ogni destinazione interna — il router, Postgres, Redis, gli altri
+    servizi dell'Umbrel — anche quando ci si arriva da un redirect esterno.
 
 
-  Una cosa da sapere mentre provi: a questa versione, se un comando si perde
-  per strada, **il pannello dice lo stesso che è andato a buon fine**. Non
-  fidarti del pannello: dopo un lockdown guarda i canali su Discord.
+  Dalla 1.31.0 resta: il file dei segreti nasce già scritto con i campi da
+  riempire, e un file che hai già non viene toccato. La copia leggera su
+  Discord non c'è ancora.
 
 
   Il resto del sistema dei segreti è quello della 1.30. Token, chiavi e

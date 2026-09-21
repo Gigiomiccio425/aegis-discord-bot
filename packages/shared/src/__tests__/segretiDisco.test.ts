@@ -95,6 +95,23 @@ describe('preparazione dei segreti', () => {
     expect(decodeURIComponent(indirizzo.password)).toBe(password);
   });
 
+  /*
+   * Su umbrelOS `postgres` è un nome che anche altre app registrano sulla
+   * stessa rete, e una connessione può finire nel database di un'altra app.
+   * Il compose dello store passa il nome completo del container: se qui
+   * venisse ignorato, la correzione esisterebbe solo sulla carta.
+   */
+  it('usa POSTGRES_HOST quando c’è', async () => {
+    const cartella = await cartellaNuova('host');
+    const ambiente: Record<string, string | undefined> = {
+      POSTGRES_HOST: 'g-d-app-store-gd-angel_postgres_1',
+    };
+
+    await assicuraSegreti(cartella, ambiente);
+
+    expect(new URL(ambiente.DATABASE_URL!).hostname).toBe('g-d-app-store-gd-angel_postgres_1');
+  });
+
   it('un DATABASE_URL già scritto vince su quello che comporrebbe', async () => {
     // È il caso di chi aggiorna: il database esiste già, con la sua
     // password. Comporne una nuova significherebbe non entrarci più.

@@ -40,7 +40,27 @@ export async function closeRedis(): Promise<void> {
  * un'intenzione, il bot la esegue. Un solo processo connesso a Discord
  * significa rate limit gestiti in un punto solo e pannello riavviabile senza
  * far cadere la connessione.
+ *
+ * Restituisce quanti l'hanno ricevuto. Redis lo dice sempre, e per settimane
+ * questo numero è stato buttato via: con zero ricevitori il pannello
+ * rispondeva «fatto» a un comando che nessuno aveva sentito. Era la riga che
+ * avrebbe detto subito dov'era il guasto — il bot e il pannello collegati a
+ * due Redis diversi — e non veniva mai scritta.
+ *
+ * Non lancia, di proposito: alcuni chiamanti la usano dopo un salvataggio
+ * già riuscito, e un errore qui farebbe sembrare fallito quello.
  */
-export async function sendBotCommand(command: Record<string, unknown>): Promise<void> {
-  await getRedis().publish(RedisKeys.commandChannel, JSON.stringify(command));
+export async function sendBotCommand(command: Record<string, unknown>): Promise<number> {
+  const ricevitori = await getRedis().publish(RedisKeys.commandChannel, JSON.stringify(command));
+
+  if (ricevitori === 0) {
+    logger.warn(
+      { azione: command.action, guildId: command.guildId, ricevitori },
+      'comando pubblicato, ma nessuno l’ha ricevuto: il bot non è in ascolto su questo Redis. ' +
+        'Se il bot risulta collegato a Discord, il pannello e il bot stanno usando due Redis ' +
+        'diversi — controlla REDIS_URL.',
+    );
+  }
+
+  return ricevitori;
 }

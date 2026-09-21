@@ -76,7 +76,7 @@ services:
   #  tentativo e l'altro.
   # ─────────────────────────────────────────────────────────
   angel:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.0
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.1
     restart: on-failure
     stop_grace_period: 1m
 
@@ -86,10 +86,26 @@ services:
       TZ: Europe/Rome
 
       # ── Database e code ────────────────────────────────────
-      # Il nome è quello del servizio: dentro la rete dell'app si raggiunge
-      # così. DATABASE_URL non c'è perché conterrebbe la password: la compone
-      # ANGEL dal file che trova in /segreti.
-      REDIS_URL: redis://redis:6379
+      # Il nome COMPLETO del container, mai quello corto del servizio.
+      #
+      # Su umbrelOS una rete dell'app non esiste: tutte le app stanno sulla
+      # stessa rete, e ognuna ci registra i nomi dei propri servizi. Se
+      # un'altra app ha un servizio chiamato `redis` — Immich, Nextcloud e
+      # molte altre ce l'hanno — il nome `redis` risponde con due indirizzi,
+      # e ogni connessione ne prende uno a caso.
+      #
+      # Con Redis è il guasto peggiore possibile, perché non dà errori: non
+      # c'è password, quindi la connessione a quello sbagliato riesce. Il
+      # pannello pubblica i comandi su un Redis, il bot li aspetta su un
+      # altro, e tutti e due credono di funzionare. È così che «lockdown»
+      # rispondeva «fatto» e non succedeva niente.
+      #
+      # È la stessa convenzione delle app ufficiali di umbrelOS
+      # (`immich_redis_1`, `nextcloud_redis_1`), e il motivo è questo.
+      # DATABASE_URL non c'è perché conterrebbe la password: la compone
+      # ANGEL dal file che trova in /segreti, usando POSTGRES_HOST.
+      REDIS_URL: redis://g-d-app-store-gd-angel_redis_1:6379
+      POSTGRES_HOST: g-d-app-store-gd-angel_postgres_1
 
       # ── Dove stanno i valori ───────────────────────────────
       #

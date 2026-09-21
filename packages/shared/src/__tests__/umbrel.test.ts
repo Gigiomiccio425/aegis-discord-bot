@@ -183,8 +183,60 @@ describe('pacchetto per umbrelOS', () => {
     // Senza, il container ripartirebbe all'infinito dopo aver finito.
     expect(valore(blocco, 'restart')).toBe('no');
   });
-  it('Redis si raggiunge per nome di servizio', () => {
-    expect(new URL(valore(compose, 'REDIS_URL')!).hostname).toBe('redis');
+
+  /*
+   * NOMI COMPLETI, MAI QUELLI CORTI
+   *
+   * Qui prima c'era il test opposto: pretendeva che Redis si chiamasse
+   * `redis`. Proteggeva il guasto.
+   *
+   * Su umbrelOS tutte le app stanno sulla stessa rete, e ognuna ci registra
+   * i nomi dei suoi servizi. Basta un'altra app con un servizio `redis` —
+   * Immich, Nextcloud, molte altre — perché il nome risponda con due
+   * indirizzi, e ogni connessione ne prenda uno a caso. Redis non ha
+   * password: la connessione a quello sbagliato riesce, e non c'è un errore
+   * da nessuna parte. Il pannello pubblicava i comandi su un Redis, il bot li
+   * aspettava su un altro, e il pannello diceva «bot: fermo» di un bot
+   * collegato a Discord.
+   *
+   * Il nome del container invece è unico per costruzione: comincia con l'id
+   * dell'app. È la convenzione delle app ufficiali, per questo motivo.
+   */
+  it('Redis e Postgres si raggiungono col nome del container', () => {
+    expect(new URL(valore(compose, 'REDIS_URL')!).hostname).toBe(`${APP}_redis_1`);
+    expect(valore(compose, 'POSTGRES_HOST')).toBe(`${APP}_postgres_1`);
+  });
+
+  /** Le righe che usano il nome corto di un servizio come indirizzo. */
+  function nomiCorti(righe: string[], servizi: string[]): string[] {
+    return righe
+      .map((riga) => riga.trim())
+      // `image: redis:7` e `- redis` in depends_on usano il nome del servizio
+      // per quello che è, non come indirizzo: vanno lasciati stare.
+      .filter((riga) => riga && !riga.startsWith('#') && !riga.startsWith('image:'))
+      .filter((riga) => !riga.startsWith('- '))
+      .filter((riga) =>
+        servizi.some(
+          (s) =>
+            riga.includes(`//${s}:`) ||
+            riga.includes(`@${s}:`) ||
+            // Solo le chiavi che sono indirizzi: `POSTGRES_USER: angel` usa
+            // un nome uguale a quello di un servizio, ma è un utente.
+            new RegExp(`^[A-Z_]*HOST(NAME)?:\\s*["']?${s}["']?$`).test(riga),
+        ),
+      );
+  }
+
+  it('nessun indirizzo usa il nome corto di un servizio', () => {
+    const servizi = [...compose.matchAll(/^ {2}([a-z_][a-z0-9_-]*):$/gm)].map((riga) => riga[1]!);
+    expect(servizi, 'nessun servizio letto').toContain('redis');
+
+    // La controprova: la riga che c'era prima deve essere riconosciuta.
+    // Senza, una regola che non trova mai niente passerebbe su tutto.
+    expect(nomiCorti(['REDIS_URL: redis://redis:6379'], servizi)).toHaveLength(1);
+    expect(nomiCorti(['POSTGRES_HOST: postgres'], servizi)).toHaveLength(1);
+
+    expect(nomiCorti(compose.split('\n'), servizi)).toEqual([]);
   });
 
   /*
