@@ -115,8 +115,34 @@ export function consumaPosta({
    * proprio la riga che serve.
    */
   let battitoRotto = false;
+  let saltato = false;
   const battito = async (): Promise<void> => {
-    if (!pronto()) return;
+    /*
+     * Saltare in silenzio era l'ultimo buco.
+     *
+     * Se discord.js dice che il bot non è collegato, il battito non si scrive
+     * — ed è giusto: quella chiave significa «collegato adesso». Ma senza una
+     * riga, dal di fuori questo caso è indistinguibile da un ciclo di eventi
+     * bloccato, che non fa partire il battito affatto. Due guasti diversi,
+     * stesso sintomo: il pannello che scrive «il bot non è collegato».
+     *
+     * Con questa riga si distinguono: se compare, è la prima; se la chiave
+     * scade e questa riga non c'è, è la seconda.
+     */
+    if (!pronto()) {
+      if (!saltato) {
+        saltato = true;
+        log.warn(
+          'battito saltato: discord.js dice che il bot non è collegato. ' +
+            'Finché dura, il pannello lo dà per scollegato — ed è vero',
+        );
+      }
+      return;
+    }
+    if (saltato) {
+      saltato = false;
+      log.info('collegamento tornato: il battito riprende');
+    }
     try {
       await redis.set(Posta.pronto, String(Date.now()), 'EX', 45);
       if (battitoRotto) {

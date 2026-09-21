@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
 import { Events } from 'discord.js';
-import { announceVersion, runningVersion } from '@angel/shared';
+import { announceVersion, runningVersion, sorvegliaCicloEventi } from '@angel/shared';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
 import { closeRedis, getRedis } from './core/redis.js';
@@ -53,6 +53,21 @@ async function main(): Promise<void> {
         'versione scritta ma non rileggibile: il pannello dirà che questo processo è fermo',
       );
     }
+  });
+
+  /*
+   * Il cronometro del ciclo degli eventi.
+   *
+   * Se il bot risulta «fermo» al pannello mentre il processo è vivo, ci sono
+   * due cause possibili e dai log erano identiche: Redis che non accetta le
+   * scritture, oppure il ciclo degli eventi bloccato, che non fa partire
+   * nemmeno il battito. La prima adesso si vede. Questa è la seconda.
+   */
+  sorvegliaCicloEventi((ritardo) => {
+    logger.warn(
+      { ritardoMs: ritardo.ritardoMs },
+      'ciclo degli eventi bloccato: per tutto quel tempo il bot non ha potuto fare niente, battito compreso. Il pannello lo dà per fermo',
+    );
   });
 
   subscribeConfigInvalidation();
