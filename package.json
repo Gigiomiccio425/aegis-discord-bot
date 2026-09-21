@@ -1,6 +1,6 @@
 {
   "name": "angel",
-  "version": "1.29.6",
+  "version": "1.29.7",
   "private": true,
   "description": "ANGEL — bot Discord di sicurezza avanzata con pannello web di controllo",
   "type": "module",
