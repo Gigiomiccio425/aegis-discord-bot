@@ -10,6 +10,17 @@ build/
 # File di configurazione compilati con credenziali vere. La repository è
 # pubblica: qualunque cosa contenga segreti resta sulla macchina.
 *.local.yml
+
+# Il file dei segreti, compilato. Va copiato sulla macchina che esegue ANGEL,
+# non lasciato qui dentro: GitHub rifiuterebbe comunque il push con GH013, e
+# Discord revoca i token che trova nelle repository pubbliche.
+#
+# Questa riga mancava, e un `git add -A` durante la risoluzione di un
+# conflitto ha messo il file dentro un commit. Il ramo non era stato spinto e
+# il commit è stato annullato, ma la difesa giusta è questa: il file non deve
+# poter finire in un commit nemmeno per sbaglio.
+segreti.env
+*.segreti.env
 *.local.yaml
 
 # dati runtime (allegati archiviati, cache OCR, backup)
