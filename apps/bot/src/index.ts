@@ -1,24 +1,32 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
-import { announceVersion, RedisKeys, runningVersion } from '@angel/shared';
+import { announceVersion, runningVersion } from '@angel/shared';
+import { ascoltaComandiDalPannello } from './core/ascoltoPannello.js';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
-import { closeRedis, getRedis, getSubscriber } from './core/redis.js';
+import { closeRedis, getRedis } from './core/redis.js';
 import { subscribeConfigInvalidation } from './core/config.js';
 import { registerAllEvents } from './events/index.js';
 import { flushBatches } from './logging/auditLogger.js';
 import { closeFileSink } from './logging/fileSink.js';
 import { invalidateCustomCommands } from './personas/customCommands.js';
-import { handlePanelCommand } from './core/panelCommands.js';
 
 /**
  * Avvio del bot.
  *
- * L'ordine è deliberato: prima database e Redis, poi le sottoscrizioni ai
- * canali del pannello, e solo alla fine il collegamento al gateway. Connettersi
- * a Discord prima di avere il database pronto significherebbe ricevere eventi
- * che non è ancora possibile registrare — e il primo minuto dopo un riavvio è
- * proprio quello in cui un attaccante approfitta della finestra.
+ * L'ordine è deliberato, e una parte è stata corretta dopo un guasto:
+ *
+ * • **il database per primo.** Collegarsi a Discord senza database pronto
+ *   significa ricevere eventi che non si riescono a registrare, e il primo
+ *   minuto dopo un riavvio è proprio quello in cui un attaccante ne approfitta;
+ *
+ * • **poi Discord**, e solo dopo l'ascolto dei comandi dal pannello. Prima era
+ *   il contrario, e costava il bot intero: `subscribe` su una connessione con
+ *   `maxRetriesPerRequest: null` non fallisce quando Redis non risponde — resta
+ *   in coda, per sempre. L'attesa non finiva mai, `login` non veniva mai
+ *   raggiunto, il bot non compariva su Discord, e nei log non c'era una riga
+ *   che dicesse dove si era fermato. Adesso niente di ciò che riguarda Redis
+ *   può trattenere il collegamento a Discord.
  */
 async function main(): Promise<void> {
   const token = process.env.DISCORD_TOKEN;
@@ -44,17 +52,11 @@ async function main(): Promise<void> {
   const client = createClient();
   registerAllEvents(client);
 
-  // Canale di comando dal pannello: lockdown, ricarica comandi, emergenza.
-  const subscriber = getSubscriber();
-  await subscriber.subscribe(RedisKeys.commandChannel);
-  subscriber.on('message', (channel: string, message: string) => {
-    if (channel !== RedisKeys.commandChannel) return;
-    void handlePanelCommand(client, message).catch((error) =>
-      logger.error({ err: error }, 'comando dal pannello fallito'),
-    );
-  });
-
   await login(client, token);
+
+  // Dopo il collegamento, e senza `await`: l'ascolto dei comandi riprova per
+  // conto suo finché non ci riesce, e nel frattempo il bot difende il server.
+  void ascoltaComandiDalPannello(client);
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'spegnimento in corso');

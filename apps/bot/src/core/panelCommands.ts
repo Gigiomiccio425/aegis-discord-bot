@@ -116,7 +116,30 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
   }
 
   const guild = client.guilds.cache.get(parsed.guildId);
-  if (!guild) return;
+  if (!guild) {
+    /*
+     * Qui si usciva in silenzio, ed è il punto che costava di più.
+     *
+     * Il pannello non aspetta una risposta: pubblica il comando e dice che è
+     * stato eseguito. Se il server non è nella cache, il comando spariva senza
+     * lasciare traccia — e chi guardava vedeva un pannello che dice «fatto» e
+     * un Discord in cui non era successo niente. Cercare la causa nei log era
+     * inutile: non c'era niente da trovare.
+     *
+     * I server che il bot vede finiscono nella riga apposta: se l'elenco è
+     * vuoto il bot non ha ancora finito di collegarsi, se contiene altri ID il
+     * pannello sta parlando di un server in cui il bot non è entrato.
+     */
+    log.warn(
+      {
+        azione: parsed.action,
+        guildId: parsed.guildId,
+        serverVisti: [...client.guilds.cache.keys()],
+      },
+      'comando dal pannello ignorato: il bot non vede questo server',
+    );
+    return;
+  }
 
   switch (parsed.action) {
     case 'lockdown.enable': {
