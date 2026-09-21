@@ -8,6 +8,7 @@ export * from './util/template.js';
 // In fondo alle altre: importa RedisKeys, definito più sotto in questo file.
 export * from './version.js';
 export * from './sorveglia.js';
+export * from './backupLeggero.js';
 export * from './env.js';
 export * from './posta.js';
 export * from './cacheConfig.js';
