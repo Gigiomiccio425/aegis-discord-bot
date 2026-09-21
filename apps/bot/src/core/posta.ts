@@ -99,6 +99,10 @@ export function consumaPosta({
 }: DipendenzePosta & { chiudi?: () => void }): () => Promise<void> {
   let fermata = false;
   let inVolo = 0;
+  /** Si segnala una volta sola: a ogni giro sarebbe rumore. */
+  let formaSegnalata = false;
+  /** La prima lettura riuscita: solo allora la posta è davvero in ascolto. */
+  let inAscolto = false;
   const code = new Map<string, Promise<void>>();
 
   /*
@@ -163,13 +167,50 @@ export function consumaPosta({
   const timerBattito = setInterval(() => void battito(), BATTITO_MS);
   timerBattito.unref?.();
 
-  const preparaGruppo = async (): Promise<void> => {
-    await lettore
+  /*
+   * Creare il gruppo, con un tetto di tempo.
+   *
+   * Il tetto non è prudenza: con `maxRetriesPerRequest: null` — che BullMQ
+   * pretende e che questa connessione eredita — ioredis **non fallisce mai**
+   * quando Redis non risponde. Accoda il comando e lo tiene lì. Un `await` su
+   * quella promessa non finisce più.
+   *
+   * Il risultato era il peggiore possibile: il ciclo non partiva, nessun
+   * errore da nessuna parte, e il bot scriveva lo stesso «posta in ascolto».
+   * Da fuori si vedeva solo un pannello che diceva «ci sto lavorando» per
+   * sempre.
+   */
+  const preparaGruppo = async (): Promise<boolean> => {
+    let risposto = false;
+
+    const lavoro = lettore
       .call('XGROUP', 'CREATE', Posta.stream, Posta.gruppo, '0', 'MKSTREAM')
-      .catch((errore: Error) => {
-        // Il gruppo esiste già: è il caso normale a ogni avvio dopo il primo.
-        if (!String(errore.message).includes('BUSYGROUP')) throw errore;
-      });
+      .then(
+        () => {
+          risposto = true;
+        },
+        (errore: Error) => {
+          risposto = true;
+          // Il gruppo esiste già: è il caso normale a ogni avvio dopo il primo.
+          if (!String(errore.message).includes('BUSYGROUP')) throw errore;
+        },
+      );
+
+    await Promise.race([
+      lavoro,
+      new Promise<void>((risolvi) => {
+        const t = setTimeout(risolvi, 10_000);
+        t.unref?.();
+      }),
+    ]);
+
+    if (!risposto) {
+      log.error(
+        'Redis non risponde alla creazione del gruppo: la posta non parte, e i comandi ' +
+          'dal pannello resteranno in coda senza che nessuno li legga. Riprovo.',
+      );
+    }
+    return risposto;
   };
 
   /**
@@ -323,12 +364,14 @@ export function consumaPosta({
   const ciclo = async (): Promise<void> => {
     while (!fermata) {
       try {
-        await preparaGruppo();
-        break;
+        // Non basta che non lanci: deve aver **risposto**. Con Redis muto la
+        // promessa resta appesa, e prima si usciva lo stesso da questo ciclo
+        // lasciando un lettore che non leggeva.
+        if (await preparaGruppo()) break;
       } catch (errore) {
         log.warn({ err: errore }, 'gruppo della posta non creato, riprovo');
-        await pausa(3_000);
       }
+      await pausa(3_000);
     }
 
     // Prima quello che questo consumatore aveva già ricevuto e non confermato
@@ -383,6 +426,33 @@ export function consumaPosta({
        *
        * Avanzando, una voce che non si conferma costa un giro in più e basta.
        */
+      /*
+       * Una risposta che c'è ma da cui non si ricava niente.
+       *
+       * `leggiRisposta` si aspetta la forma di RESP2:
+       * `[[stream, [[id, [campo, valore, …]], …]]]`. Qualunque altra cosa
+       * produce un elenco vuoto **senza dire niente** — e succede per davvero:
+       * con RESP3 la stessa risposta arriva come mappa invece che come array.
+       *
+       * Il sintomo è il peggiore che ci sia: letture che riescono, comandi che
+       * spariscono, zero righe nei log, e il pannello che dice «ci sto
+       * lavorando» per sempre.
+       */
+      if (!formaSegnalata && voci.length === 0 && Array.isArray(risposta) && risposta.length > 0) {
+        formaSegnalata = true;
+        log.error(
+          { forma: `array di ${risposta.length}` },
+          'Redis ha risposto qualcosa che non so leggere: i comandi dal pannello ' +
+            'verrebbero scartati in silenzio. Attesa la forma RESP2 ' +
+            '[[stream, [[id, [campo, valore]]]]]',
+        );
+      }
+
+      if (!inAscolto) {
+        inAscolto = true;
+        log.info('posta del bot in ascolto');
+      }
+
       if (cursore !== '>') {
         if (voci.length === 0) {
           cursore = '>';
@@ -400,8 +470,16 @@ export function consumaPosta({
     }
   };
 
+  /*
+   * Niente «in ascolto» qui.
+   *
+   * Prima si stampava subito dopo `void ciclo()`, cioè prima che il ciclo
+   * avesse letto alcunché. Con Redis muto il ciclo non partiva e il log
+   * diceva lo stesso che era in ascolto: la riga che doveva rassicurare era
+   * quella che nascondeva il guasto. Adesso la scrive la prima lettura
+   * riuscita.
+   */
   void ciclo();
-  log.info('posta del bot in ascolto');
 
   return async () => {
     fermata = true;
