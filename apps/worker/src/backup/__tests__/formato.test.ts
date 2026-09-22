@@ -25,6 +25,11 @@ const ESCLUSE_APPOSTA = new Set([
   'panelSession',
   // Stessa ragione, aggravata: il pannello Twitch sta su Internet.
   'twitchSession',
+  // Lo stato di un lockdown in corso descrive Discord in un istante. Portato
+  // da una copia di giorni prima, la revoca lo prenderebbe per un blocco
+  // ancora attivo e rimetterebbe i permessi di ruolo di allora, sopra quelli
+  // cambiati nel frattempo.
+  'lockdownRecord',
 ]);
 
 describe('elenco delle tabelle da copiare', () => {

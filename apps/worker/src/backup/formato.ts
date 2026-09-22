@@ -77,6 +77,12 @@ export type Tabella = (typeof TABELLE)[number];
  * giorni e si rigenerano con un nuovo accesso: non c'è nulla da recuperare e
  * c'è qualcosa da perdere. Vale identico per le sessioni del pannello Twitch,
  * che per giunta vive esposto a Internet.
+ *
+ * Esclusa anche `lockdownRecord`, per una ragione diversa: non è un dato ma
+ * uno stato di passaggio, la fotografia dei permessi di Discord nel momento
+ * in cui è partito un blocco. Riportata da una copia vecchia, la revoca la
+ * prenderebbe per un blocco ancora in corso e rimetterebbe i permessi di
+ * ruolo di quel giorno sopra quelli cambiati da allora.
  */
 
 /** Nomi dei file dentro una cartella di copia. */

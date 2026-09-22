@@ -13,6 +13,7 @@ import { getRedis } from './redis.js';
 import { humanDuration } from './i18n.js';
 import { getGuildConfig } from './config.js';
 import { recordEvent } from '../logging/auditLogger.js';
+import { archivioBlocchi, type ArchivioBlocchi } from './bloccoDurevole.js';
 import {
   bitScrittura,
   comeModifica,
@@ -167,6 +168,18 @@ function ricorda(guildId: string, stato: LockdownState | null): void {
   memoria.set(guildId, { stato, scade: Date.now() + MEMORIA_MS });
 }
 
+/**
+ * La copia dello stato su Postgres: vedi `bloccoDurevole.ts` per il perché.
+ *
+ * Creata al primo uso e non al caricamento del modulo: `getPrisma()` vuole
+ * `DATABASE_URL`, e un modulo che la pretende appena importato rompe ogni
+ * test che lo tocca anche solo di passaggio.
+ */
+let archivio: ArchivioBlocchi | null = null;
+function copia(): ArchivioBlocchi {
+  return (archivio ??= archivioBlocchi());
+}
+
 export async function isLockedDown(guildId: string): Promise<boolean> {
   return (await getRedis().exists(RedisKeys.lockdown(guildId))) === 1;
 }
@@ -312,6 +325,25 @@ export async function enableLockdown(
     falliti: [],
   };
 
+  /*
+   * Redis può aver perso uno stato che il database ricorda ancora: un blocco
+   * in corso, con i suoi permessi di ruolo da rimettere. Partirne uno nuovo
+   * sopra significherebbe sovrascrivere quell'elenco, e quei permessi non
+   * tornerebbero più. Rimesso in Redis, il NX qui sotto lo trova, e da lì
+   * vale quello che vale per qualunque stato già presente: blocco già
+   * attivo, oppure — se nessun canale è più chiuso — stato orfano, scartato.
+   */
+  if (!(await redis.exists(key))) {
+    const ricordato = await copia().leggi(guild.id);
+    if (ricordato) {
+      log.warn(
+        { guildId: guild.id },
+        'stato di lockdown ritrovato nel database: Redis lo aveva perso',
+      );
+      await redis.set(key, JSON.stringify(ricordato), 'NX');
+    }
+  }
+
   // Lo stato si scrive **prima** di toccare i canali, e con NX: se il processo
   // muore a metà la revoca trova un elenco parziale da cui ripartire, e due
   // richieste simultanee non bloccano due volte.
@@ -329,6 +361,10 @@ export async function enableLockdown(
     }
   }
   ricorda(guild.id, state);
+  // La copia subito, prima di toccare i canali: per la stessa ragione per
+  // cui Redis si scrive prima. Un processo che muore a metà deve lasciare un
+  // elenco parziale da cui ripartire, non niente.
+  await copia().salva(guild.id, state);
 
   if (settings.lockChannels) {
     const piano = pianificaBlocco([...canali.values()].map(descrivi), {
@@ -354,6 +390,7 @@ export async function enableLockdown(
         ),
       );
       await redis.set(key, JSON.stringify(state));
+      await copia().salva(guild.id, state);
     }
 
     esito.locked = state.channels.length;
@@ -380,6 +417,7 @@ export async function enableLockdown(
   }
 
   await redis.set(key, JSON.stringify(state));
+  await copia().salva(guild.id, state);
   ricorda(guild.id, state);
 
   const righe = [
@@ -497,7 +535,19 @@ export async function disableLockdown(
 ): Promise<EsitoSblocco> {
   const redis = getRedis();
   const key = RedisKeys.lockdown(guild.id);
-  const state = await readLockdownState(guild.id);
+  const inRedis = await readLockdownState(guild.id);
+  /*
+   * Senza stato in Redis, la copia. È il caso per cui la copia esiste: senza,
+   * la revoca forzata riaprirebbe i canali a @everyone ma non saprebbe quali
+   * permessi di ruolo rimettere, e resterebbero tolti.
+   */
+  const state = inRedis ?? (await copia().leggi(guild.id));
+  if (!inRedis && state) {
+    log.warn(
+      { guildId: guild.id },
+      'revoca con lo stato ritrovato nel database: Redis lo aveva perso',
+    );
+  }
   const esito: EsitoSblocco = {
     unlocked: 0,
     ruoliRipristinati: 0,
@@ -605,6 +655,9 @@ export async function disableLockdown(
     );
   }
 
+  // Prima la copia, poi Redis: se il processo muore in mezzo, resta lo stato
+  // in Redis e la revoca successiva lo ritrova intero.
+  await copia().cancella(guild.id);
   await redis.del(key);
   ricorda(guild.id, null);
 
@@ -647,8 +700,14 @@ export function startLockdownSweeper(client: Client, intervalMs = 20_000): NodeJ
     if (inCorso) return;
     inCorso = true;
     void (async () => {
+      // Un blocco a tempo di cui Redis ha perso lo stato non scadrebbe mai:
+      // il server resterebbe chiuso finché qualcuno non se ne accorge. Una
+      // query per giro dice quali server hanno una copia.
+      const conCopia = await copia().elenca();
       for (const guild of client.guilds.cache.values()) {
-        const state = await readLockdownState(guild.id).catch(() => null);
+        const state =
+          (await readLockdownState(guild.id).catch(() => null)) ??
+          (conCopia.has(guild.id) ? await copia().leggi(guild.id) : null);
         if (!state?.expiresAt || state.expiresAt > Date.now()) continue;
         const config = await getGuildConfig(guild.id).catch(() => undefined);
         await disableLockdown(client, guild, 'scadenza automatica', { config }).catch((errore) =>

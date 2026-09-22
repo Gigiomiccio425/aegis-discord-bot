@@ -1003,3 +1003,21 @@ model TwitchSession {
   @@index([twitchUserId])
   @@index([expiresAt])
 }
+
+/// Copia durevole dello stato di un lockdown in corso.
+///
+/// Lo stato vive in Redis, perché lì si reclama con SET NX e due lockdown
+/// insieme non partono. Ma dentro ci sono anche i permessi di scrittura
+/// tolti ai ruoli per la durata del blocco, da rimettere alla revoca. Se
+/// Redis lo perde — uno spegnimento brusco prima che salvi su disco — quei
+/// permessi non tornano più da soli. Questa riga è la stessa cosa, in un
+/// posto che non si perde.
+///
+/// Senza chiave esterna verso `Guild`, di proposito: la revoca deve poter
+/// ritrovare lo stato anche se la riga del server non c'è.
+model LockdownRecord {
+  guildId   String   @id
+  /// Lo stesso JSON che sta in Redis sotto `lockdown:<guildId>`.
+  state     Json
+  updatedAt DateTime @updatedAt
+}
