@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
-import { announceVersion, runningVersion } from '@angel/shared';
+import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
 import { ascoltaComandiDalPannello } from './core/ascoltoPannello.js';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   // funzionava: al token rifiutato il processo esce dopo poche centinaia di
   // millisecondi, la scrittura resta per strada, e il pannello dice «non
   // risponde» a un container che invece c'è.
-  await announceVersion(getRedis(), 'bot');
+  await announceVersion(getRedis(), 'bot', segnalaNelLog(logger));
 
   subscribeConfigInvalidation();
 

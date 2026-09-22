@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { announceVersion, readServiceVersions } from '../version.js';
+import {
+  announceVersion,
+  readServiceVersions,
+  segnalaNelLog,
+  type ProblemaVersione,
+} from '../version.js';
 
 /** Redis finto: risponde da una mappa, senza rete né server. */
 function fakeRedis(values: Record<string, string>) {
@@ -105,4 +110,126 @@ describe('versioni dei servizi', () => {
       ]),
     ).resolves.toBeUndefined();
   }, 6000);
+});
+
+/*
+ * QUANDO LA DICHIARAZIONE NON ARRIVA
+ *
+ * Il pannello scriveva «bot: fermo» per un bot collegato, e non c'era una
+ * riga da nessuna parte che dicesse perché: la scrittura aveva
+ * `() => undefined` su entrambi i rami, quindi un rifiuto di Redis spariva.
+ *
+ * Adesso ogni modo di fallire ha un nome. Non ripara la causa — che può
+ * stare fuori dal processo — ma la rende leggibile.
+ */
+describe('quando la versione non si dichiara', () => {
+  const tipi = (problemi: ProblemaVersione[]) => problemi.map((p) => p.tipo);
+
+  it('dice quando Redis rifiuta la scrittura, e non prova a rileggere', async () => {
+    const problemi: ProblemaVersione[] = [];
+    const redis = {
+      set: async () => {
+        throw new Error('READONLY finto');
+      },
+      get: async () => null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    // Rileggere una chiave che non si è riusciti a scrivere aggiungerebbe
+    // solo una seconda riga che dice la stessa cosa peggio.
+    expect(tipi(problemi)).toEqual(['scrittura']);
+  });
+
+  /*
+   * Il caso che inganna di più: con Redis irraggiungibile ioredis non
+   * fallisce, accoda. La promessa non si risolve né si rifiuta, quindi
+   * «nessun errore» non vuol dire «scritto».
+   */
+  it('dice quando Redis non risponde affatto', async () => {
+    const problemi: ProblemaVersione[] = [];
+    let letture = 0;
+    const redis = {
+      set: () => new Promise<void>(() => undefined),
+      get: async () => {
+        letture += 1;
+        return null;
+      },
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    expect(tipi(problemi)).toEqual(['lenta']);
+    expect(letture, 'non si rilegge una scrittura che non è arrivata').toBe(0);
+  }, 6000);
+
+  it('dice quando la scrive senza errori e rileggendola non c’è', async () => {
+    const problemi: ProblemaVersione[] = [];
+    const redis = {
+      set: async () => 'OK',
+      get: async () => null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    const rilettura = problemi.find((p) => p.tipo === 'rilettura');
+    expect(rilettura, 'una scrittura che non si rilegge deve essere segnalata').toBeTruthy();
+    expect(rilettura?.tipo === 'rilettura' && rilettura.letto).toBeNull();
+  });
+
+  /*
+   * IL TETTO SULLA RILETTURA
+   *
+   * La prima versione di questo codice aspettava il GET senza limite. Con
+   * Redis che risponde alla scrittura e poi si ammutolisce, l'attesa non
+   * finiva — e nel bot questa funzione si aspetta **prima** del collegamento
+   * a Discord. La diagnosi reintroduceva il blocco all'avvio che doveva
+   * spiegare.
+   */
+  it('una rilettura che non risponde non trattiene l’avvio', async () => {
+    const redis = {
+      set: async () => 'OK',
+      get: () => new Promise<string | null>(() => undefined),
+    };
+
+    await expect(
+      Promise.race([
+        announceVersion(redis, 'bot', () => undefined),
+        new Promise((_, ko) => setTimeout(() => ko(new Error('mai finito')), 4000)),
+      ]),
+    ).resolves.toBeUndefined();
+  }, 6000);
+
+  it('quando tutto funziona non segnala niente', async () => {
+    const problemi: ProblemaVersione[] = [];
+    const memoria = new Map<string, string>();
+    const redis = {
+      set: async (chiave: string, valore: string) => {
+        memoria.set(chiave, valore);
+        return 'OK';
+      },
+      get: async (chiave: string) => memoria.get(chiave) ?? null,
+    };
+
+    await announceVersion(redis, 'bot', (problema) => problemi.push(problema));
+
+    // La controprova: la chiave c'è davvero, quindi il silenzio è quello buono.
+    expect(memoria.get('version:bot')).toBeTruthy();
+    expect(problemi).toEqual([]);
+  });
+
+  it('nel log, i guasti sono errori e la lentezza è un avviso', () => {
+    const righe: string[] = [];
+    const logger = {
+      error: (_: object, messaggio: string) => righe.push(`error ${messaggio}`),
+      warn: (_: object, messaggio: string) => righe.push(`warn ${messaggio}`),
+    };
+    const segnala = segnalaNelLog(logger);
+
+    segnala({ tipo: 'scrittura', errore: new Error('x') });
+    segnala({ tipo: 'lenta', attesaMs: 2000 });
+    segnala({ tipo: 'rilettura', letto: null, atteso: '1.0.0' });
+
+    expect(righe.map((riga) => riga.split(' ')[0])).toEqual(['error', 'warn', 'error']);
+  });
 });

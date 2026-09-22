@@ -10,7 +10,7 @@ import websocket from '@fastify/websocket';
 import { disconnectPrisma, getPrisma } from '@angel/db';
 import { logger, loggerOptions } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
-import { announceVersion, runningVersion } from '@angel/shared';
+import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
 import { authRoutes } from './routes/auth.js';
 import { configRoutes } from './routes/config.js';
 import { logRoutes } from './routes/logs.js';
@@ -282,7 +282,7 @@ async function main(): Promise<void> {
 
   const port = Number(process.env.API_PORT ?? 8080);
   await app.listen({ port, host: '0.0.0.0' });
-  void announceVersion(getRedis(), 'api');
+  void announceVersion(getRedis(), 'api', segnalaNelLog(logger));
   logger.info(
     { port, publicUrl: process.env.PUBLIC_URL, versione: runningVersion() },
     'API avviata',

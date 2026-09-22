@@ -30,7 +30,7 @@
 
 import 'dotenv/config';
 import { disconnectPrisma, getPrisma } from '@angel/db';
-import { announceVersion, runningVersion } from '@angel/shared';
+import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
 import { logger } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
 import { Motore } from './motore.js';
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  void announceVersion(getRedis(), 'twitch');
+  void announceVersion(getRedis(), 'twitch', segnalaNelLog(logger));
   logger.info({ versione: runningVersion(), bot: botLogin }, 'ANGEL per Twitch');
 
   const motore = new Motore({

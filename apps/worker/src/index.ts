@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
 import { disconnectPrisma, getPrisma } from '@angel/db';
-import { announceVersion, Queues, runningVersion } from '@angel/shared';
+import { announceVersion, segnalaNelLog, Queues, runningVersion } from '@angel/shared';
 import { logger } from './logger.js';
 import { getRedis, closeRedis } from './redis.js';
 import { deepScanProcessor } from './jobs/deepScan.js';
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   await prisma.$queryRaw`SELECT 1`;
   // Dichiara la propria versione: e l'unico modo di accorgersi che un
   // aggiornamento ha ricreato tre container su quattro.
-  void announceVersion(connection, 'worker');
+  void announceVersion(connection, 'worker', segnalaNelLog(logger));
   logger.info({ versione: runningVersion() }, 'worker avviato');
 
   const workers = [

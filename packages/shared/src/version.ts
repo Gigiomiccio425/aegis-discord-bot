@@ -42,22 +42,102 @@ interface RedisLike {
  */
 const PRIMA_ATTESA_MS = 2000;
 
-/** Una scrittura sola, che non solleva mai e non aspetta oltre il tetto. */
-async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number): Promise<void> {
-  const set = redis
-    .set(RedisKeys.serviceVersion(service), runningVersion(), 'EX', VERSION_TTL_SEC)
-    .then(
-      () => undefined,
-      () => undefined,
-    );
+/**
+ * Cosa può andare storto in una dichiarazione, detto a parole.
+ *
+ * Prima non lo diceva nessuno: la scrittura aveva `() => undefined` su
+ * entrambi i rami, quindi un rifiuto di Redis spariva. Il sintomo era il
+ * pannello che scriveva «bot: fermo» per un processo vivo, e nessuna riga da
+ * nessuna parte che dicesse perché.
+ */
+export type ProblemaVersione =
+  | { tipo: 'scrittura'; errore: unknown }
+  | { tipo: 'lenta'; attesaMs: number }
+  | { tipo: 'rilettura'; letto: string | null; atteso: string };
 
-  await Promise.race([
-    set,
-    new Promise<void>((risolvi) => {
-      const t = setTimeout(risolvi, attesaMs);
+/** Il minimo di un logger che serve qui: pino lo soddisfa così com'è. */
+interface LoggerLike {
+  error(oggetto: object, messaggio: string): void;
+  warn(oggetto: object, messaggio: string): void;
+}
+
+/**
+ * Il modo standard di raccontare un problema di dichiarazione nei log.
+ *
+ * Uno solo per tutti e quattro i processi. La prima versione di questo
+ * codice ne aveva quattro copie identiche, una per processo, e quattro
+ * copie di un messaggio diagnostico sono il modo in cui una smette di dire
+ * la stessa cosa delle altre.
+ */
+export function segnalaNelLog(logger: LoggerLike): (problema: ProblemaVersione) => void {
+  return (problema) => {
+    if (problema.tipo === 'scrittura') {
+      logger.error({ err: problema.errore }, 'versione non dichiarata: Redis ha rifiutato');
+    } else if (problema.tipo === 'lenta') {
+      logger.warn(
+        { attesaMs: problema.attesaMs },
+        'versione non ancora dichiarata: Redis non risponde, il comando resta in coda',
+      );
+    } else {
+      logger.error(
+        { letto: problema.letto, atteso: problema.atteso },
+        'versione scritta ma non rileggibile: il pannello dirà che questo processo è fermo',
+      );
+    }
+  };
+}
+
+/**
+ * Il valore della promessa, o `null` se il tetto scade prima.
+ *
+ * Il timer non tiene vivo il processo: un processo che sta uscendo non deve
+ * restare appeso a una diagnosi.
+ */
+function entroIlTetto<T>(promessa: Promise<T>, ms: number): Promise<{ valore: T } | null> {
+  return Promise.race([
+    promessa.then((valore) => ({ valore })),
+    new Promise<null>((risolvi) => {
+      const t = setTimeout(() => risolvi(null), ms);
       t.unref?.();
     }),
   ]);
+}
+
+/**
+ * Una scrittura sola: non solleva mai, non aspetta oltre il tetto, e dice
+ * cosa è andato storto invece di ingoiarlo.
+ *
+ * Restituisce `true` se la scrittura è arrivata a Redis entro il tetto.
+ */
+async function scrivi(
+  redis: RedisLike,
+  service: ServiceName,
+  attesaMs: number,
+  segnala?: (problema: ProblemaVersione) => void,
+): Promise<boolean> {
+  const set = redis
+    .set(RedisKeys.serviceVersion(service), runningVersion(), 'EX', VERSION_TTL_SEC)
+    .then(
+      () => true,
+      (errore: unknown) => {
+        segnala?.({ tipo: 'scrittura', errore });
+        return false;
+      },
+    );
+
+  /*
+   * Con Redis irraggiungibile ioredis non fallisce: accoda e tiene lì. La
+   * promessa non si risolve né si rifiuta, quindi «nessun errore» non vuol
+   * dire «scritto». Se allo scadere del tetto non è ancora finita, è quello
+   * che sta succedendo — e va detto, perché da fuori si vede solo un
+   * processo che risulta fermo.
+   */
+  const esito = await entroIlTetto(set, attesaMs);
+  if (esito === null) {
+    segnala?.({ tipo: 'lenta', attesaMs });
+    return false;
+  }
+  return esito.valore;
 }
 
 /**
@@ -76,14 +156,48 @@ async function scrivi(redis: RedisLike, service: ServiceName, attesaMs: number):
  * riesce solo a collegarsi. Sono due guasti diversi con due rimedi diversi:
  * ricreare il container non serve a niente se il token è sbagliato.
  */
-export function announceVersion(redis: RedisLike, service: ServiceName): Promise<void> {
+export async function announceVersion(
+  redis: RedisLike,
+  service: ServiceName,
+  segnala?: (problema: ProblemaVersione) => void,
+): Promise<void> {
   const timer = setInterval(() => {
-    void scrivi(redis, service, PRIMA_ATTESA_MS);
+    void scrivi(redis, service, PRIMA_ATTESA_MS, segnala);
   }, VERSION_HEARTBEAT_SEC * 1000);
   // Non deve tenere vivo il processo da solo.
   timer.unref?.();
 
-  return scrivi(redis, service, PRIMA_ATTESA_MS);
+  const riuscita = await scrivi(redis, service, PRIMA_ATTESA_MS, segnala);
+
+  /*
+   * La rilettura, solo la prima volta, e solo se la scrittura è arrivata.
+   *
+   * Scrivere senza errori non prova che il valore ci sia: può essere scaduto
+   * subito o tolto da qualcuno. Un GET in più all'avvio lo trasforma in una
+   * riga di log.
+   *
+   * Due limiti, detti per non fidarsi troppo di questa riga:
+   *
+   * • la rilettura passa **dalla stessa connessione** che ha scritto. Se il
+   *   processo è finito sul Redis sbagliato — il guasto della 1.31.0, due app
+   *   col servizio `redis` sulla stessa rete — la chiave la ritrova lì, e non
+   *   segnala niente. Quel caso lo vede solo il pannello;
+   *
+   * • ha il suo tetto di tempo. La prima versione non ce l'aveva: con Redis
+   *   muto il GET restava in coda per sempre, e nel bot questa funzione viene
+   *   attesa **prima** del collegamento a Discord. Era lo stesso blocco
+   *   all'avvio che si voleva diagnosticare.
+   */
+  if (!segnala || !riuscita) return;
+
+  const lettura = await entroIlTetto(
+    redis.get(RedisKeys.serviceVersion(service)).catch(() => null),
+    PRIMA_ATTESA_MS,
+  );
+  if (lettura === null) return;
+
+  const atteso = runningVersion();
+  if (lettura.valore !== atteso) segnala({ tipo: 'rilettura', letto: lettura.valore, atteso });
 }
 
 export interface ServiceVersions {
