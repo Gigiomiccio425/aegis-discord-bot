@@ -58,7 +58,7 @@ const log = childLogger('ruoli');
  * apposta — chi li vede capisce che li gestisce il bot e non li rinomina per
  * sbaglio. Gli altri sono i vestiti che si scelgono con `/crea-server`.
  */
-export type StileRuoli = 'TECNICO' | 'ANGELICO';
+export type StileRuoli = 'TECNICO' | 'ANGELICO' | 'YUYU';
 
 export const STILI: { chiave: StileRuoli; nome: string; descrizione: string }[] = [
   {
@@ -66,6 +66,13 @@ export const STILI: { chiave: StileRuoli; nome: string; descrizione: string }[] 
     nome: 'Tecnico',
     descrizione:
       'Nomi espliciti con il prefisso ANGEL. Si riconoscono a colpo d’occhio come ruoli del bot.',
+  },
+  {
+    chiave: 'YUYU',
+    nome: 'Yuyu',
+    descrizione:
+      'Come l’angioletto chiama chi la segue. Simboli minuti, tutto minuscolo, ' +
+      'e i membri verificati sono le «yuyu».',
   },
   {
     chiave: 'ANGELICO',
@@ -167,6 +174,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Non verificato', colore: '#6d7c94', separato: false },
       ANGELICO: { nome: '☁︎ In attesa', colore: '#6d7c94', separato: false },
+      YUYU: { nome: '⊹ senza ali', colore: '#6d7c94', separato: false },
     },
   },
   {
@@ -180,6 +188,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Quarantena', colore: '#8a8578', separato: false },
       ANGELICO: { nome: '⛆ Nube grigia', colore: '#8a8578', separato: false },
+      YUYU: { nome: '༄ piuma spezzata', colore: '#8a8578', separato: false },
     },
   },
   {
@@ -192,6 +201,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Verificato', colore: '#5fbf8b', separato: false },
       ANGELICO: { nome: '˚ʚ♡ɞ˚ Piumette', colore: '#e6ccff', separato: false },
+      YUYU: { nome: '⋆｡˚ yuyu ˚｡⋆', colore: '#e6ccff', separato: false },
     },
   },
   {
@@ -204,6 +214,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Guida', colore: '#fff6d5', separato: true },
       ANGELICO: { nome: '⋆｡°✩ Angelo Maggiore', colore: '#fff6d5', separato: true },
+      YUYU: { nome: '⟡ custode del cielo', colore: '#fff6d5', separato: true },
     },
   },
   {
@@ -224,6 +235,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Staff', colore: '#d8b45f', separato: true },
       ANGELICO: { nome: '☾ Ali Guardiane', colore: '#bfd8ff', separato: true },
+      YUYU: { nome: '✦ custodi', colore: '#bfd8ff', separato: true },
     },
   },
   {
@@ -236,6 +248,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Aiutanti', colore: '#c8f7dc', separato: true },
       ANGELICO: { nome: '✿ Piume', colore: '#c8f7dc', separato: true },
+      YUYU: { nome: '˖ ࣪ piccole ali', colore: '#c8f7dc', separato: true },
     },
   },
   {
@@ -248,6 +261,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Sostenitori', colore: '#ffd1dc', separato: true },
       ANGELICO: { nome: '♡ Nuvola d’oro', colore: '#ffd1dc', separato: true },
+      YUYU: { nome: 'ೀ yuyu d’oro', colore: '#ffd1dc', separato: true },
     },
   },
   {
@@ -260,6 +274,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Allerta', colore: '#e05263', separato: true },
       ANGELICO: { nome: '⚡ Sveglia le ali', colore: '#e05263', separato: true },
+      YUYU: { nome: '⚡ sveglia le nuvole', colore: '#e05263', separato: true },
     },
   },
   {
@@ -272,6 +287,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · In diretta', colore: '#9146ff', separato: false },
       ANGELICO: { nome: '✧ Luci accese', colore: '#9146ff', separato: false },
+      YUYU: { nome: '⭑ ora in volo', colore: '#9146ff', separato: false },
     },
   },
   {
@@ -284,6 +300,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Partecipa', colore: '#6f8a95', separato: false },
       ANGELICO: { nome: '✿ Ci sarò', colore: '#6f8a95', separato: false },
+      YUYU: { nome: '⊹ presente', colore: '#6f8a95', separato: false },
     },
   },
 
@@ -301,6 +318,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Avviso diretta', colore: '#9146ff', separato: false },
       ANGELICO: { nome: '⋆ Avviso diretta', colore: '#9146ff', separato: false },
+      YUYU: { nome: '☾ diretta in arrivo', colore: '#9146ff', separato: false },
     },
   },
   {
@@ -313,6 +331,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Avviso video', colore: '#ff6b6b', separato: false },
       ANGELICO: { nome: '✦ Avviso video', colore: '#ff6b6b', separato: false },
+      YUYU: { nome: '✦ video nuovo', colore: '#ff6b6b', separato: false },
     },
   },
   {
@@ -325,6 +344,7 @@ export const RUOLI: RuoloSpec[] = [
     vestiti: {
       TECNICO: { nome: 'ANGEL · Avviso eventi', colore: '#ffe9a8', separato: false },
       ANGELICO: { nome: '✧ Avviso eventi', colore: '#ffe9a8', separato: false },
+      YUYU: { nome: '⟡ serate insieme', colore: '#ffe9a8', separato: false },
     },
   },
 ];

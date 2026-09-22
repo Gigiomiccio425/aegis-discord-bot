@@ -88,7 +88,7 @@ interface CategoriaModello {
  * canali continuano a puntare al ruolo giusto, e chi lo aveva non perde nulla.
  */
 
-const MODELLO: CategoriaModello[] = [
+const NUVOLE: CategoriaModello[] = [
   {
     nome: '｡ﾟ☁︎ INIZIA DA QUI ☁︎ﾟ｡',
     descrizione: 'Le uniche cose che servono nei primi trenta secondi.',
@@ -229,14 +229,189 @@ const MODELLO: CategoriaModello[] = [
   },
 ];
 
-/** Il modello appiattito: serve ai test, che devono poterlo esaminare voce per voce. */
-export const CANALI_MODELLO = MODELLO.flatMap((categoria) =>
-  categoria.canali.map((canale) => ({ ...canale, categoria: categoria.nome })),
-);
+/*
+ * Il secondo modello: «yuyu».
+ *
+ * Stessa struttura — l'ordine in cui si incontrano le cose è quello che
+ * funziona, e non c'è motivo di cambiarlo — e stessi percorsi di
+ * configurazione. Cambia la voce: tutto minuscolo, simboli minuti al posto
+ * dei separatori grossi, e la community chiamata col suo nome. Chi segue
+ * yayadoppia è una «yuyu», e un server che lo dice nei ruoli e nelle
+ * categorie è un server dove si sa di essere nel posto giusto.
+ *
+ * Perché due modelli invece di uno configurabile: i nomi sono scelte di
+ * gusto, e un modello è una tavolozza coerente. Mescolarli a metà — una
+ * categoria di qua, un ruolo di là — dà un server che sembra costruito da
+ * due persone che non si sono parlate.
+ */
+const YUYU: CategoriaModello[] = [
+  {
+    nome: '⋆｡˚ COMINCIA QUI ˚｡⋆',
+    descrizione: 'Le uniche cose che servono nei primi trenta secondi.',
+    canali: [
+      {
+        nome: '🕊│regolamento',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'Poche regole, scritte chiare. Restare qui significa accettarle.',
+      },
+      {
+        nome: '✨│verifica',
+        tipo: 'testo',
+        argomento: 'Un pulsante, e il server si apre. Serve a tenere fuori i bot.',
+        percorsi: ['security.verification.verifyChannelId'],
+      },
+      {
+        nome: '📢│annunci',
+        tipo: 'annunci',
+        soloLettura: true,
+        argomento: 'Novità importanti. Si può seguire da altri server.',
+      },
+      {
+        nome: '🎀│prendi-i-ruoli',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'Scegli cosa vuoi che ti venga notificato.',
+      },
+      {
+        nome: '🫧│presentati',
+        tipo: 'testo',
+        lento: 30,
+        argomento: 'Chi sei, cosa ti piace, come sei arrivata qui.',
+      },
+    ],
+  },
+  {
+    nome: '⊹ ࣪ ˖ CIELO ˖ ࣪ ⊹',
+    descrizione: 'Pochi canali, e pieni. Venti canali vuoti scoraggiano più di una chat affollata.',
+    canali: [
+      { nome: '💬│chiacchiere', tipo: 'testo', argomento: 'Il canale principale. Si parla di tutto.' },
+      { nome: '🍓│fuori-tema', tipo: 'testo', argomento: 'Quando la conversazione va altrove.' },
+      {
+        nome: '🖼│scatti-e-arte',
+        tipo: 'testo',
+        argomento: 'Disegni, foto, fan art. Metti il credito a chi l’ha fatto.',
+      },
+      { nome: '🎮│giochi', tipo: 'testo', argomento: 'Cosa state giocando, e con chi.' },
+      { nome: '🎧│musica', tipo: 'testo', argomento: 'Quello che avete in cuffia adesso.' },
+    ],
+  },
+  {
+    nome: '⭑ ˚｡⋆ IN VOLO ⋆｡˚ ⭑',
+    descrizione: 'Tutto ciò che il bot pubblica da solo: dirette, clip, video, eventi.',
+    canali: [
+      {
+        nome: '🔴│in-diretta',
+        tipo: 'annunci',
+        soloLettura: true,
+        argomento: 'Quando la diretta comincia, l’avviso arriva qui.',
+      },
+      {
+        nome: '✂│clip',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'I momenti migliori, raccolti automaticamente.',
+      },
+      {
+        nome: '▶│video-nuovi',
+        tipo: 'annunci',
+        soloLettura: true,
+        argomento: 'Ogni caricamento su YouTube.',
+      },
+      {
+        nome: '📰│dal-web',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'Feed seguiti: blog, novità, uscite.',
+      },
+      {
+        nome: '🗓│eventi',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'Serate insieme, giochi, ospiti. Con promemoria.',
+      },
+    ],
+  },
+  {
+    nome: 'ೀ ⊹ LE YUYU ⊹ ೀ',
+    descrizione: 'Le cose che la community fa, non che le vengono dette.',
+    canali: [
+      {
+        nome: '⭐│bacheca',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'I messaggi più apprezzati finiscono qui, scelti da voi con una reazione.',
+        percorsi: ['integrations.starboard.channelId'],
+      },
+      { nome: '🗳│sondaggi', tipo: 'testo', argomento: 'Domande alla community.' },
+      {
+        nome: '🎁│giveaway',
+        tipo: 'testo',
+        soloLettura: true,
+        argomento: 'Regali e sorteggi. Si partecipa con un pulsante.',
+      },
+      {
+        nome: '💡│suggerimenti',
+        tipo: 'forum',
+        argomento: 'Idee per il server. Ogni proposta è una discussione a sé.',
+      },
+    ],
+  },
+  {
+    nome: '⟡ ˚ VOCI ˚ ⟡',
+    descrizione: 'Vocali, dal salotto al palco.',
+    canali: [
+      { nome: '⟡ nuvola', tipo: 'vocale' },
+      { nome: '🎧 ascolti', tipo: 'vocale' },
+      { nome: '🎮 partita', tipo: 'vocale' },
+      { nome: '🛋 pausa', tipo: 'vocale' },
+    ],
+  },
+  {
+    nome: '✦ CUSTODI ✦',
+    descrizione: 'Riservata. I membri non la vedono.',
+    riservata: true,
+    canali: [
+      {
+        nome: '🔔│aggiornamenti-server',
+        tipo: 'testo',
+        riservato: true,
+        argomento: 'Discord scrive qui le comunicazioni per i server community.',
+      },
+      { nome: '💬│custodi', tipo: 'testo', riservato: true, argomento: 'Coordinamento fra moderatori.' },
+      { nome: '🗒│note-interne', tipo: 'testo', riservato: true, argomento: 'Decisioni, casi aperti, promemoria.' },
+      { nome: '🔒 riunione', tipo: 'vocale', riservato: true },
+    ],
+  },
+];
 
-/** I nomi dei ruoli del modello, per il controllo dei doppioni. */
-/** I nomi che i ruoli assumono con questo modello. Per i test e per la documentazione. */
-export const RUOLI_MODELLO_NOMI = RUOLI.map((ruolo) => ruolo.vestiti.ANGELICO.nome);
+/**
+ * I modelli disponibili, con lo stile dei ruoli che li accompagna.
+ *
+ * Le chiavi sono quelle dello stile perché i due vanno insieme: un server con
+ * le categorie «yuyu» e i ruoli «Ali Guardiane» sarebbe mezzo e mezzo.
+ */
+export const MODELLI = { ANGELICO: NUVOLE, YUYU } as const;
+
+export type NomeModello = keyof typeof MODELLI;
+
+/** I modelli appiattiti: servono ai test, che devono esaminarli voce per voce. */
+export const CANALI_PER_MODELLO = Object.fromEntries(
+  Object.entries(MODELLI).map(([nome, categorie]) => [
+    nome,
+    categorie.flatMap((categoria) =>
+      categoria.canali.map((canale) => ({ ...canale, categoria: categoria.nome })),
+    ),
+  ]),
+) as Record<NomeModello, (CanaleModello & { categoria: string })[]>;
+
+/** I nomi che i ruoli assumono, per modello. Per i test e per la documentazione. */
+export const RUOLI_PER_MODELLO = Object.fromEntries(
+  (Object.keys(MODELLI) as NomeModello[]).map((nome) => [
+    nome,
+    RUOLI.map((ruolo) => ruolo.vestiti[nome].nome),
+  ]),
+) as Record<NomeModello, string[]>;
 
 export interface EsitoModello {
   categorieCreate: string[];
@@ -266,6 +441,7 @@ export async function costruisciModello(
   guild: Guild,
   config: GuildConfig,
   attore: string,
+  modello: NomeModello = 'ANGELICO',
 ): Promise<EsitoModello> {
   const esito: EsitoModello = {
     categorieCreate: [],
@@ -304,7 +480,7 @@ export async function costruisciModello(
    * bot che distribuisce poteri da solo appena entra e uno che li dà quando
    * qualcuno ha detto che tipo di server vuole.
    */
-  const stile = await applicaStile(guild, bozza, 'ANGELICO', {
+  const stile = await applicaStile(guild, bozza, modello, {
     crea: true,
     permessi: true,
     attore,
@@ -317,15 +493,15 @@ export async function costruisciModello(
 
   // Lo stile si ricorda: senza, la predisposizione successiva rimetterebbe i
   // nomi tecnici, e i ruoli ballerebbero fra i due nomi a ogni riavvio.
-  if (bozza.general.stileRuoli !== 'ANGELICO') {
-    bozza.general.stileRuoli = 'ANGELICO';
+  if (bozza.general.stileRuoli !== modello) {
+    bozza.general.stileRuoli = modello;
     modificati.push('general.stileRuoli');
   }
 
   /* ── Categorie e canali ────────────────────────────────────── */
   const staff = bozza.general.staffRoleIds.filter((id) => guild.roles.cache.has(id));
 
-  for (const categoria of MODELLO) {
+  for (const categoria of MODELLI[modello]) {
     const contenitore = await assicuraCategoria(guild, categoria, staff, esito, attore);
     if (!contenitore) continue;
 

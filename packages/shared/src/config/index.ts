@@ -250,7 +250,7 @@ export const GeneralConfig = z
      * questo campo dice al bot come deve chiamarsi adesso, così una
      * riesecuzione della predisposizione non lo riporta al nome tecnico.
      */
-    stileRuoli: z.enum(['TECNICO', 'ANGELICO']).default('TECNICO'),
+    stileRuoli: z.enum(['TECNICO', 'ANGELICO', 'YUYU']).default('TECNICO'),
 
     /**
      * Parola d'ordine dello staff, verificabile con `/verifica-staff`.

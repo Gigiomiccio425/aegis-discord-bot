@@ -88,9 +88,11 @@ export const BY_PATH: Record<string, FieldDoc> = {
     label: 'Stile dei nomi dei ruoli',
     help:
       'Come si chiamano i ruoli gestiti dal bot. **Tecnico**: nomi espliciti con il prefisso ' +
-      "ANGEL, riconoscibili a colpo d'occhio. **Angelico**: nuvole, piume e caratteri speciali, " +
-      'lo stile del modello di server. Cambiarlo rinomina i ruoli che esistono senza ricrearli: ' +
-      'chi li aveva li mantiene, i permessi sui canali restano dove sono.',
+      "ANGEL, riconoscibili a colpo d'occhio. **Angelico**: nuvole, piume e caratteri speciali. " +
+      '**Yuyu**: tutto minuscolo con simboli minuti, e i verificati si chiamano «yuyu» come la ' +
+      'community. Gli ultimi due corrispondono ai due modelli di server. Cambiare stile rinomina ' +
+      'i ruoli che esistono senza ricrearli: chi li aveva li mantiene, i permessi sui canali ' +
+      'restano dove sono.',
   },
   'security.links.linkChannelIds': {
     label: 'Canali dove i link sono ammessi',

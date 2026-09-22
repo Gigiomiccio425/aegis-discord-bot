@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGuildConfig } from '@angel/shared';
-import { CANALI_MODELLO, RUOLI_MODELLO_NOMI } from '../modello.js';
+import { CANALI_PER_MODELLO, MODELLI, RUOLI_PER_MODELLO, type NomeModello } from '../modello.js';
 
 /*
  * Il modello crea decine di canali e ne scrive gli ID nella configurazione.
@@ -19,8 +19,17 @@ function esiste(config: Record<string, unknown>, percorso: string): boolean {
   );
 }
 
-describe('modello del server', () => {
+const MODELLI_CHIAVI = Object.keys(MODELLI) as NomeModello[];
+
+/*
+ * I controlli valgono per ogni modello: aggiungerne uno senza ripassare da
+ * qui è esattamente il modo in cui il secondo prende un difetto che il primo
+ * non aveva.
+ */
+describe.each(MODELLI_CHIAVI)('modello del server (%s)', (nome) => {
   const config = defaultGuildConfig() as unknown as Record<string, unknown>;
+  const CANALI_MODELLO = CANALI_PER_MODELLO[nome];
+  const RUOLI_MODELLO_NOMI = RUOLI_PER_MODELLO[nome];
 
   it('scrive solo su campi di configurazione che esistono', () => {
     const inventati = CANALI_MODELLO.flatMap((canale) => canale.percorsi ?? []).filter(
