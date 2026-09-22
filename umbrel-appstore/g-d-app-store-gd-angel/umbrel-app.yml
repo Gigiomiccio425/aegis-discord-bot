@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.3"
+version: "1.31.4"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,33 +65,45 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Sicurezza dei pannelli, e un secondo modello di server.
+  Il lockdown chiude anche le chat delle vocali, e non perde più i permessi
+  dei ruoli.
 
 
-  - **Chi perde «Gestisci server» perde anche il pannello.** Prima un
-    moderatore retrocesso o uscito dal server restava ADMIN — lockdown,
-    configurazione, archivio dei messaggi — finché qualcuno non se ne
-    accorgeva. Ora l'accesso dato in automatico si revoca appena il
-    permesso sparisce. Quelli dati a mano da un proprietario restano.
+  - **Vocali, palchi e canali media.** Il lockdown ora chiude anche le loro
+    chat. Nelle vocali si toglie solo la scrittura: parlare e collegarsi
+    restano, perché buttare fuori chi sta parlando con lo staff non ferma
+    un raid.
 
-  - **Il pannello degli streamer non può scrivere su quello Discord.** Una
-    pagina della porta 781, quella pensata per Internet, poteva mandare
-    comandi alla 780 con i cookie di chi la usa. Ora quelle richieste si
-    rifiutano. Il pannello aperto con l'indirizzo IP funziona come prima.
+  - **Un ruolo con «Invia messaggi» non scavalca più il blocco.** Per la
+    durata del lockdown quei permessi tornano a «eredita», e alla revoca
+    vengono rimessi. Staff, ruoli di moderazione e integrazioni non si
+    toccano.
 
-  - **Il limite di frequenza limita davvero.** Si fidava di qualunque
-    indirizzo scritto nella richiesta; ora solo del proxy di umbrelOS.
+  - **E se l'Umbrel si spegne di colpo durante un blocco,** l'elenco dei
+    permessi da rimettere non si perde: sta anche nel database. Prima
+    stava solo in Redis, e uno spegnimento brusco se lo portava via.
 
-  - **Il pannello Twitch:** uscire, togliere un accesso e staccare un canale
-    non avevano mai funzionato. Ora sì.
+  - **Dice cosa non ha chiuso.** Al posto di «Canali chiusi: 0» e basta,
+    ogni canale non modificato è elencato col motivo — nel comando, nel
+    pannello e nel registro.
 
-  - **Il modello «yuyu» per `/crea-server`:** tutto minuscolo, simboli
-    minuti, i membri verificati si chiamano `⋆｡˚ yuyu ˚｡⋆`. Si usa solo
-    scegliendolo; i server esistenti restano come sono.
+  - **La modalità prova vale anche per l'anti-raid.** Prima, con la prova
+    accesa, un raid rilevato faceva partire davvero lockdown e cancello di
+    verifica: il periodo pensato per tarare le soglie senza danni poteva
+    chiudere il server per un falso positivo.
+
+  - **Seconda linea:** chi riesce comunque a scrivere in un canale chiuso si
+    vede il messaggio rimosso, tranne lo staff e i ticket.
 
 
-  Il lockdown non chiude ancora le chat dei canali vocali: arriva nella
-  prossima versione, da solo.
+  Da provare dopo l'aggiornamento: un «Lockdown 15 min» dal pannello, poi
+  guarda le chat delle vocali, e dopo la revoca controlla che i ruoli
+  scrivano di nuovo dove scrivevano prima.
+
+
+  Dalla 1.31.3: chi perde «Gestisci server» perde anche il pannello, il
+  pannello degli streamer non può scrivere su quello Discord, e il modello
+  di server «yuyu».
 
 
   Dalla 1.31.2: il contatore delle minacce conta solo le minacce vere, il
