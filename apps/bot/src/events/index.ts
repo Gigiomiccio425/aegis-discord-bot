@@ -16,6 +16,7 @@ import { registerAuditLogEvents } from './auditLog.js';
 import { registerInviteEvents, primeInviteCache } from './invites.js';
 import { registerInteractionEvents } from './interactions.js';
 import { registraInventario } from '../core/inventory.js';
+import { registraRevocheAccesso } from '../security/accessoPannello.js';
 import { deployGuildCommands } from '../scripts/deployCommands.js';
 import { getPrisma } from '@angel/db';
 
@@ -31,6 +32,7 @@ export function registerAllEvents(client: Client): void {
   registerInviteEvents(client);
   registerInteractionEvents(client);
   registraInventario(client);
+  registraRevocheAccesso(client);
 
   client.once(Events.ClientReady, (readyClient) => {
     void onReady(readyClient).catch((error) => log.error({ err: error }, 'avvio fallito'));

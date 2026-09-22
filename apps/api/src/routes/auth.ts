@@ -17,6 +17,9 @@ import {
 import { getRedis } from '../redis.js';
 import { logger } from '../logger.js';
 
+/** Lo stato del flusso OAuth, legato al browser che lo ha avviato. */
+const STATO_COOKIE = 'angel_oauth';
+
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Avvio del flusso OAuth.
@@ -43,6 +46,24 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     if (!scritto) return reply.redirect('/?errore=redis_non_disponibile');
 
+    /*
+     * Lo stato anche in un cookie, oltre che in Redis.
+     *
+     * In Redis dice «questo flusso l'ho avviato io»; nel cookie dice «l'ho
+     * avviato in questo browser». Senza il cookie, chi avvia un accesso col
+     * proprio account può far aprire alla vittima l'indirizzo di ritorno e
+     * farla entrare nel proprio pannello, con i propri server: non ruba
+     * niente, ma le fa credere di guardare il suo.
+     */
+    void reply.setCookie(STATO_COOKIE, state, {
+      httpOnly: true,
+      secure: (process.env.PUBLIC_URL ?? '').startsWith('https://'),
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 600,
+      signed: true,
+    });
+
     return reply.redirect(authorizeUrl(state));
   });
 
@@ -53,6 +74,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       if (error) return reply.redirect('/?errore=accesso_negato');
       if (!code || !state) return reply.redirect('/?errore=parametri_mancanti');
+
+      const dalCookie = request.cookies[STATO_COOKIE];
+      const statoAtteso = dalCookie ? request.unsignCookie(dalCookie) : null;
+      void reply.clearCookie(STATO_COOKIE, { path: '/' });
+      if (!statoAtteso?.valid || statoAtteso.value !== state) {
+        return reply.redirect('/?errore=stato_non_valido');
+      }
 
       const redis = getRedis();
       const valid = await redis.del(`oauth:state:${state}`).catch(() => -1);
@@ -95,6 +123,26 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       );
 
       const prisma = getPrisma();
+
+      /*
+       * Prima si toglie, poi si dà.
+       *
+       * Un accesso concesso automaticamente vale finché su Discord vale il
+       * permesso che lo ha prodotto. Prima non veniva mai revocato: chi era
+       * stato retrocesso restava ADMIN sul pannello, e bastava rientrare per
+       * ritrovare tutto. Gli accessi dati a mano da un proprietario
+       * (`grantedBy` con il suo ID) non si toccano: sono una scelta.
+       */
+      await prisma.panelAccess
+        .deleteMany({
+          where: {
+            userId: user.id,
+            grantedBy: 'system',
+            guildId: { notIn: managed.map((guild) => guild.id) },
+          },
+        })
+        .catch(() => undefined);
+
       // Il primo accesso di chi amministra un server gli assegna il ruolo ADMIN
       // sul pannello, ma solo per i server dove il bot è presente.
       for (const guild of managed) {

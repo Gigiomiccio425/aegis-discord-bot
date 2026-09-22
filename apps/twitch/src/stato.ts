@@ -230,6 +230,46 @@ export class Registro {
     void this.salvaSuDisco();
   }
 
+  /**
+   * Riallinea configurazione e server Discord con il database.
+   *
+   * Il processo Twitch legge i canali all'avvio e poi lavora in memoria. Ma
+   * c'è chi scrive nel database da fuori: `/twitch bot registro` su Discord
+   * imposta dove mandare gli avvisi. Senza questo, quella scelta non arrivava
+   * mai qui finché il processo non ripartiva — e il primo `!angel livello` in
+   * chat riscriveva nel database la copia in memoria, cancellandola.
+   *
+   * Non si tocca niente in modalità autonoma: senza database, la copia in
+   * memoria è l'unica che c'è.
+   */
+  async riallinea(soloId?: string): Promise<number> {
+    if (this.autonomo) return 0;
+    const ids = soloId ? [soloId] : [...this.canali.keys()];
+    if (ids.length === 0) return 0;
+
+    const righe = await getPrisma().twitchChannel.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, config: true, guildId: true },
+    });
+
+    let cambiati = 0;
+    for (const riga of righe) {
+      const canale = this.canali.get(riga.id);
+      if (!canale) continue;
+      const config = leggiConfig(riga.config);
+      if (
+        JSON.stringify(config) !== JSON.stringify(canale.config) ||
+        canale.guildId !== riga.guildId
+      ) {
+        canale.config = config;
+        canale.guildId = riga.guildId;
+        cambiati += 1;
+      }
+    }
+    if (cambiati > 0) void this.salvaSuDisco();
+    return cambiati;
+  }
+
   rimuovi(id: string): void {
     const canale = this.canali.get(id);
     if (!canale) return;

@@ -10,6 +10,7 @@ export * from './version.js';
 export * from './env.js';
 export * from './segreti.js';
 export * from './sorveglia.js';
+export * from './sicurezzaWeb.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
 export const RedisKeys = {
@@ -29,6 +30,12 @@ export const RedisKeys = {
   commandChannel: 'aegis:command',
   /** Canale pub/sub per il feed live verso il pannello. */
   eventChannel: 'aegis:events',
+  /**
+   * La configurazione di un canale Twitch è cambiata fuori dal processo
+   * Twitch — da `/twitch bot registro` su Discord. Il messaggio è l'ID del
+   * canale. Se va perso, il riallineamento periodico lo recupera.
+   */
+  twitchConfigChannel: 'aegis:twitch:config',
 
   joinWindow: (guildId: string) => `raid:joins:${guildId}`,
   raidState: (guildId: string) => `raid:state:${guildId}`,

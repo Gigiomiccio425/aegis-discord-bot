@@ -10,7 +10,13 @@ import websocket from '@fastify/websocket';
 import { disconnectPrisma, getPrisma } from '@angel/db';
 import { logger, loggerOptions } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
-import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
+import {
+  announceVersion,
+  proxyFidati,
+  richiestaDaAltraOrigine,
+  runningVersion,
+  segnalaNelLog,
+} from '@angel/shared';
 import { authRoutes } from './routes/auth.js';
 import { configRoutes } from './routes/config.js';
 import { logRoutes } from './routes/logs.js';
@@ -107,9 +113,10 @@ async function main(): Promise<void> {
 
   const app = Fastify({
     logger: loggerOptions,
-    // Dietro Caddy l'IP reale arriva negli header: senza questo, il rate limit
-    // vedrebbe un solo client per tutti.
-    trustProxy: true,
+    // Dietro un proxy l'IP reale arriva negli header: senza, il rate limit
+    // vedrebbe un solo client per tutti. Ma solo dai proxy su rete privata —
+    // il perché è in `proxyFidati`.
+    trustProxy: proxyFidati(process.env.TRUST_PROXY),
     // 32 MB: un rientro dal nodo di emergenza porta con se ore di registro, e
     // rifiutarlo per dimensione significherebbe perdere proprio i dati che si
     // stava cercando di salvare.
@@ -121,20 +128,40 @@ async function main(): Promise<void> {
    * riserializzare il JSON dopo il parsing cambia gli spazi e la firma non
    * corrisponde più. Si conserva quindi il testo originale prima di analizzarlo.
    */
+  //
+  // Il parsing lo fa il parser di Fastify, non `JSON.parse`: è quello che
+  // rifiuta le chiavi `__proto__` e `constructor.prototype`, e con il parsing
+  // a mano quella protezione era andata persa.
+  const parserPredefinito = app.getDefaultJsonParser('error', 'error');
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'string' },
     (request: FastifyRequest & { rawBody?: string }, body, done) => {
       request.rawBody = body as string;
-      try {
-        done(null, body ? JSON.parse(body as string) : {});
-      } catch (error) {
-        done(error as Error, undefined);
+      if (!body) {
+        done(null, {});
+        return;
       }
+      parserPredefinito(request, body as string, done);
     },
   );
 
   await app.register(cookie, { secret: sessionSecret });
+
+  /*
+   * Richieste forgiate da un'altra origine.
+   *
+   * Il cookie `SameSite=Lax` protegge dagli altri siti, non dalle altre
+   * porte della stessa macchina: il pannello degli streamer, esposto a
+   * Internet, per il browser è lo stesso sito. Il browser dice da dove parte
+   * ogni richiesta, e una pagina non può falsificarlo.
+   */
+  app.addHook('onRequest', async (request, reply) => {
+    if (!request.url.startsWith('/api/')) return;
+    if (richiestaDaAltraOrigine(request.method, request.headers['sec-fetch-site'])) {
+      await reply.code(403).send({ error: 'richiesta da un’altra origine rifiutata' });
+    }
+  });
 
   await app.register(rateLimit, {
     global: true,

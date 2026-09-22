@@ -129,7 +129,7 @@ services:
       #    chat ma non può scrivere: per parlare serve una bocca.
       #
       #    Per ottenere i quattro valori qui sotto **non serve fare niente a
-      #    mano**: metti una parola qualsiasi in TWITCH_SETUP_KEY, riavvia, e
+      #    mano**: metti in TWITCH_SETUP_KEY almeno 16 caratteri (openssl rand -hex 16), riavvia, e
       #    apri dal browser dell'account bot
       #
       #        TWITCH_PUBLIC_URL/api/auth/bot?chiave=LA_PAROLA

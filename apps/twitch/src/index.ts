@@ -30,7 +30,7 @@
 
 import 'dotenv/config';
 import { disconnectPrisma, getPrisma } from '@angel/db';
-import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
+import { announceVersion, RedisKeys, runningVersion, segnalaNelLog } from '@angel/shared';
 import { logger } from './logger.js';
 import { closeRedis, getRedis } from './redis.js';
 import { Motore } from './motore.js';
@@ -93,6 +93,21 @@ async function main(): Promise<void> {
   await motore.avvia();
 
   /*
+   * Chi cambia la configurazione di un canale da fuori — il bot Discord con
+   * `/twitch bot registro` — lo annuncia qui, e il canale si rilegge subito.
+   * Connessione a parte: una connessione in ascolto non può fare altro.
+   */
+  const ascolto = getRedis().duplicate();
+  ascolto.on('error', (errore: Error) => logger.debug({ err: errore }, 'ascolto configurazione'));
+  await ascolto.subscribe(RedisKeys.twitchConfigChannel).catch((errore: unknown) =>
+    logger.warn({ err: errore }, 'ascolto delle modifiche esterne non avviato: resta il giro periodico'),
+  );
+  ascolto.on('message', (canale: string, id: string) => {
+    if (canale !== RedisKeys.twitchConfigChannel) return;
+    void motore.registro.riallinea(id).catch(() => undefined);
+  });
+
+  /*
    * Il pannello dopo, e in un `catch` che non propaga.
    *
    * È la riga che mantiene la promessa: qualunque cosa vada storta qui —
@@ -119,6 +134,7 @@ async function main(): Promise<void> {
   const spegni = async (segnale: string): Promise<void> => {
     logger.info({ segnale }, 'spegnimento');
     await pannello?.close().catch(() => undefined);
+    ascolto.disconnect();
     await motore.ferma();
     await closeRedis();
     await disconnectPrisma();
