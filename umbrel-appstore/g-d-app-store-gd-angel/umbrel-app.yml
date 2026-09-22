@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.2"
+version: "1.31.3"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,28 +65,38 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Il pannello dice cose vere, e quando qualcosa si blocca lo dice anche lui.
+  Sicurezza dei pannelli, e un secondo modello di server.
 
 
-  - **«512 minacce oggi» non c'è più.** Il contatore contava tutta la
-    categoria sicurezza, dentro cui stanno anche gli snapshot e i lockdown
-    che ANGEL fa da solo. Ora conta solo le minacce vere: un numero che
-    parte da cinquecento non fa notare niente, e una minaccia vera ci si
-    perdeva dentro.
+  - **Chi perde «Gestisci server» perde anche il pannello.** Prima un
+    moderatore retrocesso o uscito dal server restava ADMIN — lockdown,
+    configurazione, archivio dei messaggi — finché qualcuno non se ne
+    accorgeva. Ora l'accesso dato in automatico si revoca appena il
+    permesso sparisce. Quelli dati a mano da un proprietario restano.
 
-  - **Il worker non risulta più «fermo» mentre lavora.** I dieci lavori in
-    coda aspettavano tutti sulla stessa connessione a Redis con cui il
-    worker dichiara di essere vivo, e la dichiarazione poteva arrivare
-    troppo tardi. Ora ognuno ha la sua.
+  - **Il pannello degli streamer non può scrivere su quello Discord.** Una
+    pagina della porta 781, quella pensata per Internet, poteva mandare
+    comandi alla 780 con i cookie di chi la usa. Ora quelle richieste si
+    rifiutano. Il pannello aperto con l'indirizzo IP funziona come prima.
 
-  - **Quando un processo risulta «fermo», i log dicono perché.** Se Redis
-    rifiuta la dichiarazione, se non risponde, o se il ciclo degli eventi
-    del bot resta bloccato per più di due secondi, c'è una riga che lo
-    dice. Prima quei casi erano identici: la chiave mancava e basta.
+  - **Il limite di frequenza limita davvero.** Si fidava di qualunque
+    indirizzo scritto nella richiesta; ora solo del proxy di umbrelOS.
+
+  - **Il pannello Twitch:** uscire, togliere un accesso e staccare un canale
+    non avevano mai funzionato. Ora sì.
+
+  - **Il modello «yuyu» per `/crea-server`:** tutto minuscolo, simboli
+    minuti, i membri verificati si chiamano `⋆｡˚ yuyu ˚｡⋆`. Si usa solo
+    scegliendolo; i server esistenti restano come sono.
 
 
-  Il lockdown non chiude ancora le chat dei canali vocali: arriva in una
-  prossima versione.
+  Il lockdown non chiude ancora le chat dei canali vocali: arriva nella
+  prossima versione, da solo.
+
+
+  Dalla 1.31.2: il contatore delle minacce conta solo le minacce vere, il
+  worker non risulta più «fermo» mentre lavora, e quando un processo
+  risulta fermo i log dicono perché.
 
 
   Dalla 1.31.1: i comandi del pannello tornano ad arrivare al bot.
