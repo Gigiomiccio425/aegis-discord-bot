@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { getPrisma, disconnectPrisma } from '@angel/db';
-import { announceVersion, segnalaNelLog, runningVersion } from '@angel/shared';
+import {
+  announceVersion,
+  runningVersion,
+  segnalaNelLog,
+  sorvegliaCicloEventi,
+} from '@angel/shared';
 import { ascoltaComandiDalPannello } from './core/ascoltoPannello.js';
 import { createClient } from './core/client.js';
 import { logger } from './core/logger.js';
@@ -46,6 +51,23 @@ async function main(): Promise<void> {
   // millisecondi, la scrittura resta per strada, e il pannello dice «non
   // risponde» a un container che invece c'è.
   await announceVersion(getRedis(), 'bot', segnalaNelLog(logger));
+
+  /*
+   * Il cronometro del ciclo degli eventi.
+   *
+   * Se il bot risulta «fermo» al pannello mentre il processo è vivo, le
+   * cause possibili sono due e dai log erano identiche: Redis che non accetta
+   * le scritture, oppure il ciclo degli eventi bloccato, che non fa partire
+   * nemmeno il battito. La prima la racconta `segnalaNelLog`. Questa è la
+   * seconda.
+   */
+  sorvegliaCicloEventi((ritardo) => {
+    logger.warn(
+      { ritardoMs: Math.round(ritardo.ritardoMs) },
+      'ciclo degli eventi bloccato: per tutto quel tempo il bot non ha potuto fare niente, ' +
+        'battito compreso. Il pannello lo dà per fermo',
+    );
+  });
 
   subscribeConfigInvalidation();
 

@@ -9,6 +9,7 @@ export * from './util/template.js';
 export * from './version.js';
 export * from './env.js';
 export * from './segreti.js';
+export * from './sorveglia.js';
 
 /** Chiavi Redis, centralizzate per evitare collisioni fra bot, api e worker. */
 export const RedisKeys = {
