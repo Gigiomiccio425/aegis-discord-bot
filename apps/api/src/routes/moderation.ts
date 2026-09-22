@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getPrisma, serializeBigInt } from '@angel/db';
 import { requireGuild } from '../guard.js';
-import { sendBotCommand } from '../redis.js';
+import { botNonInAscolto, sendBotCommand } from '../redis.js';
 
 export async function moderationRoutes(app: FastifyInstance): Promise<void> {
   /* ── Casi ──────────────────────────────────────────────────────────── */
@@ -154,11 +154,12 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'automod.sync',
         guildId: context.guildId,
         actorId: context.user.id,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -229,13 +230,14 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'lockdown.enable',
         guildId: context.guildId,
         actorId: context.user.id,
         reason: request.body?.reason ?? `Lockdown richiesto da ${context.user.tag}`,
         durationSec: (request.body?.minutes ?? 0) * 60,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -246,11 +248,12 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'lockdown.disable',
         guildId: context.guildId,
         actorId: context.user.id,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -261,12 +264,13 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'quarantine.lift',
         guildId: context.guildId,
         actorId: context.user.id,
         userId: request.params.userId,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -278,13 +282,14 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
     const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
     if (!context) return;
 
-    await sendBotCommand({
+    const ricevuto = await sendBotCommand({
       action: 'quarantine.apply',
       guildId: context.guildId,
       actorId: context.user.id,
       userId: request.params.userId,
       reason: request.body?.reason ?? `Quarantena decisa da ${context.user.tag}`,
     });
+    if (!ricevuto) return botNonInAscolto(reply);
     return { ok: true };
   });
 
@@ -299,11 +304,12 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'server.setup',
         guildId: context.guildId,
         actorId: context.user.id,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -349,7 +355,7 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
     const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
     if (!context) return;
 
-    await sendBotCommand({
+    const ricevuto = await sendBotCommand({
       action: 'watch.add',
       guildId: context.guildId,
       actorId: context.user.id,
@@ -357,6 +363,7 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       reason: request.body?.reason ?? `Sorveglianza avviata da ${context.user.tag}`,
       hours: Math.min(Math.max(request.body?.hours ?? 0, 0), 8760),
     });
+    if (!ricevuto) return botNonInAscolto(reply);
     return { ok: true };
   });
 
@@ -366,12 +373,13 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       const context = await requireGuild(request, reply, request.params.guildId, 'MOD');
       if (!context) return;
 
-      await sendBotCommand({
+      const ricevuto = await sendBotCommand({
         action: 'watch.remove',
         guildId: context.guildId,
         actorId: context.user.id,
         userId: request.params.userId,
       });
+      if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true };
     },
   );
@@ -409,7 +417,7 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
         .send({ error: 'il link deve essere https e puntare a un\'immagine o a una GIF' });
     }
 
-    await sendBotCommand({
+    const ricevuto = await sendBotCommand({
       action: 'message.send',
       guildId: context.guildId,
       actorId: context.user.id,
@@ -420,6 +428,7 @@ export async function moderationRoutes(app: FastifyInstance): Promise<void> {
       title: body.title ?? null,
       editMessageId: body.editMessageId ?? null,
     });
+    if (!ricevuto) return botNonInAscolto(reply);
     return { ok: true };
   });
 

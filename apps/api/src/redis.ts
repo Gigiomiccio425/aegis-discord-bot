@@ -1,3 +1,4 @@
+import type { FastifyReply } from 'fastify';
 import { Redis } from 'ioredis';
 import { RedisKeys } from '@angel/shared';
 import { logger } from './logger.js';
@@ -63,4 +64,26 @@ export async function sendBotCommand(command: Record<string, unknown>): Promise<
   }
 
   return ricevitori;
+}
+
+/**
+ * Il testo per chi ha premuto un pulsante il cui comando non è arrivato a
+ * nessuno. Dice cosa è successo e cosa fare, non solo che è andata male.
+ */
+export const BOT_NON_IN_ASCOLTO =
+  'Il bot non ha ricevuto il comando: non è in ascolto in questo momento. ' +
+  'Riprova fra poco; se continua, guarda nei log del container se il bot è collegato.';
+
+/**
+ * La risposta per un comando che nessuno ha ricevuto.
+ *
+ * Prima il pannello rispondeva «fatto» comunque: è così che per settimane
+ * lockdown e backup sono sembrati eseguiti senza che succedesse niente. Si
+ * usa solo nelle rotte in cui il comando **è** l'azione. Dove parte dopo un
+ * salvataggio già riuscito — la configurazione, i comandi personalizzati —
+ * un errore farebbe sembrare fallito un salvataggio andato bene, e lì basta
+ * la riga di log di `sendBotCommand`.
+ */
+export function botNonInAscolto(reply: FastifyReply): FastifyReply {
+  return reply.code(503).send({ error: BOT_NON_IN_ASCOLTO });
 }
