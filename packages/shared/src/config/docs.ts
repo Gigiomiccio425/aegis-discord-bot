@@ -84,6 +84,29 @@ export const BY_PATH: Record<string, FieldDoc> = {
       'nessun software distingue un deepfake vocale, una parola concordata in anticipo sì.',
   },
   'general.locale': { label: 'Lingua', help: 'Lingua dei messaggi del bot: italiano o inglese.' },
+
+  'general.copiaLeggera.enabled': {
+    label: 'Copia leggera su Discord',
+    help:
+      'Ogni notte, dopo la copia su disco, pubblica in un canale un file di testo con la ' +
+      'configurazione, i ruoli, i canali, i comandi e gli elenchi. La copia su disco è più ' +
+      'completa ma sta sulla stessa macchina: se quella si rompe sparisce insieme a ciò che ' +
+      'proteggeva. Questa resta su Discord, e da lì si riparte.',
+  },
+  'general.copiaLeggera.channelId': {
+    label: 'Canale della copia leggera',
+    help:
+      'Dove pubblicarla. Scegline uno che leggono solo gli amministratori: quel file dice ' +
+      'quali difese sono accese e con quali soglie, e in un canale aperto è una mappa per ' +
+      'chi vuole aggirarle. Se @everyone può leggerlo, ANGEL si rifiuta di pubblicare e lo dice.',
+  },
+  'general.copiaLeggera.includiConfigurazione': {
+    label: 'Includi la configurazione',
+    help:
+      'Acceso è il caso utile: la configurazione è la cosa che costa più tempo rifare a mano. ' +
+      'Spento pubblica solo gli elenchi — ruoli, canali, comandi, parole — per chi preferisce ' +
+      'che le proprie soglie non stiano scritte fuori dalla macchina, e accetta di rimetterle a mano.',
+  },
   'general.stileRuoli': {
     label: 'Stile dei nomi dei ruoli',
     help:
@@ -1339,6 +1362,7 @@ export const COMMAND_DOCS: CommandDoc[] = [
   { name: '/lockdown', group: 'Sicurezza', permission: 'Gestire il server', summary: 'Mette i canali in sola lettura e sospende gli inviti.', example: '/lockdown attiva motivo:raid in corso minuti:15', caution: 'Se i canali restano chiusi dopo la revoca, ripetere con l\'opzione forza.' },
   { name: '/panico', group: 'Sicurezza', permission: 'Gestire il server', summary: 'Blocca il server, salva un backup e avvisa lo staff, tutto insieme.', caution: 'Pensato per essere usato nel dubbio: un blocco ingiustificato costa dieci minuti, un nuke non fermato costa il server.' },
   { name: '/backup', group: 'Sicurezza', permission: 'Amministratore', summary: 'Salva o ripristina la struttura del server: ruoli, canali, permessi.', caution: 'La cronologia dei messaggi non è ripristinabile da Discord: si recupera solo ciò che il bot ha già archiviato.' },
+  { name: '/copia-leggera', group: 'Sicurezza', permission: 'Amministratore', summary: 'La copia che sopravvive alla macchina: la pubblica in un canale Discord, o la rimette.', example: '/copia-leggera adesso', caution: 'Si rimette solo da una copia pubblicata dal bot in quel canale: un file caricato da qualcun altro potrebbe essere stato preparato per spegnere le difese.' },
   { name: '/audit', group: 'Sicurezza', permission: 'Gestire il server', summary: 'Revisione: webhook non approvati, bot con troppi permessi, inviti a rischio.' },
   { name: '/verifica-staff', group: 'Sicurezza', permission: 'Nessuno', summary: 'Conferma la parola d\'ordine dello staff.', caution: 'È la sola difesa pratica contro chi imita un moderatore con la voce clonata.' },
   { name: '/scansiona', group: 'Sicurezza', permission: 'Gestire i messaggi', summary: 'Analizza a richiesta un link o un\'immagine.' },

@@ -100,7 +100,7 @@ export async function runSelfBackup(): Promise<BackupResult> {
   // sorgente di un ripristino.
   const lavoro = path.join(radice, `.in-corso-${stampa}`);
 
-  await fs.mkdir(radice, { recursive: true });
+  await assicuraRadice(radice);
   await controllaSpazio(radice);
 
   let risultato: BackupResult;
@@ -130,6 +130,41 @@ export async function runSelfBackup(): Promise<BackupResult> {
     'copia di sicurezza completata',
   );
   return risultato;
+}
+
+/**
+ * La cartella deve esistere **ed essere scrivibile**, e se non lo è va detto
+ * in modo che si capisca cosa fare.
+ *
+ * Prima c'era una `mkdir` e basta. Su umbrelOS le cartelle di bind-mount le
+ * crea Docker di root, ANGEL gira con un altro utente, e quella `mkdir`
+ * falliva con `EACCES`: il lavoro notturno moriva, l'errore finiva in una
+ * riga di log fra migliaia, e per settimane non c'è stata **nessuna copia**
+ * mentre tutto sembrava a posto. Un backup che non c'è si scopre il giorno in
+ * cui serve, e quel giorno è tardi.
+ *
+ * Non si ripiega su un'altra cartella: una copia scritta dentro il volume
+ * dell'applicazione sparirebbe insieme a ciò che dovrebbe proteggere, e
+ * sarebbe una finta rassicurazione. Meglio fallire dicendo il comando esatto.
+ */
+async function assicuraRadice(radice: string): Promise<void> {
+  try {
+    await fs.mkdir(radice, { recursive: true });
+    // `mkdir` su una cartella che esiste già non fallisce mai, nemmeno se non
+    // ci si può scrivere: la prova va fatta scrivendo.
+    const prova = path.join(radice, `.prova-${process.pid}`);
+    await fs.writeFile(prova, 'ok');
+    await fs.rm(prova, { force: true });
+  } catch (errore) {
+    const codice = (errore as NodeJS.ErrnoException).code;
+    throw new Error(
+      `la cartella delle copie (${radice}) non è utilizzabile: ${codice ?? String(errore)}. ` +
+        'Finché resta così non viene salvata nessuna copia, e non ci si accorge di ' +
+        'niente finché non serve. Se appartiene a root — è il caso normale su ' +
+        `umbrelOS — sulla macchina, una volta sola:  sudo chown -R 1000:1000 ${radice}`,
+      { cause: errore },
+    );
+  }
 }
 
 /** Stampa temporale usata nei nomi delle cartelle: ordinabile alfabeticamente. */

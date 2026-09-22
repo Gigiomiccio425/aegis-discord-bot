@@ -18,6 +18,7 @@ import { eventCommands } from './events.js';
 import { voiceCommands } from './voice.js';
 import { announceCommands } from './announce.js';
 import { wordCommands } from './words.js';
+import { copiaLeggeraCommands } from './copiaLeggera.js';
 import { reportCommands } from './reports.js';
 import { healthCommands } from './health.js';
 import { serverCommands } from './server.js';
@@ -37,6 +38,7 @@ export const commands: Command[] = [
   ...voiceCommands,
   ...announceCommands,
   ...wordCommands,
+  ...copiaLeggeraCommands,
   ...reportCommands,
   ...healthCommands,
   ...serverCommands,

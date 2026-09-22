@@ -1,7 +1,13 @@
 import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
 import { disconnectPrisma, getPrisma } from '@angel/db';
-import { announceVersion, segnalaNelLog, Queues, runningVersion } from '@angel/shared';
+import {
+  announceVersion,
+  Queues,
+  RedisKeys,
+  runningVersion,
+  segnalaNelLog,
+} from '@angel/shared';
 import { logger } from './logger.js';
 import { getRedis, closeRedis, connessionePerCoda } from './redis.js';
 import { deepScanProcessor } from './jobs/deepScan.js';
@@ -65,7 +71,25 @@ async function main(): Promise<void> {
       async (job) => {
         const dati = (job.data ?? {}) as { trasloco?: boolean; conSegreti?: boolean };
         if (dati.trasloco) return preparaTrasloco({ conSegreti: dati.conSegreti });
-        return runSelfBackup();
+
+        const esito = await runSelfBackup();
+
+        /*
+         * Poi la copia leggera, in un `catch` che non propaga.
+         *
+         * Le due copie sono indipendenti apposta: quella su disco è la copia
+         * buona, questa è quella che sopravvive alla macchina. Far fallire la
+         * prima perché la seconda non ha trovato il canale sarebbe scambiare
+         * l'importanza delle due.
+         */
+        await chiediCopieLeggere().catch((errore: unknown) => {
+          logger.warn(
+            { err: errore },
+            'copie leggere non richieste: la copia su disco è comunque fatta',
+          );
+        });
+
+        return esito;
       },
       { connection: connessionePerCoda(), concurrency: 1 },
     ),
@@ -101,6 +125,55 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('unhandledRejection', (reason) => logger.error({ err: reason }, 'promise non gestita'));
+}
+
+/**
+ * Chiede al bot una copia leggera per ogni server.
+ *
+ * Il worker non parla con Discord: manda il comando e il bot pubblica. La
+ * chiave anti-doppione evita che due giri ravvicinati — un riavvio, una
+ * riesecuzione manuale — producano due file identici nello stesso canale:
+ * un SET NX con scadenza, e chi arriva secondo nell'ora non chiede niente.
+ *
+ * Non si controlla qui se la copia leggera è accesa per quel server: lo sa
+ * il bot, che ha la configurazione. Filtrare in due punti significa che un
+ * giorno i due punti non saranno più d’accordo.
+ *
+ * Il comando passa dal pub/sub, come quelli del pannello. Se il bot non è
+ * in ascolto in quel momento la copia di oggi salta, e lo si dice: la copia
+ * su disco è comunque fatta, e domani si riprova.
+ */
+async function chiediCopieLeggere(): Promise<void> {
+  const redis = getRedis();
+  const guilds = await getPrisma().guild.findMany({ select: { id: true } });
+  let richieste = 0;
+  let senzaBot = 0;
+
+  for (const guild of guilds) {
+    const chiave = `copia.leggera:${guild.id}`;
+    const prima = await redis.set(chiave, '1', 'EX', 3600, 'NX');
+    if (prima !== 'OK') continue;
+
+    const ricevitori = await redis.publish(
+      RedisKeys.commandChannel,
+      JSON.stringify({ action: 'copia.leggera', guildId: guild.id }),
+    );
+    richieste += 1;
+    if (ricevitori === 0) {
+      senzaBot += 1;
+      // Non arrivata a nessuno: la chiave non deve impedire di riprovare.
+      await redis.del(chiave);
+    }
+  }
+
+  if (senzaBot > 0) {
+    logger.warn(
+      { richieste, senzaBot },
+      'copie leggere chieste ma il bot non era in ascolto: per quei server oggi salta',
+    );
+  } else {
+    logger.info({ richieste }, 'copie leggere richieste');
+  }
 }
 
 /**

@@ -7,6 +7,7 @@ export * from './util/json.js';
 export * from './util/template.js';
 // In fondo alle altre: importa RedisKeys, definito più sotto in questo file.
 export * from './version.js';
+export * from './backupLeggero.js';
 export * from './env.js';
 export * from './segreti.js';
 export * from './sorveglia.js';

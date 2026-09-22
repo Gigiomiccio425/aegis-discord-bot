@@ -25,6 +25,7 @@ import { pruneLogFiles } from '../logging/fileSink.js';
 import { unwatchUser, watchUser } from '../security/watchlist.js';
 import { provisionGuild } from '../security/provision.js';
 import { ensureOwnerRole } from '../security/ownerRole.js';
+import { COPIA_SPENTA, pubblicaCopiaLeggera } from '../security/copiaLeggera.js';
 
 const log = childLogger('panelCommands');
 
@@ -40,6 +41,10 @@ const PanelCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('lockdown.enable'), guildId: z.string(), actorId: z.string(), reason: z.string(), durationSec: z.number().int().min(0).default(0) }),
   z.object({ action: z.literal('lockdown.disable'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('snapshot.create'), guildId: z.string(), actorId: z.string() }),
+  // La copia leggera pubblicata su Discord. La chiede il worker dopo quella su
+  // disco, e chi preme il pulsante dal pannello. Nessun parametro: cosa e dove
+  // pubblicare lo dice la configurazione del server, non chi chiede.
+  z.object({ action: z.literal('copia.leggera'), guildId: z.string() }),
   // Predisposizione a richiesta: crea solo cio che manca, non duplica nulla.
   z.object({ action: z.literal('server.setup'), guildId: z.string(), actorId: z.string() }),
   z.object({ action: z.literal('quarantine.lift'), guildId: z.string(), actorId: z.string(), userId: z.string() }),
@@ -165,6 +170,27 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
         actorId: parsed.actorId,
         summary: `Backup creato dal pannello: \`${id}\``,
       });
+      break;
+    }
+
+    /*
+     * La copia leggera, chiesta dal worker dopo quella su disco.
+     *
+     * Non lancia: un server che non ce la fa — canale sparito, permessi tolti
+     * — non deve impedire agli altri di avere la loro. Col pub/sub non c'è un
+     * mittente che aspetta la risposta, quindi l'esito va nei log: è lì che
+     * si guarda quando la copia del giorno non è comparsa nel canale.
+     */
+    case 'copia.leggera': {
+      const esito = await pubblicaCopiaLeggera(client, parsed.guildId);
+      if (esito.stato === 'fatto') {
+        log.info({ guildId: parsed.guildId }, `copia leggera: ${esito.messaggio}`);
+      } else if (esito.messaggio === COPIA_SPENTA) {
+        // Il caso normale per chi non l'ha accesa: ogni giorno, ogni server.
+        log.debug({ guildId: parsed.guildId }, `copia leggera: ${esito.messaggio}`);
+      } else {
+        log.warn({ guildId: parsed.guildId }, `copia leggera non pubblicata: ${esito.messaggio}`);
+      }
       break;
     }
 
