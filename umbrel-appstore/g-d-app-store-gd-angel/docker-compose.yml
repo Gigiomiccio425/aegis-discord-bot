@@ -56,6 +56,14 @@ services:
   #  concessione — sistema il proprietario, e finisce. Nessun `depends_on`
   #  con condizioni: sia ANGEL sia Postgres riprovano già per conto loro,
   #  quindi basta che il lavoro sia fatto entro qualche secondo.
+  #
+  #  Lo stesso vale per le copie e per gli allegati. Prima sistemava solo
+  #  /segreti, e la cartella dei backup restava di root: ANGEL diceva
+  #  «cartella di backup non disponibile (EACCES)» a ogni avvio, e i backup
+  #  notturni su disco non venivano scritti. Qui si cambia solo quello che
+  #  non è già di uid 1000: con migliaia di allegati, un `chown -R` a ogni
+  #  avvio sarebbe lento per niente. Postgres e Redis hanno i loro utenti, e
+  #  qui dentro non ci passano.
   # ─────────────────────────────────────────────────────────
   preparasegreti:
     image: alpine:3
@@ -63,9 +71,11 @@ services:
     command:
       - sh
       - -c
-      - mkdir -p /segreti && chown -R 1000:1000 /segreti && chmod 700 /segreti
+      - "mkdir -p /segreti && chown -R 1000:1000 /segreti && chmod 700 /segreti && find /backup /storage ! -user 1000 -exec chown 1000:1000 {} +"
     volumes:
       - ${APP_DATA_DIR}/data/segreti:/segreti
+      - ${APP_DATA_DIR}/data/backup:/backup
+      - ${APP_DATA_DIR}/data/storage:/storage
 
   # ─────────────────────────────────────────────────────────
   #  ANGEL — un solo container per tutto

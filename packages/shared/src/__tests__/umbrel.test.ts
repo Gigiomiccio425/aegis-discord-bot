@@ -185,6 +185,37 @@ describe('pacchetto per umbrelOS', () => {
   });
 
   /*
+   * Ogni cartella in cui ANGEL scrive passa dal container dei permessi.
+   *
+   * Prima sistemava solo /segreti. La cartella dei backup restava di root,
+   * ANGEL diceva «cartella di backup non disponibile (EACCES)» a ogni avvio,
+   * e i backup notturni su disco non venivano scritti — una delle ragioni
+   * per cui «il backup non salva niente». Aggiungere un volume ad ANGEL
+   * senza aggiungerlo anche qui rimette lo stesso guasto su quella cartella.
+   */
+  it('ogni cartella in cui ANGEL scrive ha il proprietario sistemato', () => {
+    const bloccoDi = (servizio: string, successivo: string) =>
+      compose.slice(compose.indexOf(`\n  ${servizio}:`), compose.indexOf(`\n  ${successivo}:`));
+
+    /** Le cartelle dell'host montate in scrittura (non `:ro`). */
+    const montateInScrittura = (blocco: string) =>
+      [...blocco.matchAll(/^\s+- (\$\{APP_DATA_DIR\}[^:\s]+):[^:\s]+(:ro)?$/gm)]
+        .filter((riga) => !riga[2])
+        .map((riga) => riga[1]!);
+
+    const diAngel = montateInScrittura(bloccoDi('angel', 'postgres'));
+    const sistemate = new Set(montateInScrittura(bloccoDi('preparasegreti', 'angel')));
+
+    // La controprova: senza, una lettura sbagliata non troverebbe cartelle
+    // e il test passerebbe su qualunque compose.
+    expect(diAngel, 'nessuna cartella di ANGEL letta').toContain(
+      '${APP_DATA_DIR}/data/backup',
+    );
+
+    expect(diAngel.filter((cartella) => !sistemate.has(cartella))).toEqual([]);
+  });
+
+  /*
    * NOMI COMPLETI, MAI QUELLI CORTI
    *
    * Qui prima c'era il test opposto: pretendeva che Redis si chiamasse
