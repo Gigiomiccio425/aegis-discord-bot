@@ -37,10 +37,20 @@ const log = childLogger('panelCommands');
  * resta uno, i rate limit sono gestiti in un punto solo, e il pannello può
  * essere riavviato senza far cadere la connessione del bot.
  */
-const PanelCommand = z.discriminatedUnion('action', [
+export const PanelCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('lockdown.enable'), guildId: z.string(), actorId: z.string(), reason: z.string(), durationSec: z.number().int().min(0).default(0) }),
   z.object({ action: z.literal('lockdown.disable'), guildId: z.string(), actorId: z.string() }),
-  z.object({ action: z.literal('snapshot.create'), guildId: z.string(), actorId: z.string() }),
+  // Il tipo lo dice chi chiede. Prima il bot scriveva sempre MANUAL, anche
+  // per il backup notturno: il worker, che salta il giro se trova uno
+  // SCHEDULED delle ultime dodici ore, non ne trovava mai uno, e il registro
+  // attribuiva al pannello un backup che nessuno aveva chiesto. Senza il
+  // campo resta MANUAL: è quello che manda il pannello.
+  z.object({
+    action: z.literal('snapshot.create'),
+    guildId: z.string(),
+    actorId: z.string(),
+    kind: z.enum(['MANUAL', 'SCHEDULED']).default('MANUAL'),
+  }),
   // La copia leggera pubblicata su Discord. La chiede il worker dopo quella su
   // disco, e chi preme il pulsante dal pannello. Nessun parametro: cosa e dove
   // pubblicare lo dice la configurazione del server, non chi chiede.
@@ -163,12 +173,14 @@ export async function handlePanelCommand(client: Client, raw: string): Promise<v
     }
 
     case 'snapshot.create': {
-      const id = await createSnapshot(guild, 'MANUAL', parsed.actorId);
+      const id = await createSnapshot(guild, parsed.kind, parsed.actorId);
+      const notturno = parsed.kind === 'SCHEDULED';
       await recordEvent(client, {
         guildId: parsed.guildId,
         type: 'SECURITY_SNAPSHOT_CREATED',
-        actorId: parsed.actorId,
-        summary: `Backup creato dal pannello: \`${id}\``,
+        actorId: notturno ? undefined : parsed.actorId,
+        automated: notturno,
+        summary: notturno ? `Backup notturno: \`${id}\`` : `Backup creato dal pannello: \`${id}\``,
       });
       break;
     }

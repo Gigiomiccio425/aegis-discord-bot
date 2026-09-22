@@ -7,6 +7,18 @@ import { childLogger } from '../logger.js';
 const log = childLogger('snapshot');
 
 /**
+ * La richiesta del backup notturno, come arriva al bot.
+ *
+ * Il tipo `SCHEDULED` è quello che il controllo qui sotto cerca per non
+ * rifare un backup nelle dodici ore successive. Prima mancava: il bot
+ * scriveva MANUAL, quel controllo non trovava mai niente, e il registro
+ * attribuiva al pannello un backup che nessuno aveva chiesto.
+ */
+export function richiestaBackupNotturno(guildId: string) {
+  return { action: 'snapshot.create', guildId, actorId: 'system', kind: 'SCHEDULED' } as const;
+}
+
+/**
  * Backup programmati.
  *
  * Il worker non li esegue direttamente: pubblica la richiesta e il bot la
@@ -37,10 +49,7 @@ export async function snapshotProcessor(_job: Job): Promise<void> {
     });
     if (recent) continue;
 
-    await redis.publish(
-      RedisKeys.commandChannel,
-      JSON.stringify({ action: 'snapshot.create', guildId: guild.id, actorId: 'system' }),
-    );
+    await redis.publish(RedisKeys.commandChannel, JSON.stringify(richiestaBackupNotturno(guild.id)));
   }
 
   log.info({ guilds: guilds.length }, 'backup programmati richiesti');
