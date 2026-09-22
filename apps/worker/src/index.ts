@@ -3,7 +3,7 @@ import { Queue, Worker } from 'bullmq';
 import { disconnectPrisma, getPrisma } from '@angel/db';
 import { announceVersion, segnalaNelLog, Queues, runningVersion } from '@angel/shared';
 import { logger } from './logger.js';
-import { getRedis, closeRedis } from './redis.js';
+import { getRedis, closeRedis, connessionePerCoda } from './redis.js';
 import { deepScanProcessor } from './jobs/deepScan.js';
 import { snapshotProcessor } from './jobs/snapshot.js';
 import { threatFeedProcessor } from './jobs/threatFeeds.js';
@@ -39,19 +39,19 @@ async function main(): Promise<void> {
 
   const workers = [
     new Worker(Queues.deepScan, deepScanProcessor, {
-      connection,
+      connection: connessionePerCoda(),
       // Un'immagine alla volta: tesseract è pesante e la concorrenza alta
       // farebbe solo aumentare la memoria senza migliorare la resa.
       concurrency: 2,
       limiter: { max: 30, duration: 60_000 },
     }),
-    new Worker(Queues.snapshot, snapshotProcessor, { connection, concurrency: 1 }),
-    new Worker(Queues.threatFeeds, threatFeedProcessor, { connection, concurrency: 1 }),
-    new Worker(Queues.retention, retentionProcessor, { connection, concurrency: 1 }),
-    new Worker(Queues.twitch, twitchProcessor, { connection, concurrency: 3 }),
-    new Worker(Queues.integrations, integrationsProcessor, { connection, concurrency: 1 }),
-    new Worker(Queues.securityAudit, securityAuditProcessor, { connection, concurrency: 1 }),
-    new Worker(Queues.social, socialProcessor, { connection, concurrency: 2 }),
+    new Worker(Queues.snapshot, snapshotProcessor, { connection: connessionePerCoda(), concurrency: 1 }),
+    new Worker(Queues.threatFeeds, threatFeedProcessor, { connection: connessionePerCoda(), concurrency: 1 }),
+    new Worker(Queues.retention, retentionProcessor, { connection: connessionePerCoda(), concurrency: 1 }),
+    new Worker(Queues.twitch, twitchProcessor, { connection: connessionePerCoda(), concurrency: 3 }),
+    new Worker(Queues.integrations, integrationsProcessor, { connection: connessionePerCoda(), concurrency: 1 }),
+    new Worker(Queues.securityAudit, securityAuditProcessor, { connection: connessionePerCoda(), concurrency: 1 }),
+    new Worker(Queues.social, socialProcessor, { connection: connessionePerCoda(), concurrency: 2 }),
     /*
      * Una coda sola per due lavori vicini.
      *
@@ -67,9 +67,9 @@ async function main(): Promise<void> {
         if (dati.trasloco) return preparaTrasloco({ conSegreti: dati.conSegreti });
         return runSelfBackup();
       },
-      { connection, concurrency: 1 },
+      { connection: connessionePerCoda(), concurrency: 1 },
     ),
-    new Worker(Queues.rapporto, async () => rapportoProcessor(), { connection, concurrency: 1 }),
+    new Worker(Queues.rapporto, async () => rapportoProcessor(), { connection: connessionePerCoda(), concurrency: 1 }),
   ];
 
   for (const worker of workers) {
