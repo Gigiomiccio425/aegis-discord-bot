@@ -49,12 +49,65 @@ FINE
 # Per nome parziale e non per `container_name`: ZimaOS lo riscrive, e cercare
 # «aegis-postgres» darebbe «No such object» su un'installazione fatta
 # dall'App Store.
+#
+# Ma non «il primo che contiene postgres». Su una macchina con altre app —
+# un Umbrel con Immich, Nextcloud, qualunque cosa abbia un database — quello
+# poteva essere il Postgres di un'altra app, e `importa` ci avrebbe fatto
+# DROP SCHEMA con le credenziali lette da lui: il database di un'altra app,
+# cancellato. Adesso il nome deve contenere anche angel o aegis, e se i
+# candidati sono più d'uno ci si ferma: scegliere a caso, qui, è il guasto.
+#
+# Per scegliere a mano:  PG_CONTAINER=nome  e  ANGEL_CONTAINER=nome.
+
+# Stampa il container se ce n'è esattamente uno; altrimenti spiega ed esce
+# con errore, e il chiamante si ferma. Con FACOLTATIVO=si, nessun candidato
+# non è un errore: si stampa niente e si va avanti senza.
+scegli_container() {
+	FORZATO="$1"
+	COSA="$2"
+	VARIABILE="$3"
+	CANDIDATI="$4"
+	FACOLTATIVO="${5:-no}"
+
+	if [ -n "$FORZATO" ]; then
+		if docker ps --format '{{.Names}}' | grep -qx "$FORZATO"; then
+			echo "$FORZATO"
+			return 0
+		fi
+		echo "$COSA: '$FORZATO', indicato in $VARIABILE, non è in esecuzione." >&2
+		return 1
+	fi
+
+	QUANTI="$(printf '%s\n' "$CANDIDATI" | grep -c . || true)"
+	if [ "$QUANTI" -eq 1 ]; then
+		echo "$CANDIDATI"
+		return 0
+	fi
+	if [ "$QUANTI" -eq 0 ]; then
+		[ "$FACOLTATIVO" = "si" ] && return 0
+		echo "$COSA: nessun container di ANGEL in esecuzione." >&2
+		return 1
+	fi
+
+	echo "$COSA: più di un candidato. Scegliere a caso vorrebbe dire rischiare" >&2
+	echo "i dati di un'altra installazione:" >&2
+	printf '%s\n' "$CANDIDATI" | sed 's/^/    /' >&2
+	echo "Indica quello giusto e rilancia:  $VARIABILE=<nome> sh $0 ..." >&2
+	return 1
+}
+
 trova_postgres() {
-	docker ps --format '{{.Names}}' | grep -i 'postgres' | head -1
+	scegli_container "${PG_CONTAINER:-}" "Database" "PG_CONTAINER" \
+		"$(docker ps --format '{{.Names}}' | grep -i 'postgres' | grep -iE 'angel|aegis' || true)"
 }
 
 trova_angel() {
-	docker ps --format '{{.Names}}' | grep -iE '^angel$|angel|aegis-bot' | grep -vi postgres | grep -vi redis | head -1
+	# app_proxy e preparasegreti hanno «angel» nel nome sull'Umbrel, ma non
+	# sono il bot: fermare il proxy al posto del bot lascerebbe il bot acceso
+	# mentre si riscrive il database.
+	scegli_container "${ANGEL_CONTAINER:-}" "Container di ANGEL" "ANGEL_CONTAINER" \
+		"$(docker ps --format '{{.Names}}' | grep -iE 'angel|aegis-bot' \
+			| grep -viE 'postgres|redis|app_proxy|preparasegreti' || true)" si
 }
 
 variabile_di() {
@@ -77,12 +130,12 @@ esporta() {
 	BASE="${1:-/DATA/trasloco}"
 	FUORI="$BASE/angel-trasloco-$STAMP"
 
-	PG="$(trova_postgres)"
+	PG="$(trova_postgres)" || exit 1
 	if [ -z "$PG" ]; then
 		echo "Nessun container Postgres in esecuzione: non c'è nulla da esportare."
 		exit 1
 	fi
-	ANGEL="$(trova_angel)"
+	ANGEL="$(trova_angel)" || exit 1
 
 	RETE="$(docker inspect "$PG" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')"
 	PASSWORD="$(variabile_di "$PG" POSTGRES_PASSWORD)"
@@ -253,12 +306,12 @@ importa() {
 		exit 1
 	fi
 
-	PG="$(trova_postgres)"
+	PG="$(trova_postgres)" || exit 1
 	if [ -z "$PG" ]; then
 		echo "Nessun container Postgres in esecuzione: installa e avvia ANGEL prima."
 		exit 1
 	fi
-	ANGEL="$(trova_angel)"
+	ANGEL="$(trova_angel)" || exit 1
 
 	RETE="$(docker inspect "$PG" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')"
 	PASSWORD="$(variabile_di "$PG" POSTGRES_PASSWORD)"

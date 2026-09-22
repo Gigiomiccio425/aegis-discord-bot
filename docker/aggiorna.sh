@@ -41,10 +41,33 @@ fi
 # Per nome e non per `container_name`: ZimaOS lo riscrive, e cercare
 # «aegis-postgres» darebbe «No such object» su un'installazione fatta
 # dall'App Store.
-PG="$(docker ps --format '{{.Names}}' | grep -i 'postgres' | head -1)"
-if [ -z "$PG" ]; then
-	echo "Nessun container Postgres in esecuzione: aggiornamento interrotto."
-	exit 1
+#
+# Ma non «il primo che contiene postgres»: su una macchina con altre app
+# poteva essere il database di un'altra app, e la copia di sicurezza fatta
+# prima dell'aggiornamento sarebbe stata la sua. Il nome deve contenere
+# anche angel o aegis; con più candidati ci si ferma, e si sceglie con
+# PG_CONTAINER=nome. Stessa regola di trasloco.sh.
+if [ -n "${PG_CONTAINER:-}" ]; then
+	PG="$PG_CONTAINER"
+	if ! docker ps --format '{{.Names}}' | grep -qx "$PG"; then
+		echo "Il container '$PG', indicato in PG_CONTAINER, non è in esecuzione."
+		exit 1
+	fi
+else
+	CANDIDATI="$(docker ps --format '{{.Names}}' | grep -i 'postgres' | grep -iE 'angel|aegis' || true)"
+	QUANTI="$(printf '%s\n' "$CANDIDATI" | grep -c . || true)"
+	if [ "$QUANTI" -eq 0 ]; then
+		echo "Nessun container Postgres di ANGEL in esecuzione: aggiornamento interrotto."
+		exit 1
+	fi
+	if [ "$QUANTI" -gt 1 ]; then
+		echo "Più di un container Postgres di ANGEL: scegliere a caso vorrebbe dire"
+		echo "copiare il database sbagliato. Candidati:"
+		printf '%s\n' "$CANDIDATI" | sed 's/^/    /'
+		echo "Indica quello giusto e rilancia:  PG_CONTAINER=<nome> sudo sh $0 ..."
+		exit 1
+	fi
+	PG="$CANDIDATI"
 fi
 
 RETE="$(docker inspect "$PG" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')"
@@ -57,7 +80,7 @@ mkdir -p "$BACKUP_DIR"
 DUMP="$BACKUP_DIR/aegis-$STAMP.sql.gz"
 echo "Copia del database in $DUMP"
 docker run --rm --network "$RETE" -e PGPASSWORD="$PASSWORD" postgres:17 \
-	pg_dump -h aegis-postgres -U "$UTENTE" -d aegis | gzip > "$DUMP"
+	pg_dump -h "$PG" -U "$UTENTE" -d aegis | gzip > "$DUMP"
 
 # Un dump vuoto è peggio di nessun dump: darebbe l'illusione di poter tornare
 # indietro. Se pg_dump non ha prodotto nulla di sensato, meglio fermarsi qui.
@@ -110,12 +133,18 @@ echo "Riavvio i servizi"
 docker compose -f "$COMPOSE" up -d --force-recreate --remove-orphans
 
 # ── 5. Verifica ──────────────────────────────────────────────
-# Si controllano tutti e quattro, non solo l'API: è precisamente il caso in cui
-# un container resta indietro che questa verifica deve intercettare.
+# Si controllano tutti, non solo l'API: è precisamente il caso in cui un
+# container resta indietro che questa verifica deve intercettare.
+#
+# Solo i container di ANGEL. Prima si cercava «bot|worker|api» nel nome, che
+# su una macchina con altre app prendeva anche i loro — e segnalava un
+# disallineamento che non c'era — mentre il container unico di adesso, che si
+# chiama `angel`, non lo trovava affatto.
 echo
 echo "Versione per container:"
 DISALLINEATI=0
-for NOME in $(docker ps --format '{{.Names}}' | grep -iE 'bot|worker|api' || true); do
+for NOME in $(docker ps --format '{{.Names}}' | grep -iE 'angel|aegis' \
+	| grep -viE 'postgres|redis|app_proxy|preparasegreti' || true); do
 	V="$(docker inspect "$NOME" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^ANGEL_VERSION=//p')"
 	printf '  %-24s %s\n' "$NOME" "${V:-sconosciuta}"
 	if [ -n "$VERSIONE" ] && [ "$V" != "$VERSIONE" ]; then DISALLINEATI=1; fi
@@ -135,4 +164,4 @@ echo "Se qualcosa non torna, i log:"
 echo "  docker compose -f $COMPOSE logs --tail 50 aegis-migrate aegis-bot aegis-api"
 echo
 echo "Per tornare indietro: rimetti la versione precedente in x-image, poi"
-echo "  gunzip -c $DUMP | docker run --rm -i --network $RETE -e PGPASSWORD=... postgres:17 psql -h aegis-postgres -U $UTENTE -d aegis"
+echo "  gunzip -c $DUMP | docker run --rm -i --network $RETE -e PGPASSWORD=... postgres:17 psql -h $PG -U $UTENTE -d aegis"
