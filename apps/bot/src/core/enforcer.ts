@@ -2,30 +2,24 @@ import {
   ChannelType,
   DiscordAPIError,
   PermissionFlagsBits,
-  type ForumChannel,
   type Guild,
-  type NewsChannel,
-  type TextChannel,
   type GuildMember,
   type Message,
   type Client,
 } from 'discord.js';
 import { getPrisma, type CaseType } from '@angel/db';
 import {
-  RedisKeys,
   type Decision,
   type DecisionAction,
   type GuildConfig,
   type LogEventType,
 } from '@angel/shared';
 import { childLogger } from './logger.js';
-import { getRedis } from './redis.js';
 import { canActOn, dangerousRoles } from './permissions.js';
 import { createCase } from './cases.js';
 import { recordEvent } from '../logging/auditLogger.js';
 import { humanDuration, t } from './i18n.js';
 import { unverifiedRoleId } from '@angel/shared';
-import { getGuildConfig } from './config.js';
 
 const log = childLogger('enforcer');
 
@@ -429,303 +423,24 @@ export function purgeRecent(guild: Guild, userId: string, seconds: number): numb
   return deleted;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   LOCKDOWN
-
-   Tre cose che la prima versione sbagliava, tutte scoperte sul campo:
-
-   1. Lo stato in Redis scadeva dopo 24 ore. Passate quelle, i canali restavano
-      bloccati ma la revoca non trovava più l'elenco e usciva senza fare nulla:
-      il server rimaneva muto e nessun comando lo sbloccava. Ora la chiave non
-      scade, e la scadenza è un campo dentro lo stato — sorvegliato da un ciclo
-      che sopravvive ai riavvii, cosa che un `setTimeout` non fa.
-
-   2. I canali venivano modificati uno alla volta, in serie. Su un server con
-      cinquanta canali significa cinquanta chiamate sequenziali, e il blocco
-      arrivava a raid già concluso. Ora si procede a lotti in parallelo.
-
-   3. Si leggeva solo la cache dei canali, che dopo un riavvio può essere
-      incompleta: i canali non ancora visti restavano aperti. Ora si chiede
-      l'elenco a Discord.
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/**
- * Tipi di canale su cui il lockdown ha effetto.
- *
- * I thread non ci sono: ereditano i permessi dal canale che li contiene, e
- * bloccare il canale li blocca di conseguenza. Elencarli significherebbe
- * moltiplicare le chiamate per nulla, proprio quando la velocità conta.
- */
-const LOCKABLE = [
-  ChannelType.GuildText,
-  ChannelType.GuildAnnouncement,
-  ChannelType.GuildForum,
-] as const;
-
-type LockableChannel = TextChannel | NewsChannel | ForumChannel;
-
-/**
- * Canale bloccabile: ha `permissionOverwrites`, che i thread non hanno.
- *
- * Generico perché i due chiamanti partono da insiemi diversi — l'elenco
- * completo dei canali e il singolo canale recuperato per ID — e restringere
- * ciascuno al proprio sottoinsieme evita di riaprire il controllo dopo.
- */
-function isLockable<T extends { type: ChannelType }>(
-  channel: T | null | undefined,
-): channel is Extract<T, LockableChannel> {
-  return channel != null && (LOCKABLE as readonly ChannelType[]).includes(channel.type);
-}
-
-interface LockdownState {
-  reason: string;
-  channels: string[];
-  startedAt: number;
-  /** Timestamp di revoca automatica. 0 = solo manuale. */
-  expiresAt: number;
-  /** Messaggi d'avviso pubblicati, per poterli sostituire alla revoca. */
-  notices: { channelId: string; messageId: string }[];
-}
-
-export async function readLockdownState(guildId: string): Promise<LockdownState | null> {
-  const raw = await getRedis().get(RedisKeys.lockdown(guildId));
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as LockdownState;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Lockdown: canali pubblici in sola lettura e inviti in pausa.
- *
- * La pausa degli inviti è la parte decisiva: senza, i nuovi account continuano
- * ad arrivare mentre si ripulisce quanto già entrato.
- */
-export async function enableLockdown(
-  client: Client,
-  guild: Guild,
-  config: GuildConfig,
-  reason: string,
-  durationSec: number,
-): Promise<{ locked: number; alreadyActive: boolean }> {
-  const redis = getRedis();
-  const key = RedisKeys.lockdown(guild.id);
-  if (await redis.exists(key)) return { locked: 0, alreadyActive: true };
-
-  const settings = config.security.antiRaid;
-  const everyone = guild.roles.everyone;
-  const affected: string[] = [];
-  const notices: LockdownState[ 'notices' ] = [];
-
-  // Lo stato si scrive **prima** di toccare i canali: se il processo muore a
-  // metà, la revoca trova comunque un elenco parziale da cui ripartire. Il
-  // contrario — bloccare e poi salvare — lascerebbe un server bloccato di cui
-  // nessuno sa più nulla, che è esattamente il guasto che si sta correggendo.
-  const state: LockdownState = {
-    reason,
-    channels: affected,
-    startedAt: Date.now(),
-    expiresAt: durationSec > 0 ? Date.now() + durationSec * 1000 : 0,
-    notices,
-  };
-  await redis.set(key, JSON.stringify(state));
-
-  if (settings.lockChannels) {
-    // Dall'API e non dalla cache: dopo un riavvio la cache può essere parziale,
-    // e un canale dimenticato aperto è la falla da cui passa tutto il resto.
-    const channels = await guild.channels.fetch().catch(() => null);
-    const targets = [...(channels?.values() ?? [])].filter(
-      (channel) => isLockable(channel) && !settings.lockdownExemptChannels.includes(channel.id),
-    ) as LockableChannel[];
-
-    const announcement = settings.announceLockdown
-      ? settings.lockdownMessage
-          .replace('{motivo}', reason.slice(0, 300))
-          .replace(
-            '{durata}',
-            durationSec > 0 ? `Durata prevista: ${humanDuration(durationSec)}` : '',
-          )
-          .trim()
-      : null;
-
-    for (const batch of chunk(targets, settings.lockdownBatchSize)) {
-      await Promise.allSettled(
-        batch.map(async (channel) => {
-          const current = channel.permissionOverwrites.cache.get(everyone.id);
-          // Già in sola lettura per scelta dello staff: non lo si tocca, perché
-          // alla revoca verrebbe riaperto un canale che doveva restare chiuso.
-          if (current?.deny.has(PermissionFlagsBits.SendMessages)) return;
-
-          await channel.permissionOverwrites.edit(
-            everyone,
-            { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false },
-            { reason: truncateReason(reason) },
-          );
-          affected.push(channel.id);
-
-          if (announcement && channel.isTextBased()) {
-            const sent = await channel
-              .send({ content: announcement, allowedMentions: { parse: [] } })
-              .catch(() => null);
-            if (sent) notices.push({ channelId: channel.id, messageId: sent.id });
-          }
-        }),
-      );
-      await redis.set(key, JSON.stringify(state));
-    }
-  }
-
-  if (settings.pauseInvites) {
-    // `invitesDisabled` è la pausa inviti nativa di Discord.
-    await guild.disableInvites(true).catch(() => undefined);
-  }
-
-  await redis.set(key, JSON.stringify(state));
-
-  await recordEvent(client, {
-    guildId: guild.id,
-    type: 'SECURITY_LOCKDOWN_ENABLED',
-    actorId: client.user?.id,
-    severity: 95,
-    automated: true,
-    summary:
-      `🔒 Server bloccato: ${reason}\n` +
-      `Canali chiusi: ${affected.length}` +
-      (durationSec > 0 ? `\nRevoca automatica fra ${humanDuration(durationSec)}` : ''),
-    payload: { channels: affected, durationSec, invitesPaused: settings.pauseInvites },
-  });
-
-  return { locked: affected.length, alreadyActive: false };
-}
-
-/**
- * Revoca il lockdown.
- *
- * Con `force` riapre **tutti** i canali che negano la scrittura a @everyone,
- * non solo quelli registrati. È la via d'uscita quando lo stato è andato perso
- * — un Redis svuotato, un ripristino da backup — e il server è rimasto muto
- * senza che nessun comando riesca a sbloccarlo.
- */
-export async function disableLockdown(
-  client: Client,
-  guild: Guild,
-  reason: string,
-  options: { force?: boolean; config?: GuildConfig } = {},
-): Promise<{ unlocked: number; hadState: boolean }> {
-  const redis = getRedis();
-  const key = RedisKeys.lockdown(guild.id);
-  const state = await readLockdownState(guild.id);
-  if (!state && !options.force) return { unlocked: 0, hadState: false };
-
-  const everyone = guild.roles.everyone;
-  let ids = state?.channels ?? [];
-
-  if (options.force) {
-    const channels = await guild.channels.fetch().catch(() => null);
-    const denied = [...(channels?.values() ?? [])]
-      .filter(
-        (channel) =>
-          isLockable(channel) &&
-          channel.permissionOverwrites.cache
-            .get(everyone.id)
-            ?.deny.has(PermissionFlagsBits.SendMessages),
-      )
-      .map((channel) => channel!.id);
-    ids = [...new Set([...ids, ...denied])];
-  }
-
-  const batchSize = options.config?.security.antiRaid.lockdownBatchSize ?? 10;
-  let unlocked = 0;
-
-  for (const batch of chunk(ids, batchSize)) {
-    await Promise.allSettled(
-      batch.map(async (channelId) => {
-        const channel = await guild.channels.fetch(channelId).catch(() => null);
-        if (!isLockable(channel)) return;
-        // Si rimuove solo il divieto aggiunto dal lockdown, non l'intero
-        // overwrite: sovrascriverlo cancellerebbe permessi impostati dallo staff.
-        await channel.permissionOverwrites
-          .edit(
-            everyone,
-            { SendMessages: null, SendMessagesInThreads: null, CreatePublicThreads: null },
-            { reason: truncateReason(reason) },
-          )
-          .then(() => {
-            unlocked += 1;
-          })
-          .catch(() => undefined);
-      }),
-    );
-  }
-
-  await guild.disableInvites(false).catch(() => undefined);
-
-  // L'avviso di revoca prende il posto di quello di blocco, nello stesso
-  // messaggio: due cartellini contraddittori uno sotto l'altro confondono più
-  // del silenzio.
-  const liftText = options.config?.security.antiRaid.lockdownLiftMessage;
-  if (liftText && state?.notices.length) {
-    await Promise.allSettled(
-      state.notices.map(async (notice) => {
-        const channel = await guild.channels.fetch(notice.channelId).catch(() => null);
-        if (!channel?.isTextBased()) return;
-        const message = await channel.messages.fetch(notice.messageId).catch(() => null);
-        await message?.edit({ content: liftText, allowedMentions: { parse: [] } });
-      }),
-    );
-  }
-
-  await redis.del(key);
-
-  await recordEvent(client, {
-    guildId: guild.id,
-    type: 'SECURITY_LOCKDOWN_DISABLED',
-    actorId: client.user?.id,
-    summary:
-      `🔓 Lockdown revocato: ${reason}\nCanali riaperti: ${unlocked}` +
-      (options.force && !state ? '\n(revoca forzata: nessuno stato salvato)' : ''),
-    payload: { unlocked, forced: options.force ?? false, hadState: Boolean(state) },
-  });
-
-  return { unlocked, hadState: Boolean(state) };
-}
-
-export async function isLockedDown(guildId: string): Promise<boolean> {
-  return (await getRedis().exists(RedisKeys.lockdown(guildId))) === 1;
-}
-
-/**
- * Revoca i lockdown scaduti.
- *
- * Sostituisce il `setTimeout` di prima, che moriva con il processo: un riavvio
- * durante un lockdown a tempo lasciava il server bloccato per sempre. Il ciclo
- * riparte a ogni avvio e ritrova lo stato in Redis.
- */
-export function startLockdownSweeper(client: Client, intervalMs = 20_000): NodeJS.Timeout {
-  const timer = setInterval(() => {
-    void (async () => {
-      for (const guild of client.guilds.cache.values()) {
-        const state = await readLockdownState(guild.id).catch(() => null);
-        if (!state?.expiresAt || state.expiresAt > Date.now()) continue;
-        const config = await getGuildConfig(guild.id).catch(() => undefined);
-        await disableLockdown(client, guild, 'scadenza automatica', { config }).catch(() =>
-          undefined,
-        );
-      }
-    })();
-  }, intervalMs);
-  // Non deve tenere vivo il processo da solo.
-  timer.unref?.();
-  return timer;
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
+/* ── Lockdown ─────────────────────────────────────────────────────────────
+   Vive in `lockdown.ts`: qui si riesporta perché i chiamanti storici lo
+   importano da questo file, e spostare dieci import per un trasloco interno
+   sarebbe rumore nel diff senza nessun guadagno. */
+export {
+  descriviBlocco,
+  descriviSblocco,
+  disableLockdown,
+  enableLockdown,
+  isLockedDown,
+  readLockdownState,
+  startLockdownSweeper,
+  statoRecente,
+  type EsitoBlocco,
+  type EsitoSblocco,
+  type LockdownState,
+} from './lockdown.js';
+import { enableLockdown } from './lockdown.js';
 
 async function requireVerification(ctx: EnforceContext): Promise<boolean> {
   const roleId = unverifiedRoleId(ctx.config);

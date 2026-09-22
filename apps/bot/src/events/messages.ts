@@ -22,6 +22,7 @@ import { evaluateSafety } from '../security/safety.js';
 import { evaluateLanguage } from '../security/languageGuard.js';
 import { trackFlame } from '../security/flameGuard.js';
 import { evaluateCompromise, trackActivity } from '../security/compromise.js';
+import { trattieniDuranteLockdown } from '../security/lockdownGuard.js';
 
 const log = childLogger('events:messages');
 
@@ -112,6 +113,10 @@ async function handleMessageCreate(client: Client, message: Message): Promise<vo
   // L'archiviazione precede l'analisi: se il messaggio viene eliminato tra un
   // istante, la copia deve esistere già.
   await archiveMessage(message, config).catch(() => undefined);
+
+  // Sotto lockdown, chi riesce a scrivere lo stesso in un canale chiuso viene
+  // fermato qui, prima di tutto il resto. Il perché è in `lockdownGuard.ts`.
+  if (await trattieniDuranteLockdown(message, config).catch(() => false)) return;
 
   // Gli allegati hanno un evento proprio, separato dal messaggio: «chi ha
   // caricato quel file» è una domanda che si pone da sola, e cercarla fra i
