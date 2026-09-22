@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ho trovato una vulnerabilità
+    url: https://github.com/Gigiomiccio425/aegis-discord-bot/security/advisories/new
+    about: Non aprire una issue pubblica. Una segnalazione privata resta tale fino alla correzione.
+  - name: Non riesco a installarlo
+    url: https://github.com/Gigiomiccio425/aegis-discord-bot/blob/main/docs/risoluzione-problemi.md
+    about: "Prima guarda qui: i guasti più frequenti hanno già una diagnosi scritta."

@@ -1,0 +1,52 @@
+name: Falso positivo
+description: ANGEL ha sanzionato qualcuno che non c'entrava
+labels: ["falso positivo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Un filtro che colpisce chi non c'entra è un problema serio: chi lo subisce non capisce
+        perché, e chi modera perde fiducia nello strumento. Più dettagli dai, più è correggibile.
+
+  - type: input
+    id: versione
+    attributes:
+      label: Versione
+      placeholder: "1.29.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modulo
+    attributes:
+      label: Quale difesa è scattata
+      options:
+        - Filtro sul linguaggio
+        - Anti-spam
+        - Link o GIF
+        - Scanner immagini (QR, OCR, hash percettivo)
+        - ClickFix
+        - Anti-raid
+        - Impersonificazione dello staff
+        - Controllo account
+        - Bot Twitch
+        - Non lo so
+    validations:
+      required: true
+
+  - type: textarea
+    id: contenuto
+    attributes:
+      label: Cosa è stato colpito
+      description: |
+        Il messaggio, il link o l'immagine. Se è un'immagine, allegala.
+        **Togli i nomi delle persone** se non servono a capire.
+    validations:
+      required: true
+
+  - type: textarea
+    id: perche
+    attributes:
+      label: Perché era legittimo
+    validations:
+      required: true

@@ -1,1302 +1,68 @@
+<div align="center">
+
+<img src="docs/icon.svg" width="96" alt="">
+
 # ANGEL
 
-**Il custode del tuo server.** Bot Discord di sicurezza e moderazione con pannello di controllo
-web, pensato per essere self-hosted su una VPS ZimaOS.
+**Il custode del tuo server.**
 
-Fa tre cose che i bot generalisti non fanno bene: ferma gli attacchi al server (raid, nuke,
-webhook e bot ostili), riconosce le campagne di truffa che circolano ora (immagini con QR,
-ClickFix, inviti dirottati, account compromessi), e registra ogni azione in modo consultabile.
+Bot Discord di sicurezza e moderazione, con pannello web. Self-hosted: gira su una tua macchina,
+i dati restano lì.
 
-> **Sul nome.** Il progetto si chiamava Aegis. Restano `aegis` il nome del database, dei
-> container, dei volumi e dell'immagine su ghcr: rinominarli significherebbe ricreare il
-> database e perdere tutto ciò che contiene, per un guadagno puramente estetico. Sono nomi
-> che nessuno digita e che nessun utente vede.
+[![Immagine Docker](https://github.com/Gigiomiccio425/aegis-discord-bot/actions/workflows/docker.yml/badge.svg)](https://github.com/Gigiomiccio425/aegis-discord-bot/actions/workflows/docker.yml)
+[![Licenza](https://img.shields.io/badge/licenza-AGPL--3.0-blue)](LICENSE)
+![Node](https://img.shields.io/badge/node-22-green)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 
----
+[Installazione](#installazione) · [Cosa ferma](#cosa-ferma) · [Documentazione](#documentazione) · [Sicurezza](SECURITY.md)
 
-## Indice
-
-- [Cosa protegge](#cosa-protegge)
-- [Architettura](#architettura)
-- [Requisiti](#requisiti)
-- [Configurazione dell'applicazione Discord](#configurazione-dellapplicazione-discord)
-- [Deploy su ZimaOS](#deploy-su-zimaos)
-- [Deploy su Umbrel](#deploy-su-umbrel)
-- [Aggiornare](#aggiornare)
-- [Sviluppo in locale](#sviluppo-in-locale)
-- [Primo avvio: cosa configurare](#primo-avvio-cosa-configurare)
-- [Il pannello](#il-pannello)
-- [Comandi](#comandi)
-- [Comandi personalizzati e personas](#comandi-personalizzati-e-personas)
-- [Il registro](#il-registro)
-- [Backup, archivio e ruoli](#backup-archivio-e-ruoli)
-- [Traslocare su un'altra macchina](#traslocare-su-unaltra-macchina)
-- [Notifiche da fonti esterne](#notifiche-da-fonti-esterne)
-- [Il bot Twitch](#il-bot-twitch)
-- [Bacheca e ticket](#bacheca-e-ticket)
-- [Server molto grandi: sharding](#server-molto-grandi-sharding)
-- [Privacy e GDPR](#privacy-e-gdpr)
-- [Limiti dichiarati](#limiti-dichiarati)
-- [Risoluzione dei problemi](#risoluzione-dei-problemi)
+</div>
 
 ---
 
-## Cosa protegge
+## Cosa fa
 
-| Minaccia | Come funziona nella realtà | Difesa |
+Tre cose che i bot generalisti non fanno bene:
+
+1. **Ferma gli attacchi al server** — raid, nuke, webhook e bot ostili.
+2. **Riconosce le truffe che circolano adesso** — immagini con QR, ClickFix, inviti dirottati,
+   account compromessi.
+3. **Registra ogni azione in modo consultabile** — con le prove congelate, non solo una riga di log.
+
+Dentro c'è anche un **bot di chat Twitch** completo, con un pannello suo pensato per essere dato
+agli streamer.
+
+Il bot parte con **tutti i moduli spenti**. Si accendono dal pannello, e conviene tenere la
+modalità prova accesa per qualche giorno prima di far sanzionare qualcuno davvero.
+
+---
+
+## Cosa ferma
+
+| Minaccia | Cosa succede nella realtà | Difesa |
 |---|---|---|
-| **QR di login Discord** | Un QR che punta a `discord.com/ra/…` è il flusso Remote Auth: chi lo inquadra consegna il token del proprio account. Non serve la password, non compare alcun avviso — è Discord stessa a trasmetterlo | Ogni immagine viene decodificata; un QR di questo tipo fa scattare l'azione massima e un avviso pubblico |
-| **ClickFix / finta CAPTCHA** | «Premi Win+R, Ctrl+V, Invio»: negli appunti c'è già PowerShell offuscato. +517% nel primo semestre 2025, allerta FTC di giugno 2026 | Rilevatore dedicato, attivo sia sul testo sia sull'OCR degli screenshot |
-| **Ondata MrBeast / giveaway falsi** | Account veri, compromessi da infostealer, che pubblicano in massa immagini con link | Rilevamento del *cambio di comportamento* + hash percettivo delle immagini + OCR |
-| **Invite hijacking** | Discord permette di rivendicare come vanity i codici invito scaduti o liberati: i link pubblicati mesi prima portano altrove | Ogni invito pubblicato viene risolto; i propri codici sono sorvegliati con allarme se si liberano |
-| **Raid** | Reti di self-bot generano migliaia di account in pochi minuti; i primi 30 secondi decidono l'esito | Finestra scorrevole sui join + rilevamento di cluster simili + risposta graduata fino al lockdown |
-| **Nuke** | Un amministratore compromesso o un insider cancella canali e ruoli in venti secondi | Soglie per singolo attore sul registro di controllo, rimozione immediata dei ruoli, snapshot d'emergenza |
-| **Webhook ostili** | Consentono messaggi dall'aspetto ufficiale senza essere membri; usati come canale di esfiltrazione da pacchetti npm/PyPI compromessi | Inventario, allowlist, eliminazione automatica degli sconosciuti |
-| **Bot di terze parti** | Un bot con Administrator equivale al server compromesso se la sua catena di fornitura viene colpita | Punteggio di rischio dei permessi, rimozione di Administrator, allarme sugli aumenti di permessi |
-| **Impersonificazione dello staff** | Nickname e avatar copiati, spesso con omoglifi (`Мoderatore` con la M cirillica) | Confronto per similarità su nomi normalizzati contro lo staff reale |
-| **File mascherati** | `foto.png.exe`, eseguibili rinominati, polyglot | Verifica dei magic bytes, estensione doppia, firme dentro le immagini |
-| **Link raccolta IP** | Il bot non può ottenere IP, ma i link grabber postati in chat funzionano | Blocklist dei servizi noti |
-| **Adescamento di minori** | Il primo passo è quasi sempre pubblico: richiesta di età, invito a spostarsi in privato, richiesta di segretezza | Rilevamento di schemi combinati, segnalazione allo staff con prove congelate, **nessuna sanzione automatica** |
-
-Il resto — anti-spam, controllo account, verifica d'ingresso, ruoli appiccicosi — è configurabile
-modulo per modulo dal pannello.
-
-### Rapporto giornaliero in privato
-
-A mezzanotte, a chi possiede il bot (`OWNER_IDS`), un messaggio privato con **una scheda per
-server**: ingressi e uscite, messaggi archiviati ed eliminati, provvedimenti divisi per tipo, eventi
-per categoria, cosa è successo di più, ticket, persone in quarantena e attenzionate, incidenti — e
-in fondo la diagnosi della configurazione, cioè cosa non funzionerebbe se servisse.
-
-La ragione è che il pannello lo si apre quando si sospetta un problema, quindi non lo si apre mai
-finché il problema non è già successo. Un rapporto che arriva da solo racconta anche i giorni in cui
-non è successo niente, ed è confrontando quei giorni che ci si accorge di quello diverso.
-
-Il colore della scheda dice in un colpo d'occhio se c'è da fare qualcosa: rosso configurazione rotta,
-giallo incidenti, grigio normalità. I limiti di Discord — 4096 caratteri per descrizione, 1024 per
-campo, 25 campi, 10 embed — sono rispettati alla fonte: ogni pezzo viene troncato e il rapporto si
-divide in più messaggi invece di non partire affatto.
-
-L'ora è quella del container: `TZ` nel compose la sposta senza toccare il codice.
-
-### Segnalazioni con azioni rapide
-
-`/segnala` manda una segnalazione nel canale riservato (`angel-segnalazioni`, creato dalla
-predisposizione) con le prove congelate: se chi ha scritto il messaggio lo cancella subito dopo, la
-copia resta. Il nome di chi segnala lo vede solo lo staff.
-
-Accanto alla segnalazione ci sono i pulsanti — **silenzia 10 min**, **silenzia 1 ora**,
-**quarantena**, **espelli**, **bandisci**, **archivia** — perché il tempo fra «ho letto la
-segnalazione» e «ho agito» è quello in cui il danno continua.
-
-I pulsanti non scavalcano niente: controllano il permesso di chi preme, la gerarchia dei ruoli, e
-registrano il provvedimento nella scheda della persona esattamente come farebbe il comando. Quando
-uno viene premuto, il messaggio mostra chi ha deciso cosa — una segnalazione senza esito visibile
-viene riaperta da un altro moderatore due ore dopo.
-
-`/azioni` apre lo stesso pannello su una persona qualsiasi, per il moderatore che ha visto la cosa
-con i propri occhi e non vuole ricordarsi cinque comandi con i loro argomenti.
-
-### Controlli di coerenza
-
-I guasti peggiori non stanno dentro un modulo: stanno **fra** i moduli, e per questo non si vedono
-guardando la sezione di quello che sembra rotto. Sono sempre di tre tipi.
-
-| | Esempio reale |
-|---|---|
-| **Dipendenza spenta** | Il rilevatore di account compromessi prende due dei suoi segnali dallo scanner: con lo scanner spento restano a zero per sempre |
-| **Campo necessario vuoto** | Una soglia dice «quarantena» e il ruolo di quarantena non è impostato: l'azione non isola nessuno |
-| **Contrasto** | Lo stesso ruolo usato come «non ha ancora verificato» e come «è stato sanzionato»: chi entra risulta punito senza aver fatto nulla |
-
-Le dipendenze sono **dichiarate** in [`coerenza.ts`](packages/shared/src/config/coerenza.ts), non
-dedotte dal codice: dedurle avrebbe scoperto esattamente ciò che il codice fa, cioè anche i difetti,
-spacciandoli per regole. Sono i test a tenere la dichiarazione onesta — ogni modulo del pannello
-deve comparire, e ogni campo citato deve esistere davvero nella configurazione.
-
-Il risultato si legge in due posti, dalla stessa funzione: un riquadro in cima alla
-**Configurazione**, che si aggiorna mentre modifichi invece di aspettare il salvataggio, e il
-comando **`/diagnosi`** su Discord.
-
-Nessun controllo impedisce di salvare. Una configurazione incoerente è spesso un passaggio
-intermedio verso quella giusta, e un pannello che blocca a metà strada costringe a fare tutto in un
-colpo solo o a rinunciare.
-
-### Il filtro sul linguaggio
-
-Arriva con **718 espressioni** divise in sette categorie — volgarità, insulti, discriminazione,
-minacce, istigazione all'autolesionismo, bestemmie, contenuto sessuale — ognuna con la sua gravità e
-il suo interruttore. Il contenuto sessuale parte spento: su un server di adulti la conversazione può
-essere legittima.
-
-Il confronto è per parola intera e passa da una normalizzazione: `c a z z o`, `c-a-z-z-o` e
-`di0p0rc0` vengono riconosciuti senza doverli elencare. Le **eccezioni** vincono sempre, ed è metà
-del lavoro: un filtro che blocca chi parla di edilizia (`cazzuola`) o nomina una città (`Cagliari`)
-insegna in un pomeriggio che il bot va ignorato.
-
-Restano fuori di proposito parole che senza contesto non si possono giudicare: `muori` (muori dal
-ridere), `crepa` (una crepa nel muro), `sega` (l'attrezzo), `figa` (in mezza Italia significa
-«bello»). Ogni falso positivo costa più di ciò che il blocco guadagna.
-
-**Aggiungerne è la cosa che si fa più spesso**, quindi si fa in due modi:
-
-- da Discord, nel momento in cui la parola compare: `/parole aggiungi parola:tizio, caio
-  categoria:Insulto gravita:media`, e poi `/parole togli`, `/parole consenti` per le eccezioni,
-  `/parole cerca`, `/parole elenco` per il conto per categoria;
-- dal pannello, in *Sicurezza → Linguaggio*: ricerca, filtro per categoria, aggiunta in cima e un
-  campo per incollare venti parole in una volta.
-
-`/prova-filtro` mostra cosa verrebbe riconosciuto in un testo senza sanzionare nessuno — utile
-perché in chat amministratori e proprietari del bot sono esenti, cioè proprio chi vorrebbe provarlo.
-
-#### Se il bot è installato da tempo, le parole nuove non ti arrivano
-
-I valori predefiniti valgono **solo per le configurazioni nuove**. Su un server configurato mesi fa
-l'elenco salvato resta quello di allora: le voci aggiunte al bot nel frattempo non compaiono, e non
-c'è modo di accorgersene se non notando che una parola non viene riconosciuta.
-
-Si rimedia con **`/parole aggiorna`**, o con il pulsante nel pannello che dice quante ne mancano. Le
-tue restano come le hai messe: nessuna gravità e nessuna categoria vengono cambiate.
-
-#### Elenchi come file
-
-Il formato è in [`elenchi/`](elenchi/), con il file `italiano-base.elenco` che contiene tutte le
-voci predefinite. Si legge a occhio, si commenta, si tiene sotto controllo di versione:
-
-```
-@categoria MINACCIA
-@gravita GRAVE
-ti ammazzo
-ti trovo
-
-porco dio | BESTEMMIA | GRAVE
-```
-
-Si importa con `/parole importa` allegando il file, o dal pannello; si esporta con
-`/parole esporta`. Una riga sbagliata viene saltata e riportata con il suo numero invece di far
-fallire tutto: un file di trecento parole che non si importa per un refuso alla riga 118 è un file
-che si smette di usare.
-
-### Anti-flame
-
-Il filtro delle parole guarda un messaggio alla volta; il flame non è un messaggio, è uno scambio. La
-prima risposta non è una sanzione ma un **rallentamento del canale**: silenziare i due che litigano
-punisce chi ha risposto quanto chi ha cominciato, mentre rallentare toglie alla spirale proprio ciò
-di cui si nutre, la rapidità.
-
-Il riconoscimento non passa dalle parolacce ma dal **modo** — la differenza fra «che schifo di
-partita» e «fai schifo». Il vocabolario stava scritto nel codice; ora è configurabile, ed è giusto
-che lo sia: un modulo che decide di rallentare un canale in base a un elenco che nessuno può vedere
-è un modulo di cui non ci si fida.
-
-Si regolano le espressioni riconosciute, quanto pesa ciascun segnale (frase rivolta a una persona,
-messaggio urlato, menzione del destinatario, punteggiatura concitata) e — cosa che prima non
-esisteva — le **frasi di tregua**: «scusa», «hai ragione», «lasciamo perdere» abbassano il
-punteggio. Senza, il messaggio con cui qualcuno prova a rimediare contava come un colpo in più, e
-l'intervento arrivava proprio mentre la discussione stava rientrando da sola.
-
-### Link e GIF: dove sì e dove no
-
-Va detto perché genera confusione: **i link non sono vietati.** Vengono tolti solo quando sono
-pericolosi — dominio in blocklist, phishing riconosciuto, invito verso un server sconosciuto,
-link a un eseguibile sulla CDN di Discord — e quel controllo vale in ogni canale, ticket compresi.
-
-Chi invece vuole decidere *dove* si possono mettere link e GIF ha un modulo apposta,
-**Sicurezza → Link e GIF**, spento di partenza. Serve per il canale annunci che non deve riempirsi
-di link e per la chat che non deve diventare un muro di GIF: si indicano i canali dove sono
-ammessi, e altrove il messaggio viene tolto con una spiegazione che sparisce da sola.
-
-Non è una difesa e non si comporta come tale: nessun punteggio di rischio, nessuna sanzione che si
-accumula. Chi incolla un link nel canale sbagliato non è un aggressore.
-
-Tre cose da sapere:
-
-- **Nei ticket si può sempre**, salvo spegnere l'opzione. Chi apre un ticket sta descrivendo un
-  problema, e la prova è quasi sempre uno screenshot o un link: vietarli lì impedisce di spiegarsi
-  nel posto nato apposta.
-- I link a **Tenor e Giphy** valgono come GIF, non come link — altrimenti finirebbero tolti proprio
-  dal canale delle GIF.
-- I **domini di casa** (il proprio sito, la wiki del server) si mettono fra quelli ammessi ovunque.
-
-Lasciando vuoti entrambi gli elenchi di canali non succede nulla: è il modo di tenere il modulo
-acceso senza vietare niente.
-
-### AutoMod nativo: l'unica difesa che arriva prima del messaggio
-
-Un bot vede un messaggio solo **dopo** che esiste; l'AutoMod di Discord lo intercetta durante
-l'invio. Per il contenuto noto in anticipo — domini di phishing, termini vietati — quella manciata
-di millisecondi è la differenza fra «nessuno l'ha visto» e «l'hanno letto in trenta».
-
-ANGEL tiene sincronizzate le regole native a partire dalle proprie blocklist (`/audit`, oppure dal
-pannello). Gestisce solo le regole che ha creato lui, riconoscibili dal prefisso `[ANGEL]`: quelle
-scritte a mano dallo staff non vengono mai toccate.
-
-Il caso più interessante è la regola sul **profilo utente** con azione `BlockMemberInteraction`:
-Discord mette in quarantena chi ha un nickname vietato — «Discord Staff», «Moderatore ufficiale» —
-prima ancora che possa scrivere o entrare in vocale. Nessun bot può arrivare così presto.
-
-### Nota tecnica onesta sulle immagini
-
-Un PNG o un JPG su Discord **non esegue codice**. Le immagini delle campagne scam sono contenitori
-di *link*: testo sovrimpresso, QR, o il messaggio che le accompagna. Perciò lo scanner non cerca un
-virus nei pixel — estrae ogni URL visibile o codificato, ne verifica la reputazione, e riconosce la
-campagna con l'hash percettivo. Per gli **allegati non-immagine** il controllo è invece
-sostanziale: magic bytes, estensione doppia, polyglot, eseguibili dentro gli archivi.
-
----
-
-## Architettura
-
-```
-aegis/
-├─ apps/
-│  ├─ bot/       discord.js 14 — gateway, comandi, moduli di sicurezza
-│  ├─ api/       Fastify 5 — REST + WebSocket + OAuth2, serve anche il pannello
-│  ├─ web/       React 19 + Vite 8 + Tailwind 4 — pannello
-│  └─ worker/    BullMQ 6 — OCR, backup, blocklist, retention, Twitch
-├─ packages/
-│  ├─ shared/    schemi Zod della configurazione, tipi, utilità di testo
-│  ├─ db/        Prisma 7 (schema + client)
-│  └─ scanner/   libreria pura: URL, QR, OCR, pHash, file, ClickFix
-└─ docker/       Dockerfile e Caddyfile
-```
-
-Tre scelte che spiegano il resto:
-
-- **Un solo processo parla con Discord.** Il pannello pubblica intenzioni su Redis e il bot le
-  esegue. Rate limit gestiti in un punto solo, pannello riavviabile senza far cadere il gateway.
-- **Gli schemi di configurazione stanno in un unico posto** (`packages/shared`). Il bot li usa per
-  leggere, l'API per validare, il pannello per generare i form. Due copie divergono sempre, e la
-  divergenza si scopre quando una difesa non parte.
-- **Tutto ciò che è lento vive nel worker.** L'OCR costa fino a due secondi per immagine: eseguirlo
-  nel processo del gateway ritarderebbe anche gli eventi dell'anti-raid, che non possono aspettare.
-
----
-
-## Requisiti
-
-- Docker e Docker Compose (inclusi in ZimaOS)
-- Un'applicazione Discord con bot
-- Facoltativi: chiave Google Safe Browsing (gratuita), credenziali Twitch, dominio con HTTPS
-
-Per lo sviluppo in locale servono anche Node 22+ e istanze di PostgreSQL e Redis.
-
----
-
-## Configurazione dell'applicazione Discord
-
-1. Vai su <https://discord.com/developers/applications> e crea una nuova applicazione.
-2. Sezione **Bot**: crea il bot, copia il token in `DISCORD_TOKEN`.
-3. Sempre nella sezione **Bot**, attiva **tutti e tre** i *Privileged Gateway Intents*:
-   - **Server Members Intent** — join, ruoli, profili
-   - **Message Content Intent** — scanner dei contenuti
-   - **Presence Intent** — rilevamento account compromessi
-
-   > Devono essere accesi tutti e tre: il client li richiede in blocco e Discord, se anche uno
-   > solo manca, non degrada ma chiude la connessione con `Used disallowed intents` (close code
-   > 4014). Nei log compare come un riavvio in ciclo del servizio `bot`.
-   >
-   > Dal 10 giugno 2026 la soglia per l'approvazione non è più «100 server» ma **10.000 utenti
-   > unici** raggiunti dall'app. Sotto quella soglia gli intent si attivano direttamente dal
-   > Developer Portal. La verifica del bot a 100 server resta un procedimento separato, e
-   > l'approvazione degli intent va rinnovata ogni anno.
-
-4. Sezione **OAuth2**: copia *Client ID* e *Client Secret*. Aggiungi come redirect
-   `https://tuodominio.it/api/auth/callback` (in locale: `http://localhost:8080/api/auth/callback`).
-5. Invita il bot con questi permessi:
-
-   ```
-   https://discord.com/oauth2/authorize?client_id=IL_TUO_CLIENT_ID&scope=bot+applications.commands&permissions=1101390802102
-   ```
-
-   Corrispondono a: gestione ruoli, canali, webhook, server ed espressioni; ban, kick e timeout;
-   gestione messaggi; lettura del registro di controllo; invio di messaggi, embed e allegati.
-   Non è richiesto `Administrator`, e non va concesso: un bot con Administrator rende il server
-   compromettibile attraverso la catena di fornitura del bot stesso.
-
-6. **Posizione del ruolo**: sposta il ruolo del bot *sopra* tutti i ruoli su cui deve poter agire.
-   Discord non consente di toccare chi ha un ruolo più alto — è il motivo più frequente per cui una
-   difesa configurata correttamente non riesce ad applicare la sanzione.
-
----
-
-## Deploy su ZimaOS
-
-### 1. Prendi il codice sulla VPS
-
-```bash
-git clone https://github.com/Gigiomiccio425/aegis-discord-bot.git aegis
-cd aegis
-cp .env.example .env
-```
-
-Gli aggiornamenti successivi sono `git pull` seguito da una ricostruzione:
-
-```bash
-git pull && docker compose up -d --build
-```
-
-Il file `.env` non è nella repository e non viene toccato da `git pull`: resta quello della tua
-macchina. È voluto — i segreti non stanno in git, e un aggiornamento non deve poterli sovrascrivere.
-
-Genera i due segreti:
-
-```bash
-openssl rand -hex 32   # → SESSION_SECRET
-openssl rand -hex 32   # → ENCRYPTION_KEY
-```
-
-Compila `.env` con token Discord, client ID e secret, i tuoi `OWNER_IDS`, una password robusta per
-Postgres, e `PUBLIC_URL` (il dominio da cui raggiungerai il pannello).
-
-### Porte e HTTPS
-
-Il reverse proxy pubblica **780** (HTTP) e **781** (HTTPS), non 80 e 443: sono fuori dagli standard,
-non entrano in conflitto con ZimaOS (che occupa la 80) né con SSH, DNS, mail o database, e restano
-sotto la 1024. Il binding a porte basse funziona perché è il demone Docker a legarle, non il
-processo dentro al container.
-
-```env
-HTTP_PORT=780
-HTTPS_PORT=781
-```
-
-Qui c'è però un vincolo che non dipende da questo progetto e va detto chiaro: **spostandosi da 80 e
-443 si perde il certificato HTTPS automatico.** Let's Encrypt verifica il dominio contattando la
-porta 80 o la 443; se lì non c'è nulla, il certificato non viene emesso. Tre soluzioni, in ordine di
-praticità:
-
-| Situazione | Configurazione | Risultato |
-|---|---|---|
-| **Accesso via IP**, rete locale o VPN | `SITE_ADDRESS=:80` · `TLS_DIRECTIVE=` vuoto | `http://IP:780`. Nessun certificato, nessun avviso. Va benissimo se il pannello non è esposto a internet |
-| **Dominio, porte non standard** | `SITE_ADDRESS=https://aegis.tuodominio.it:781` · `TLS_DIRECTIVE=tls internal` | HTTPS con certificato autofirmato. Il browser avvisa la prima volta, poi si accetta l'eccezione. Il traffico è cifrato lo stesso |
-| **Dominio con certificato valido** | `SITE_ADDRESS=aegis.tuodominio.it` · `HTTP_PORT=80` · `HTTPS_PORT=443` | Certificato Let's Encrypt automatico, nessun avviso. Richiede le porte standard libere |
-
-### Con Tailscale: privato e in HTTPS, senza aprire nulla
-
-Se la macchina è nel tuo tailnet, questa è la soluzione migliore su ogni fronte — e risolve anche
-il problema del certificato.
-
-Lega la porta alla sola interfaccia di loopback, così dall'esterno non esiste:
-
-```yaml
-ports:
-  - target: 8080
-    published: '780'
-    host_ip: 127.0.0.1
-    protocol: tcp
-```
-
-Poi, sulla macchina, una volta sola:
-
-```bash
-tailscale serve --bg 780
-```
-
-Il pannello diventa raggiungibile da qualunque tuo dispositivo collegato al tailnet, all'indirizzo
-`https://nome-macchina.tuo-tailnet.ts.net`, **con un certificato valido** emesso da Tailscale. Da
-internet resta invisibile: niente porte aperte, niente firewall da configurare, niente IP da
-ricordare.
-
-```bash
-tailscale serve status   # cosa sta servendo
-tailscale serve off      # smetti di servirlo
-```
-
-Poi in `PUBLIC_URL` metti quell'indirizzo **senza porta** — Tailscale serve sulla 443 — e registra
-lo stesso indirizzo con `/api/auth/callback` fra i redirect OAuth2.
-
-Un avvertimento: questo funziona se Tailscale gira **sulla macchina**, installato con il pacchetto
-di sistema. Se lo esegui come container senza rete host, `tailscale serve` non vede il `127.0.0.1`
-dell'host e non raggiunge il pannello.
-
-Resta anche la via del tunnel SSH, che non richiede nulla:
-
-```bash
-ssh -L 780:127.0.0.1:780 utente@IP_VPS
-```
-
-E c'è una quarta strada per il certificato, la validazione DNS: è l'unica ACME a ignorare le porte,
-ma richiede una build di Caddy con il modulo del tuo provider DNS e un token API. Con Tailscale non
-serve.
-
-**`PUBLIC_URL` deve combaciare esattamente** con l'indirizzo che digiti nel browser, porta compresa:
-è l'indirizzo su cui Discord rimanda dopo l'accesso OAuth2. Una porta diversa lì significa accesso
-al pannello che fallisce con «stato non valido».
-
-```env
-PUBLIC_URL=http://192.168.1.50:780
-```
-
-Ricorda di aggiungere lo stesso indirizzo con `/api/auth/callback` fra i redirect OAuth2
-dell'applicazione Discord.
-
-### 2. Installa come app personalizzata
-
-Due strade, e la differenza sta in *chi* costruisce l'immagine.
-
-#### A. Dall'interfaccia di ZimaOS — nessun terminale
-
-**App Store → Install a Custom App**, incolla il contenuto di
-[`docker-compose.zimaos.yml`](docker-compose.zimaos.yml).
-
-Quel file non compila nulla: scarica immagini già pronte da GitHub Container Registry, costruite
-automaticamente a ogni aggiornamento del progetto. Porta con sé anche i metadati `x-casaos`, quindi
-l'app compare nella dashboard di ZimaOS con icona, nome e il collegamento al pannello.
-
-Prima di premere installa vanno compilati i valori segnati `METTI_QUI` e `CAMBIA_QUESTA_PASSWORD`
-direttamente nell'editor: l'interfaccia di ZimaOS non conosce i file `.env`, quindi le variabili
-stanno inline. L'app store mostra l'elenco dei passaggi anche al momento dell'installazione.
-
-Aggiornare significa ricreare l'app tirando di nuovo l'immagine `latest`.
-
-#### B. Da terminale — se vuoi compilare tu
-
-```bash
-docker compose up -d --build
-```
-
-Serve il codice sul disco (il `git clone` del passaggio precedente) e qualche minuto per la prima
-compilazione. È la via giusta se modifichi il codice, perché non dipende dalle immagini pubblicate.
-
-I dati stanno in posti diversi nelle due strade: con il compose di ZimaOS finiscono in
-`/DATA/AppData/aegis/`, con quello di sviluppo in volumi Docker gestiti. Non mescolare le due
-installazioni sullo stesso server.
-
-Il primo avvio compila l'immagine (qualche minuto) e applica le migrazioni del database. L'ordine è
-gestito dal compose: Postgres e Redis devono essere sani, poi gira il servizio `migrate`, poi
-partono bot, worker e API.
-
-### 3. Verifica
-
-```bash
-docker compose ps          # tutti i servizi devono risultare healthy
-docker compose logs -f bot # deve comparire "connesso al gateway"
-curl http://localhost:8080/health
-```
-
-Apri il pannello all'indirizzo di `PUBLIC_URL` e accedi con Discord.
-
-### Immagini pubblicate
-
-Ogni push su `main` costruisce e pubblica l'immagine su GitHub Container Registry, per `amd64` e
-`arm64`:
-
-```
-ghcr.io/gigiomiccio425/aegis-discord-bot:latest
-```
-
-È un'immagine sola per bot, API e worker: cambia solo il comando di avvio. Tre immagini identiche
-al 99% sarebbero tre volte il tempo di build e tre volte lo spazio, per nessun guadagno.
-
-Lo stesso workflow esegue controllo dei tipi, test e lint a ogni push: se qualcosa si rompe,
-l'immagine non viene pubblicata.
-
-Oltre a `latest`, ogni tag `vX.Y.Z` produce tre riferimenti:
-
-| Tag immagine | Cosa segue |
-|---|---|
-| `:latest` | l'ultima build del ramo principale |
-| `:1.2.3` | quella versione esatta, che non cambia mai |
-| `:1.2` | l'ultima correzione della serie 1.2 |
-
----
-
-## Deploy su Umbrel
-
-Umbrel non ha il «incolla un compose» di ZimaOS: le app arrivano dallo store, e lo store prende i
-file da una repository git. Per un bot con dentro un token Discord e una chiave di cifratura quella
-strada è sbagliata — i segreti finirebbero in git, oppure in file che Umbrel riscrive a ogni
-aggiornamento dell'app.
-
-Si installa quindi a mano via SSH, in una cartella propria. Sotto, Umbrel ha Docker normale: l'app
-resta fuori dallo store e nessun aggiornamento di umbrelOS la tocca.
-
-```bash
-ssh umbrel@umbrel.local
-mkdir -p ~/angel && cd ~/angel
-
-curl -fsSLO https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/umbrel/docker-compose.yml
-curl -fsSL  https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/umbrel/.env.esempio -o .env
-
-nano .env
-docker compose up -d
-```
-
-I segreti stanno in `.env` e non nel compose: così il compose si può leggere, copiare e aggiornare
-senza pensarci. Il pannello risponde su `http://umbrel.local:780`, quello degli streamer Twitch
-sulla 781.
-
-Passaggi completi, cartelle, trasloco e diagnostica: **[umbrel/LEGGIMI.md](umbrel/LEGGIMI.md)**.
-
----
-
-## Aggiornare
-
-**Una riga, un riavvio.** Nel compose la versione compare in un punto solo:
-
-```yaml
-image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.1.2
-```
-
-Cambiala e riavvia l'app. Non c'è altro da toccare.
-
-Un tag preciso resta fermo finché non lo cambi tu, ed è la scelta giusta se preferisci decidere
-quando aggiornare invece di scoprirlo dopo un riavvio. `:latest` aggiorna a ogni ricreazione.
-
-### Perché un container solo
-
-Fino alla 1.1.1 i servizi erano quattro container che condividevano la stessa immagine: bot,
-worker, pannello e migrazione. Sembrava più ordinato ed è stato un errore.
-
-Aggiornare significava aggiornarne quattro, e bastava che uno restasse indietro perché il sistema
-diventasse incomprensibile: il pannello mostrava la versione nuova, il bot faceva quello che faceva
-prima, e la conclusione naturale era che la correzione non funzionasse. Succedeva sul serio, perché
-l'app store di ZimaOS espande le àncore YAML quando installa: nella sua copia le righe `image:`
-erano quattro e distinte, e cambiarne una non cambiava le altre.
-
-Ora è un container solo. Dentro, un supervisore ([`docker/avvio.mjs`](docker/avvio.mjs)) applica le
-migrazioni, avvia i tre processi e li riavvia se cadono, con attesa crescente fra i tentativi. Il
-prezzo è quel file; il guadagno è che una classe intera di guasti non può più capitare.
-
-Chi preferisce separarli lo può ancora fare: basta indicare `command:` nel compose, e l'immagine
-avvia il singolo processo invece del supervisore.
-
-### I dati restano
-
-Nessun aggiornamento tocca i dati. Vivono nei volumi Docker, che sopravvivono alla ricreazione del
-container: registro eventi, configurazione, snapshot, archivio messaggi, casi, profili di rischio.
-
-Lo schema lo allinea il supervisore all'avvio con `prisma migrate deploy`: applica solo le
-migrazioni mancanti, non fa nulla se sono già tutte presenti, e i tre processi partono solo dopo
-che ha finito. Non esiste il momento in cui il codice nuovo parla a uno schema vecchio.
-
-### Con il backup automatico
-
-Se vuoi che una copia del database venga fatta **prima** di ogni aggiornamento — e conviene, perché
-una migrazione non si annulla:
-
-```bash
-curl -O https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/aggiorna.sh
-sudo sh aggiorna.sh docker-compose.yml 1.1.2
-```
-
-Lo script copia il database, imposta la versione indicata, scarica l'immagine e ricrea tutto. La
-copia finisce in `/DATA/aegis-backup`, ne tiene le ultime dieci, e se il dump risulta vuoto si
-ferma senza aggiornare.
-
-A mano, se preferisci:
-
-```bash
-docker compose -f docker-compose.yml pull
-docker compose -f docker-compose.yml up -d
-```
-
-### Sapere cosa sta girando
-
-La versione è scritta nell'immagine dalla CI e compare in fondo alla colonna di sinistra del
-pannello. Se su GitHub esiste una release più recente, al suo posto appare un avviso con il numero
-della nuova versione e il link alle note. Il confronto lo fa l'API, con la risposta di GitHub in
-cache per sei ore.
-
-### Tornare indietro
-
-Rimetti la versione precedente nella riga `image:`, `docker compose up -d`, e se quella versione
-aveva uno schema diverso ripristina il dump corrispondente — il comando esatto lo stampa
-`aggiorna.sh` alla fine di ogni esecuzione.
-
-### ZimaOS: `/DATA` non è il disco grande
-
-Vale la pena saperlo **prima** di installare, perché il modo in cui si scopre è sempre lo stesso: il
-bot smette di funzionare, i log dicono `No space left on device`, e l'interfaccia mostra centinaia di
-giga liberi.
-
-Su ZimaBoard e ZimaBlade `/DATA` è la **eMMC interna**. Dopo le partizioni di sistema — boot,
-recovery, due slot RAUC, overlay, metadati — restano circa 17 GB utili, e lì dentro ZimaOS mette
-sia le immagini Docker sia i dati delle app. Il disco da terabyte è montato altrove e resta vuoto
-mentre quello si riempie: sono due filesystem diversi, e quello che si guarda non è quello che si
-riempie.
-
-Da qui la sequenza di sintomi tipica, tutti apparentemente scollegati: Postgres che non riesce a
-scrivere il proprio file di lock, Redis che rifiuta ogni scrittura perché non riesce a salvare, il
-pannello che risponde 500, l'App Store che non installa più niente.
-
-**Prima di installare**, in ZimaOS: *Impostazioni → App → Migrating location*, e sposta sul disco
-grande tutte e tre le voci — dati delle app, immagini Docker, database utente.
-
-Per capire dove si è davvero:
-
-```bash
-df -h /DATA                  # se dice ~17 GB, è la eMMC
-df -i /DATA                  # gli inode finiscono anche con spazio libero
-findmnt -T /var/lib/docker   # dove vivono immagini e volumi
-lsblk -f                     # dov'è montato il disco grande
-```
-
-Nota sul `df -h /` che mostra il 100%: su ZimaOS è normale e non è il problema. La radice è
-immutabile e piccola per costruzione (circa 1,2 GB); ciò che conta è la partizione che ospita
-`/var/lib/docker` e `/DATA`.
-
-### Note specifiche di ZimaOS
-
-- Il reverse proxy (Caddy) è **incluso nel compose**. Su ZimaOS i container avviati dall'interfaccia
-  hanno nomi generati e non espongono label, il che rende scomodo un Traefik o un Nginx Proxy
-  Manager esterni: farsi il proxy in casa evita il problema.
-- Le porte pubblicate sono 780 e 781 proprio per non collidere con l'interfaccia di ZimaOS, che
-  usa la 80. Se le vuoi cambiare, qualunque valore libero va bene: `HTTP_PORT` e `HTTPS_PORT`
-  nel `.env`.
-- I dati persistenti stanno nei volumi Docker `postgres_data`, `redis_data` e `app_storage`. In
-  `app_storage` finiscono gli allegati archiviati: dimensionalo di conseguenza se attivi
-  l'archiviazione con una retention lunga.
-
-### Backup del database
-
-```bash
-docker compose exec postgres pg_dump -U aegis aegis | gzip > aegis-$(date +%F).sql.gz
-```
-
-Vale la pena metterlo in cron: gli snapshot del server Discord vivono dentro Postgres, quindi
-perdere il database significa perdere anche i backup della struttura del server.
-
----
-
-## Sviluppo in locale
-
-```bash
-npm install
-npm run db:generate
-
-# Postgres e Redis, senza il resto dello stack
-docker compose up -d postgres redis
-
-npm run db:push          # crea lo schema senza migrazioni
-npm run commands:deploy  # registra i comandi slash
-
-npm run dev:bot          # in tre terminali separati
-npm run dev:api
-npm run dev:web          # pannello su http://localhost:5173
-npm run dev:worker
-```
-
-In sviluppo imposta `DEV_GUILD_ID`: i comandi vengono registrati solo su quella guild e sono
-disponibili all'istante, invece di attendere fino a un'ora per la propagazione globale.
-
-```bash
-npm test         # 56 test su scanner e utilità di testo, senza rete né database
-npm run typecheck
-```
-
----
-
-## Primo avvio: cosa configurare
-
-Il bot parte con tutti i moduli **spenti**: nessuna sanzione viene applicata finché non si decide
-cosa attivare. L'ordine consigliato:
-
-1. **Registro eventi** — imposta un canale di log. Serve a vedere cosa succede prima di decidere
-   cosa bloccare.
-2. **Ruolo di quarantena** — crea un ruolo senza permessi, con l'accesso negato a tutti i canali,
-   e indicalo nella configurazione generale. Senza, le difese non hanno dove isolare nessuno.
-3. **Canale di allarme e ruolo da menzionare** — per gli eventi critici.
-4. **Modalità prova** (`dryRun`) — attivala per qualche giorno: i moduli valutano e registrano tutto
-   ma non sanzionano. È il modo per tarare le soglie guardando cosa *avrebbero* fatto.
-5. Attiva i moduli, partendo da anti-nuke e scanner dei contenuti, che hanno pochissimi falsi
-   positivi. Anti-spam e controllo account vogliono più taratura.
-6. **Parola d'ordine dello staff** — impostala. Contro una voce clonata da tre secondi di audio non
-   esiste rilevamento affidabile; una parola concordata in anticipo sì.
-7. **Whitelist anti-nuke** — aggiungi i bot legittimi che riorganizzano canali o ruoli, altrimenti
-   verranno disarmati al primo lavoro di manutenzione.
-
-### Costruire il server da zero
-
-`/crea-server` (anche `/build-server`) porta un server vuoto a essere una community pronta:
-ruoli, categorie, canali, modalità community, verifica e ticket, con la configurazione già
-compilata per ogni funzione del bot — comprese quelle spente, perché un canale che esiste si
-accende con una spunta mentre un canale che manca richiede di ricordarsi che serviva.
-
-La struttura segue il percorso di chi arriva, che è la ragione per cui funziona: prima si capisce
-dove si è (regolamento, verifica, annunci, ruoli), poi si parla (pochi canali generali e pieni),
-poi le cose specifiche (dirette, clip, eventi), e in fondo staff e assistenza. Un server nuovo con
-venti canali tematici è venti canali vuoti, e il vuoto scoraggia più di una chat affollata.
-
-**La modalità community si accende da sola.** Discord la concede a un bot con Amministratore, ma
-pretende nella stessa richiesta il canale del regolamento, quello degli aggiornamenti per lo staff
-e le due impostazioni minime di sicurezza — mandandone una in meno risponde con un errore che
-parla d'altro. Da lì arrivano i canali annuncio, i forum e le funzioni riservate alle community.
-
-Si può rieseguire quando si vuole: ogni cosa viene cercata per nome prima di essere creata, e i
-campi già compilati non vengono toccati.
-
-**Il bot non può creare il server.** L'API lo consentirebbe a un bot presente in meno di dieci
-server, ma il proprietario risulterebbe il bot e la proprietà non è trasferibile a una persona: un
-server di cui non sei padrone non è tuo. Il server si crea a mano in dieci secondi, e da lì in poi
-fa tutto il comando.
-
-### I ruoli
-
-C'è **un ruolo per concetto**, e cambia vestito invece di essere affiancato da un secondo. Nasce con
-il nome tecnico — `ANGEL · Staff` — e quando scegli uno stile con `/crea-server` diventa
-`☾ Ali Guardiane` **restando lo stesso ruolo**: stesso identificativo, stesse persone dentro,
-stessi permessi sui canali. La configurazione non va riscritta e niente si rompe.
-
-Fino alla 1.26 erano due elenchi che non si conoscevano, e il risultato era che un moderatore doveva
-avere `ANGEL · Staff` *e* `☾ Ali Guardiane`: uno perché il bot lo esentasse, l'altro perché si
-vedesse nella lista membri.
-
-| Ruolo | Stile *nuvole* | Stile *yuyu* | A chi va |
-|---|---|---|---|
-| `ANGEL · Non verificato` | `☁︎ In attesa` | `⊹ senza ali` | a chiunque entri — lo mette il bot |
-| `ANGEL · Verificato` | `˚ʚ♡ɞ˚ Piumette` | `⋆｡˚ yuyu ˚｡⋆` | a chi supera la verifica — lo mette il bot |
-| `ANGEL · Quarantena` | `⛆ Nube grigia` | `༄ piuma spezzata` | provvedimento: legge ovunque, non scrive |
-| `ANGEL · Staff` | `☾ Ali Guardiane` | `✦ custodi` | **ai moderatori veri.** Sei campi puntano qui |
-| `ANGEL · Guida` | `⋆｡°✩ Angelo Maggiore` | `⟡ custode del cielo` | a te, e a chi divide la responsabilità del server |
-| `ANGEL · Aiutanti` | `✿ Piume` | `˖ ࣪ piccole ali` | a chi dà una mano e non deve poter bandire nessuno |
-| `ANGEL · Sostenitori` | `♡ Nuvola d'oro` | `ೀ yuyu d'oro` | a chi ha potenziato il server |
-| `ANGEL · Allerta` | `⚡ Sveglia le ali` | `⚡ sveglia le nuvole` | a chi vuoi svegliare di notte per un raid |
-| `ANGEL · In diretta` | `✧ Luci accese` | `⭑ ora in volo` | allo streamer mentre trasmette — lo mette il bot |
-| `ANGEL · Partecipa` | `✿ Ci sarò` | `⊹ presente` | a chi conferma un evento — lo mette il bot |
-| `ANGEL · Avviso diretta/video/eventi` | `⋆ ✦ ✧ Avviso …` | `☾ ✦ ⟡ …` | se li prendono da soli da «prendi-i-ruoli» |
-
-**Due modelli, due tavolozze.** `/crea-server modello:` sceglie fra *nuvole* — separatori grandi,
-maiuscole, l'angioletto bianco — e *yuyu*, tutto minuscolo con simboli minuti, dove i verificati si
-chiamano come la community di yayadoppia. Struttura e percorsi di configurazione sono identici:
-cambia solo la voce. Senza indicare niente si tiene quello già in uso, perché i canali si ritrovano
-per nome e passare da un modello all'altro non rinomina quelli che esistono — li affiancherebbe.
-
-I primi quattro della predisposizione (`Non verificato`, `Verificato`, `Quarantena`, `Staff`,
-più `Allerta`, `In diretta` e `Partecipa`) nascono con `/prepara-server`. Gli altri arrivano con
-`/crea-server`: su un'installazione che vuole solo la parte di sicurezza sarebbero ruoli decorativi
-mai chiesti.
-
-**I permessi arrivano con lo stile, non alla creazione.** Un ruolo appena nato non ha ancora nessuno
-dentro, e darglieli lì significa crearlo già pericoloso. Quando si sceglie uno stile, `Staff` riceve
-espelli/bandisci/silenzia/gestisci messaggi/registro/soprannomi, e `Guida` quelli più tutto il resto
-che serve a tenere in ordine il server.
-
-Tre permessi il bot non li dà **mai**, a nessun ruolo e in nessuno stile: **Amministratore**,
-**Gestire i ruoli** e **Gestire i canali**. Sono le tre chiavi con cui si prende il controllo di un
-server — chi può assegnare ruoli può assegnarsi qualunque cosa — e restano una decisione di una
-persona. C'è un test che verifica che non compaiano.
-
-E i permessi **si aggiungono, non si sostituiscono**: se ne hai tolti a mano, restano tolti. Una
-riesecuzione non riporta indietro un ruolo che avevi ridotto di proposito.
-
-### Ruoli doppi: `/ripara-ruoli`
-
-Per i server costruiti prima dell'unificazione, che hanno entrambi gli insiemi.
-
-```
-/ripara-ruoli                    guarda e racconta cosa farebbe
-/ripara-ruoli applica:true       lo fa
-/ripara-ruoli applica:true stile:Angelico
-```
-
-Per ogni concetto trova tutti i ruoli che gli corrispondono, ne sceglie uno — quello già scritto in
-configurazione, altrimenti quello con più persone, altrimenti il più alto — sposta le persone dagli
-altri, cancella i vuoti e corregge i campi.
-
-Non fa niente finché non glielo si chiede: cancellare un ruolo porta via ogni permesso che qualcuno
-gli aveva dato sui canali, uno per uno, senza avviso, e quell'anteprima è l'unica occasione di
-accorgersi che uno dei doppioni non era un doppione. Chi si sposta riceve **prima** il ruolo che
-resta e solo dopo perde il vecchio: al contrario, un errore fra le due chiamate lascerebbe qualcuno
-senza nessuno dei due.
-
-Un ruolo con più di 500 persone, o più alto del bot, o creato da un'integrazione, viene lasciato
-dov'è e segnalato.
-
-### Cosa fa la predisposizione ai permessi
-
-Con la verifica attiva, «Prepara il server» chiude il server a `@everyone`: i canali diventano
-visibili solo a chi ha il ruolo **ANGEL · Verificato**, e chi arriva vede il solo canale `#verifica`
-finché non preme il pulsante. Da lì lo staff affina come crede — questa è la base, non la parola
-finale.
-
-Due cose che vale la pena sapere prima di premere:
-
-- **I membri già presenti diventano verificati.** Senza, chiudere i canali a `@everyone`
-  cancellerebbe il server sotto gli occhi di tutti nello stesso istante: la verifica riguarda chi
-  arriva, non chi c'è da mesi. Sono compresi i bot, che senza il ruolo perderebbero la vista dei
-  canali e smetterebbero di funzionare senza un errore che lo spieghi.
-- **I canali già riservati non vengono toccati.** La regola è una sola: si interviene solo dove
-  `@everyone` vede già. Dove è già escluso non viene scritto nulla — né la negazione, superflua, né
-  il permesso ai verificati, che è precisamente ciò che aprirebbe allo staff allargato un canale
-  riservato agli amministratori.
-
-Vale anche per i canali creati dopo: nascono chiusi come gli altri, altrimenti basterebbe un canale
-aggiunto in fretta per aprire una finestra sul server.
-
----
-
-## Il pannello
-
-Otto sezioni, raggiungibili da `PUBLIC_URL` dopo l'accesso con Discord:
-
-| Sezione | Cosa contiene |
-|---|---|
-| **Dashboard** | Minacce bloccate, grafico degli ingressi per ora, feed live via WebSocket, incidenti recenti con riabilitazione di massa, azioni rapide (lockdown, backup) |
-| **Registro eventi** | Ricerca e filtri su tutti gli eventi, paginazione a cursore, dettaglio JSON di ogni riga; ogni autore è un link alla sua scheda |
-| **Scheda utente** | Profilo, rischio, provvedimenti, tempo in vocale e cronologia completa in una pagina, con il contenuto dei messaggi archiviati |
-| **Provvedimenti** | Casi con filtro per stato, revoca, e **appelli in attesa** con accoglimento che revoca davvero la sanzione |
-| **Sicurezza** | Inventario webhook e bot con punteggio di rischio, account a rischio, codici invito dirottabili, gestione delle firme di minaccia |
-| **Backup** | Elenco snapshot con anteprima del diff prima del ripristino |
-| **Archivio messaggi** | Quanto è archiviato per canale, download delle trascrizioni HTML |
-| **Ticket e trascrizioni** | Elenco dei ticket con chi li ha presi in carico, chi li ha chiusi e perché; trascrizione completa di ognuno, letta dal file salvato sul server o ricostruita dall'archivio |
-| **Annunci** | Dirette Twitch, video YouTube e feed RSS in un elenco solo: una riga per fonte, con canale, menzione, messaggio, prova d'invio e sospensione |
-| **Integrazioni** | Sondaggi con risultati in tempo reale, giveaway, menu dei ruoli |
-| **Comandi e personas** | Builder delle sequenze e gestione delle personas |
-| **Configurazione** | Tutti i moduli, con editor generato dagli schemi condivisi, **storico delle modifiche con ripristino** e gestione delle proprie sessioni attive |
-| **Accessi al pannello** | Chi può entrare e con quale livello, con revoca che chiude anche le sessioni aperte |
-
-I permessi del pannello sono **separati** da quelli Discord: `MANAGE_GUILD` è la condizione minima
-per entrare, ma cosa si può fare dentro lo decide il ruolo assegnato (Owner / Admin / Mod / Viewer).
-Amministrare un server non implica il diritto di scaricare l'archivio di tutte le conversazioni.
-
-### Configurare senza incollare ID
-
-Canali e ruoli si scelgono da una tendina, con il loro nome e la categoria che li contiene. Il
-pannello non è connesso a Discord — una sola connessione al gateway è una scelta, non una mancanza —
-quindi l'elenco lo scrive il bot in Redis e il pannello lo rilegge. Se non c'è ancora, i campi
-tornano a chiedere l'ID a mano invece di bloccare il lavoro.
-
-Non è solo comodità: un ID incollato male **non dà errore**, punta a un altro canale, e ce se ne
-accorge il giorno in cui l'avviso non arriva dove doveva.
-
-Gli elenchi di oggetti — streamer seguiti, canali YouTube, feed, scale d'azione — sono schede, una
-per elemento, con «Aggiungi» che parte da uno scheletro già compilato con i valori predefiniti. Il
-JSON resta disponibile richiuso, per copiare una configurazione da un server all'altro.
-
-Dove si scrive un messaggio — l'annuncio di una diretta, la voce del bot — `#` e `@` aprono
-l'elenco di canali e ruoli, come nel client di Discord: si sceglie il nome e viene inserito l'ID
-nella forma che Discord si aspetta. Accanto, i segnaposto come `{titolo}` si inseriscono da un
-elenco invece di andarli a cercare nella documentazione.
-
-### Annunci
-
-Le fonti stanno in una pagina sola invece che sparse in tre sezioni della configurazione: sono la
-cosa che si tocca più spesso, e la sola che non riguarda la sicurezza — aggiungere uno streamer non
-deve costringere a passare davanti alle impostazioni dell'anti-nuke.
-
-Ogni voce ha il suo canale, il suo messaggio e il suo ruolo da menzionare, più:
-
-- **Prova**, che pubblica il messaggio con valori d'esempio. È l'unico modo di sapere prima se il
-  testo viene come si pensava, se il bot può scrivere in quel canale e se la menzione funziona;
-  scoprirlo alla prima diretta vera significa scoprirlo davanti a tutti.
-- **Sospendi**, che zittisce una voce senza cancellarla — per lo streamer fermo un mese o il feed
-  troppo rumoroso in un certo periodo.
-- Anteprima del messaggio con i segnaposto già sostituiti, mentre lo si scrive.
-
-**Il ruolo «in diretta»** vuole due cose, non una: il ruolo *e* chi è quello streamer su Discord.
-Twitch e Discord non hanno niente in comune — il bot sa che `twitch.tv/tizio` sta trasmettendo, non
-chi sia quella persona nel server. Si cerca per nome fra chi il bot ha già visto, oppure si incolla
-l'ID. Il ruolo arriva all'inizio della diretta e viene tolto alla fine; se il ruolo è impostato e la
-persona no, il pannello lo dice invece di lasciare una funzione che non parte mai.
-
----
-
-## Comandi
-
-**I comandi hanno anche il nome inglese.** `/ban`, `/kick`, `/mute`, `/warn`, `/purge`, `/whois`,
-`/report`, `/setup`, `/words`, `/status`, `/say` fanno esattamente quello che fanno `/bandisci`,
-`/espelli`, `/silenzia`, `/avverti`, `/pulisci`, `/utente`, `/segnala`, `/prepara-server`, `/ripara-ruoli`,
-`/parole`, `/stato`, `/dì`. Non è una copia del comando: è lo stesso, registrato con due nomi, così
-il giorno in cui uno cambia comportamento cambiano entrambi.
-
-| Comando | Chi può usarlo | Cosa fa |
-|---|---|---|
-| `/ping` | tutti | Latenza e versioni |
-| `/salute` · `/health` | tutti | Dice quale pezzo non funziona: database, Redis, disco, versione |
-| `/segnala` · `/report` | tutti | Segnala una persona allo staff: arriva nel canale riservato con i pulsanti per intervenire |
-| `/azioni` · `/actions` | Modera membri | Pulsanti rapidi su una persona: silenzia, quarantena, espelli, bandisci |
-| `/stato` | Gestisci server | Stato dei moduli e problemi da sistemare |
-| `/pannello` | Gestisci server | Link al pannello |
-| `/verifica-staff parola:` | tutti | Verifica se chi ti ha contattato è davvero dello staff |
-| `/privacy` | tutti | Cosa registra il bot e per quanto |
-| `/cancella-i-miei-dati` | tutti | Cancellazione dei propri dati (GDPR art. 17) |
-| `/nota` | Modera membri | Annota un membro senza sanzionarlo, resta nella sua scheda |
-| `/avverti` `/silenzia` `/rimuovi-silenzio` | Modera membri | Provvedimenti con apertura del caso |
-| `/espelli` | Espelli membri | Espulsione con avviso in privato prima dell'esecuzione |
-| `/bandisci` | Bandisci membri | Ban anche per ID di chi ha già lasciato · supporta ban **temporanei** (`durata: 7d`) |
-| `/revoca-ban` | Bandisci membri | Revoca e chiude il caso corrispondente |
-| `/pulisci` | Gestisci messaggi | Elimina messaggi recenti, con o senza filtro per utente |
-| `/quarantena applica\|revoca` | Modera membri | Isola conservando i ruoli, oppure li restituisce |
-| `/utente` | Modera membri | Scheda completa: rischio, storico, provvedimenti |
-| `/appello invia\|miei` | tutti | Contesta un provvedimento che ti riguarda |
-| `/appello elenca\|risolvi\|registra` | Modera membri | Gestione degli appelli ricevuti |
-| `/scansiona contenuto:` | tutti | Analizza un link o un testo senza aprirlo |
-| `/verifica pubblica\|stato` | Gestisci server | Pubblica il messaggio col pulsante di verifica |
-| `/lockdown attiva\|revoca\|stato` | Gestisci server | Canali in sola lettura e inviti in pausa |
-| `/panico motivo:` | Gestisci server | Blocca, salva un backup e avvisa lo staff |
-| `/backup crea\|lista\|ripristina` | Amministratore | Backup della struttura del server |
-| `/archivio esporta\|stato\|ricostruisci` | Gestisci messaggi | Trascrizioni HTML e ricostruzione dei messaggi |
-| `/audit` | Gestisci server | Revisione di webhook, bot e inviti sorvegliati |
-| `/evento crea\|lista\|annulla` | configurabile | Eventi programmati con promemoria e ruolo RSVP |
-| `/sondaggio crea\|chiudi\|lista` | configurabile | Sondaggi persistenti, anche anonimi |
-| `/giveaway crea\|estrai\|riestrai` | Gestisci messaggi | Giveaway con requisiti d'ingresso |
-| `/ruoli-menu` | Gestisci ruoli | Menu di auto-assegnazione dei ruoli |
-| `/ticket pannello\|chiudi\|aggiungi\|lista` | configurabile | Assistenza privata in canali dedicati |
-| `/diagnostica` | proprietari del bot | Stato tecnico |
-
-I ban temporanei vengono revocati davvero: un lavoro periodico controlla le scadenze ogni notte e
-toglie il ban. Sondaggi, giveaway e promemoria degli eventi hanno invece un controllo al minuto —
-un giveaway che dichiara «termina fra 24 ore» e si chiude con mezz'ora di ritardo è una promessa
-non mantenuta.
-
-Accogliere un appello **revoca davvero** il provvedimento (ban rimosso, silenziamento tolto,
-quarantena revocata con ripristino dei ruoli), sia dal comando sia dal pannello. Un appello che
-cambia solo lo stato nel registro sarebbe una formalità.
-
-Limite dichiarato sugli appelli: chi è **bandito** non è più nel server e non può usare un comando
-slash. Il suo appello deve arrivare per altra via e viene registrato dallo staff con
-`/appello registra`.
-
----
-
-## Comandi personalizzati e personas
-
-Dal pannello si compongono sequenze del tipo: *questa persona dice questo, tre secondi dopo
-quest'altra risponde, poi al destinatario viene assegnato un ruolo*. La sequenza diventa un comando
-slash vero, utilizzabile solo da chi ha i ruoli indicati.
-
-Il «finto utente» con nome e immagine propri è un **webhook** — è l'unico modo che Discord offre.
-ANGEL crea e riusa un webhook per canale, e lo registra automaticamente nella allowlist del modulo
-di protezione webhook, così non viene eliminato da sé stesso.
-
-Variabili disponibili nei testi: `{user}`, `{user.name}`, `{arg:nome}`, `{guild}`, `{channel}`,
-`{count}`, `{random:a|b|c}`.
-
-Tre vincoli, non aggirabili dal pannello:
-
-- Una persona **non può** chiamarsi come Discord, lo staff, il supporto o un moderatore, né avere un
-  nome troppo simile ai nickname reali dello staff. Sarebbe uno strumento di truffa confezionato.
-- Ogni messaggio inviato da una persona resta registrato con l'ID dell'utente umano che ha lanciato
-  il comando. Una persona non è mai anonimato.
-- I ruoli con permessi amministrativi non sono assegnabili da un comando personalizzato: sarebbe una
-  scalata di privilegi a disposizione di chiunque possa lanciarlo.
-
----
-
-## Il registro
-
-**140 tipi di evento**, tutti effettivamente emessi — un test di build lo verifica scandendo il
-codice sorgente, così un tipo dichiarato non può restare muto e trasformarsi in un filtro
-perennemente vuoto nel pannello.
-
-| Categoria | Cosa viene registrato |
-|---|---|
-| **Messaggi** | Invio, modifica (con prima/dopo), eliminazione singola e di massa, fissaggio e rimozione dai fissati, allegati con nome e dimensione, voti nei sondaggi nativi di Discord |
-| **Reazioni** | Aggiunta, rimozione, azzeramento |
-| **Membri** | Ingresso e uscita, ban e revoche, espulsioni (anche quelle fatte dall'interfaccia Discord), nickname, **username e nome visualizzato**, **avatar globale e avatar specifico del server**, ruoli assegnati e rimossi uno per uno, silenziamenti, inizio e fine dei boost |
-| **Voce** | Entrata, uscita, spostamento, microfono e cuffie (distinguendo la scelta dell'utente dall'imposizione del server), condivisione schermo, webcam, e un **riepilogo di fine sessione** con la durata effettiva |
-| **Canali e thread** | Creazione, eliminazione, modifiche, permessi; thread creati, rinominati, bloccati, archiviati e riaperti, con entrate e uscite dei partecipanti |
-| **Ruoli** | Creazione, eliminazione, modifiche, ed evidenza separata quando vengono **aggiunti permessi pericolosi** |
-| **Server** | Impostazioni, emoji e sticker (creazione, rinomina, rimozione), eventi programmati con iscrizioni e disiscrizioni, stage |
-| **Inviti** | Creazione, eliminazione, **quale invito ha usato chi entra**, inviti pubblicati in chat, codici a rischio dirottamento |
-| **Webhook** | Creazione, **rinomina o spostamento**, eliminazione, webhook non autorizzati |
-| **Moderazione** | Ogni provvedimento con il suo caso, note, pulizie, appelli aperti e decisi |
-| **Sicurezza** | Raid, nuke, lockdown, quarantene, account compromessi, ogni tipo di contenuto bloccato |
-| **Bot e pannello** | Comandi usati, comandi personalizzati, messaggi delle personas (con l'autore umano reale), modifiche alla configurazione, **accessi al pannello con IP**, cancellazioni GDPR |
-
-Cosa **non** viene registrato, per scelta: `typingStart` e `presenceUpdate`. Sono decine di eventi
-al minuto per membro, riempirebbero il database senza rispondere a nessuna domanda che qualcuno si
-ponga davvero.
-
-### Tre destinazioni, non una
-
-| Destinazione | A cosa serve |
-|---|---|
-| **Postgres** | Ricerca e filtri del pannello, statistiche, timeline utente. Ha bisogno degli indici, quindi conviene tenerlo leggero |
-| **Canali Discord** | Sorveglianza quotidiana. Gli eventi ad alta frequenza vengono accorpati (fino a 10 per messaggio); quelli critici saltano la coda |
-| **File su disco** | Archivio a lungo termine. Append-only, rotazione giornaliera, `grep`-abile |
-
-Il sink su file risolve un problema che il database non risolve bene. Con i file si può tenere
-Postgres a qualche mese di retention — query veloci, backup piccoli — e conservare comunque **tutto
-per anni** su disco, dove costa solo spazio. Un `grep` trova una riga di due anni fa senza che il
-database si porti dietro quelle righe a ogni query.
-
-```
-storage/logs/<idServer>/2026-08-10/SECURITY.txt
-storage/logs/<idServer>/2026-08-10/SECURITY.jsonl
-```
-
-TXT è leggibile a occhio e con `grep`; JSONL è analizzabile con `jq` o reimportabile. Con spazio
-abbondante si tengono entrambi: sono la stessa informazione in due forme, e la scelta sbagliata si
-paga anni dopo. La retention dei file è **separata** da quella del database, e `0` significa «per
-sempre» — che è il valore sensato quando lo spazio non è il vincolo.
-
-```bash
-# Tutti gli eventi di sicurezza di agosto
-grep -h "SECURITY_" storage/logs/*/2026-08-*/*.txt
-
-# Cosa ha fatto un utente, in ordine
-grep -rh "autore=.*(123456789012345678)" storage/logs/<idServer>/ | sort
-
-# Con jq: i dieci eventi più gravi della settimana
-cat storage/logs/<idServer>/2026-08-*/*.jsonl | jq -s 'sort_by(-.severity) | .[:10]'
-```
-
-Le scritture sono bufferizzate e svuotate a intervalli: una syscall per evento, su un server
-attivo, sarebbe spreco puro. In caso di arresto improvviso si perdono al massimo gli ultimi
-secondi, che sono comunque nel database.
-
-Due note sul funzionamento:
-
-- Alcune azioni **esistono solo nel registro di controllo** di Discord — fissare un messaggio,
-  espellere qualcuno dall'interfaccia, eliminare un webhook. Il gateway non le riporta affatto, o le
-  riporta senza dire chi le ha fatte. Senza il permesso `ViewAuditLog` quelle righe non compaiono.
-- Gli eventi ad alta frequenza vengono accorpati prima di finire nel canale Discord (fino a 10 per
-  messaggio), mentre nel database restano riga per riga. Gli eventi critici saltano la coda: durante
-  un nuke i secondi contano.
-
----
-
-## Backup, archivio e ruoli
-
-Tre meccanismi distinti, che coprono cose diverse. Vale la pena tenerli separati in testa, perché
-promettono cose diverse.
-
-### 1. Struttura del server — `/backup`
-
-Snapshot di ruoli (con permessi e posizione), canali (con gli overwrite), categorie, emoji,
-sticker, impostazioni, regole AutoMod e ruoli di ogni membro. Automatico ogni notte, su richiesta,
-e **d'emergenza** appena l'anti-nuke rileva qualcosa.
-
-Il ripristino ricrea solo ciò che manca, confrontando per nome: dopo un nuke parziale, ripristinare
-alla cieca farebbe più danni dell'attacco. Il pannello mostra l'anteprima prima di agire.
-
-### 2. Ruoli dei membri — riassegnazione automatica
-
-Due percorsi diversi:
-
-- **Dopo un ripristino**: `/backup ripristina ruoli-membri:true` rimette ogni persona al proprio
-  posto usando l'elenco salvato nello snapshot.
-- **Al rientro di un singolo** (*ruoli appiccicosi*): chi esce e rientra ritrova i ruoli che aveva.
-  Oltre alla comodità, chiude il trucco più banale della moderazione — uscire e rientrare per
-  liberarsi di un silenziamento o di una quarantena.
-
-In entrambi i casi i ruoli con permessi amministrativi **non** vengono mai riassegnati in
-automatico, e nemmeno quelli più alti del ruolo del bot: restituire `ManageRoles` a chi rientra
-sarebbe una scalata di privilegi gratuita.
-
-### 3. Messaggi — `/archivio`
-
-Qui va detto chiaramente: **Discord non consente di ripristinare i messaggi eliminati.** Non esiste
-alcun endpoint per farlo e nessun bot può aggirarlo. Quello che ANGEL può fare — e fa — è tenere
-una copia mentre i messaggi passano, e poi:
-
-- `/archivio esporta` produce una **trascrizione HTML autonoma**: nessun CSS o immagine remota,
-  leggibile fra dieci anni, con i messaggi eliminati evidenziati e gli allegati elencati con il loro
-  hash. Scaricabile anche dal pannello, dove non scade con la retention del canale.
-- `/archivio ricostruisci` **ripubblica** i messaggi archiviati in un canale, tramite webhook.
-- `/archivio stato` mostra quanto è stato archiviato, canale per canale.
-
-La ricostruzione è dichiarata come tale e non finge di essere l'originale: un avviso in testa al
-canale, il suffisso `(archivio)` sul nome di ogni autore, la data originale nel testo, e gli
-allegati non ripubblicati. Una ricostruzione indistinguibile da una cronologia autentica sarebbe uno
-strumento per fabbricare prove, non per conservarle.
-
-Quanto viene archiviato dipende da `logging.messageContent`: in modalità `HASHED` o
-`METADATA_ONLY` la trascrizione conterrà i metadati ma non il testo. È un compromesso deliberato fra
-capacità investigativa e privacy, e va scelto consapevolmente.
-
-### 4. L'installazione intera — copia automatica
-
-I tre meccanismi qui sopra proteggono il *server Discord*. Questo protegge **ANGEL**: se domani il
-disco della VPS non si accende più, è l'unica cosa che riporta indietro anni di registro,
-configurazione, provvedimenti e trascrizioni.
-
-Ogni notte alle **4:15**, e subito dopo ogni aggiornamento di versione, il worker esporta tutto in
-una cartella dentro `BACKUP_DIR` — che nel compose predefinito è `/DATA/angel-backup`, cioè una
-cartella dell'host **fuori** dai volumi Docker. Non è un dettaglio: disinstallando l'app da ZimaOS i
-volumi possono sparire, e una copia che sparisce insieme a ciò che protegge non protegge nulla.
-
-```
-/DATA/angel-backup/angel-2026-08-31T04-15-00/
-  MANIFESTO.json     leggibile senza estrarre nulla: cosa c'è, quante righe, quale versione
-  ISTRUZIONI.md      come rileggerla, per chi la ritrova fra un anno
-  dati.tar.gz        tabelle/<tabella>.ndjson — una riga JSON per record
-  archivio.tar.gz    allegati archiviati e trascrizioni dei ticket
-```
-
-Il formato è NDJSON e non un dump binario di Postgres: un dump si rilegge solo con la stessa
-versione di Postgres, e fra due anni quella versione sarà un problema in più proprio nel momento
-peggiore. Qui bastano `tar` e `grep`.
-
-```bash
-# Cosa c'è dentro, senza ripristinare nulla
-tar tzf dati.tar.gz
-tar xzf dati.tar.gz -O tabelle/auditEvent.ndjson | wc -l
-```
-
-Nel pannello, in **Backup**, la sezione «Copia completa dell'installazione» elenca le copie
-presenti, ne crea una fuori orario e — la cosa che conta — **le scarica**. Una copia che vive solo
-sul server di cui è la copia protegge da un volume cancellato per sbaglio e da nient'altro: non dal
-disco che muore, non dalla macchina che non si accende più. La sezione è visibile solo a chi è in
-`OWNER_IDS`, perché contiene i dati di *tutti* i server dove il bot è presente.
-
-Variabili che la governano:
-
-| Variabile | Predefinito | Cosa fa |
-|---|---|---|
-| `BACKUP_DIR` | `/backup` | Dove finiscono le copie. Deve stare su un volume diverso dall'applicazione |
-| `BACKUP_KEEP` | `14` | Quante tenerne. Le più vecchie vengono rimosse |
-| `BACKUP_INCLUDE_STORAGE` | `true` | Include allegati e trascrizioni |
-| `BACKUP_STORAGE_MAX_MB` | `4096` | Oltre questa soglia l'archivio dei file viene **escluso**, non troncato, e il motivo finisce nel manifesto |
-
-Se lo spazio libero in `BACKUP_DIR` scende sotto i 300 MB la copia non parte e lo dice: una copia
-interrotta a metà per disco pieno lascia una cartella che *sembra* valida.
-
----
-
-## Traslocare su un'altra macchina
-
-Due strade. Fanno la stessa cosa e si coprono a vicenda; la differenza è se hai accesso al
-terminale della macchina vecchia.
-
-### Strada A — `trasloco.sh` (consigliata quando hai SSH)
-
-Un `pg_dump`, cioè una copia **esatta** del database con sequenze, indici e vincoli. È la strada
-giusta per un trasloco, dove non serve leggibilità fra dieci anni ma fedeltà fra dieci minuti.
-
-Sulla macchina vecchia:
-
-```bash
-sudo sh docker/trasloco.sh esporta /DATA/trasloco
-```
-
-Produce una cartella con il database, i file archiviati, l'ultima copia notturna come rete di
-sicurezza, e `ambiente.txt` con i segreti — **compresa `ENCRYPTION_KEY`, senza la quale metà dei
-dati resterebbe illeggibile.** Quel file ha i permessi `600` e va cancellato appena finito.
-
-Copiala sulla macchina nuova:
-
-```bash
-scp -r utente@vecchia:/DATA/trasloco/angel-trasloco-* ./
-```
-
-Sulla macchina nuova: installa ANGEL con lo stesso compose, riportando i valori di `ambiente.txt` —
-`ENCRYPTION_KEY` identica, `PUBLIC_URL` invece cambia — fallo partire **una volta** perché crei le
-tabelle, poi:
-
-```bash
-sudo sh docker/trasloco.sh importa ./angel-trasloco-20260831-041500
-```
-
-Chiede conferma due volte, ferma il bot, sostituisce il database, rimette i file, riaccende.
-
-### Strada B — il kit di trasloco, dal pannello
-
-Nel pannello, **Backup → Copia completa → «Prepara il trasloco»**. Produce una cartella
-`trasloco-<data>` dentro `BACKUP_DIR` con dentro i dati **e** un `TRASLOCO.txt` che è il pezzo che
-mancava: i dati da soli non fanno ripartire nulla, servono anche i valori — e quei valori stanno nel
-compose della macchina che stai per spegnere.
-
-`TRASLOCO.txt` contiene, in ordine:
-
-1. **cosa c'è nella cartella**, con le impronte SHA-256 dei due archivi — un file arrivato troncato
-   si estrae comunque per buona parte, e il ripristino sembra riuscito con qualche tabella in meno;
-2. **cosa devi ritrovare dopo**: l'elenco dei server con id, nome e numero di membri, e le righe per
-   tabella. È la lista di controllo — se il pannello nuovo mostra numeri diversi, il trasloco è
-   andato a metà;
-3. **i valori da riportare**, raggruppati per cosa succede se li sbagli: quelli che devono essere
-   identici, quelli il cui errore si vede subito, quelli che cambiano con la macchina;
-4. **il blocco YAML pronto da incollare** sotto `environment:`, `POSTGRES_PASSWORD` compresa —
-   che è lo stesso valore dentro `DATABASE_URL`, scritto in due punti che devono coincidere;
-5. **la procedura passo per passo**, 6. **le verifiche finali**, 7. **cosa fare se si ferma**.
-
-Il file nasce con permessi `600` e **contiene i segreti in chiaro**: token del bot, chiave di
-cifratura, password del database. È deliberato — un kit che elenca solo i nomi costringe ad andare a
-cercare i valori, cioè esattamente il passaggio che fallisce quando la macchina vecchia non risponde
-più. Se preferisci, il pannello offre anche **«Senza segreti»**: al posto dei valori restano le
-impronte, che bastano a verificare di aver riportato quello giusto ma non a ricostruirlo.
-
-Il kit non è programmato e non gira di notte: scrivere segreti su disco è una decisione, e le
-decisioni si prendono una volta. Ne vengono tenuti gli ultimi due, e il pannello ha un pulsante
-**Elimina** — usalo appena il trasloco è finito.
-
-Poi:
-
-1. Copia la cartella `trasloco-<data>` intera in `/DATA/angel-backup` sulla macchina nuova.
-2. Installa ANGEL con i valori del punto 3, cambiando `PUBLIC_URL`, e fallo partire una volta.
-3. Nel compose, nel blocco `environment:` di `angel`:
-
-   ```yaml
-   RESTORE_FROM: /backup/trasloco-2026-08-31T22-40-00
-   ```
-
-4. Riavvia l'app, poi togli quella riga ed elimina il kit.
-
-Se non hai modo di copiare la cartella, ogni pezzo si scarica singolarmente dallo stesso elenco —
-in quel caso rimettili in una cartella dal nome uguale, con i nomi originali (`dati.tar.gz`,
-`archivio.tar.gz`, `MANIFESTO.json`), togliendo il prefisso che il browser aggiunge.
-
-Il ripristino avviene **prima** che il bot si colleghi — un bot già connesso mentre il database gli
-cambia sotto reagirebbe a eventi con metà dei dati vecchi e metà nuovi — e lascia un file
-`RIPRISTINATO` dentro la cartella perché non si ripeta a ogni riavvio.
-
-Passa da una variabile d'ambiente e non da `docker exec` perché su ZimaOS l'exec dentro i container
-viene rifiutato con «permission denied»: un ripristino che si può fare solo con `exec`, su quella
-macchina, non si può fare. Dove `exec` funziona c'è anche il comando diretto:
-
-```bash
-node apps/worker/dist/ripristina.js /backup/trasloco-2026-08-31T22-40-00
-```
-
-### Le tre cose che vanno storte
-
-**La chiave di cifratura.** I token delle integrazioni sono cifrati nel database con
-`ENCRYPTION_KEY`. Con una chiave diversa il ripristino riesce e sembra perfetto: tutte le righe
-tornano, i conteggi combaciano, il pannello si apre. Poi Twitch e YouTube smettono di funzionare, e
-niente collega la causa all'effetto. Per questo la copia porta con sé un'**impronta** della chiave
-(SHA-256 troncato, non la chiave) e il ripristino si ferma se non combacia. Si forza con
-`RESTORE_ACCEPT_KEY_MISMATCH=1`, sapendo che le integrazioni andranno riconfigurate a mano.
-
-**Il database non vuoto.** Su un'installazione che contiene già qualcosa il ripristino si ferma,
-per non mescolare due installazioni. Serve `RESTORE_OVERWRITE=1`, che **svuota le tabelle** prima
-di riempirle.
-
-**Due bot con lo stesso token.** Spegni ANGEL sulla macchina vecchia *prima* di accenderlo sulla
-nuova. Due processi collegati allo stesso token si contendono il gateway: Discord ne fa cadere uno
-di continuo, e ogni sanzione rischia di essere applicata due volte.
-
-Da controllare a trasloco finito, in quest'ordine: il pannello mostra i server di prima; il registro
-contiene eventi vecchi di giorni e non solo di adesso; un ticket chiuso tempo fa ha ancora la sua
-trascrizione; le integrazioni funzionano. Poi aggiungi il nuovo `PUBLIC_URL` ai redirect OAuth2 nel
-Developer Portal, altrimenti l'accesso al pannello fallisce con «stato non valido».
-
----
-
-## Notifiche da fonti esterne
-
-Twitch, YouTube e qualunque feed RSS/Atom. Tutte funzionano leggendo un documento pubblico: niente
-chiavi API, niente quote, niente token da rinnovare.
-
-**Perché non ci sono TikTok, Instagram e X.** Non offrono un modo pubblico e stabile di leggere i
-contenuti: le opzioni sarebbero scraping fragile o servizi a pagamento. Un'integrazione che si
-rompe da sola dopo tre settimane è peggio della sua assenza, perché nel frattempo si smette di
-controllare a mano. Dove esiste un feed RSS — e ne esistono per moltissime fonti — il modulo
-generico copre già tutto.
-
-Due protezioni che contano più della logica di pubblicazione:
-
-- **Nessun diluvio alla prima lettura.** Un feed appena aggiunto contiene quindici elementi già
-  vecchi: la prima volta si registra soltanto il più recente, senza annunciare nulla.
-- **Le fonti morte si mettono in pausa da sole.** Dopo dieci errori consecutivi si smette di
-  interrogarle: un feed inesistente letto ogni dieci minuti per mesi è traffico sprecato e rumore.
-
-Il confronto per capire cosa è nuovo usa l'**identificativo**, non la data: i feed hanno date
-inaffidabili — fusi sbagliati, aggiornamenti che ne cambiano il valore, elementi ripubblicati.
+| **QR di login Discord** | Un QR verso `discord.com/ra/…` è il flusso Remote Auth: chi lo inquadra consegna il token del proprio account. Nessuna password, nessun avviso | Ogni immagine viene decodificata; azione massima e avviso pubblico |
+| **ClickFix / finta CAPTCHA** | «Premi Win+R, Ctrl+V, Invio»: negli appunti c'è già PowerShell offuscato | Rilevatore dedicato, sul testo e sull'OCR degli screenshot |
+| **Raid** | Migliaia di account in pochi minuti; i primi 30 secondi decidono l'esito | Finestra scorrevole sui join, cluster simili, risposta graduata fino al lockdown |
+| **Nuke** | Un admin compromesso cancella canali e ruoli in venti secondi | Soglie per singolo attore, rimozione immediata dei ruoli, snapshot d'emergenza |
+| **Invite hijacking** | I codici invito liberati si possono rivendicare: i link pubblicati mesi prima portano altrove | Ogni invito viene risolto; i propri codici sorvegliati |
+| **Webhook ostili** | Messaggi dall'aspetto ufficiale senza essere membri | Inventario, allowlist, eliminazione degli sconosciuti |
+| **Impersonificazione dello staff** | Nickname e avatar copiati, spesso con omoglifi (`Мoderatore` con la M cirillica) | Confronto per similarità contro lo staff reale |
+| **Adescamento di minori** | Il primo passo è quasi sempre pubblico | Schemi combinati, segnalazione allo staff con prove congelate, **nessuna sanzione automatica** |
+
+L'elenco completo, con il ragionamento dietro ogni difesa: **[docs/sicurezza.md](docs/sicurezza.md)**.
 
 ---
 
 ## Il bot Twitch
 
-Un secondo bot dentro lo stesso container. Non è l'integrazione che annuncia le dirette su Discord
-— quella sta qui sopra: è un **bot di chat Twitch** completo, che modera la chat e fa quello che
-fa un bot di chat.
+Un secondo bot dentro lo stesso container. Non è l'integrazione che annuncia le dirette su
+Discord: è un **bot di chat Twitch** completo, che modera la chat e fa quello che fa un bot di
+chat.
 
-**Cosa fa.** Riconosce i venditori di visualizzatori (anche scritti `Ch̍eap Vi̇ewers` per
-aggirare i filtri), i link truffa, le finte carte regalo Steam, i wallet drainer, chi si spaccia
-per lo streamer, le ondate coordinate. E messaggi a tempo, comandi personalizzati, saluti, comandi
-integrati.
+**Cosa riconosce.** Venditori di visualizzatori (anche scritti `Ch̍eap Vi̇ewers` per aggirare i
+filtri), link truffa, finte carte regalo Steam, wallet drainer, chi si spaccia per lo streamer,
+ondate coordinate. E poi messaggi a tempo, comandi personalizzati, saluti.
 
 **Cinque livelli invece di trenta soglie.** Osserva · Leggero · Normale · Alto · Blindato. Una
 scelta sola imposta tutto; toccare un campo porta a «personalizzato» e nessun preset lo tocca più.
@@ -1311,149 +77,111 @@ finisce in un canale Discord come embed colorato per gravità.
 raggiungere per collegare il proprio canale da soli. Il pannello Discord contiene i dati di ogni
 server e resta dietro Tailscale — due porte, due platee, e aprire la seconda non apre la prima.
 
-**Funziona senza pannello.** `!angel livello alto`, `!angel scudo on`, `!angel permetti
+**Funziona anche senza pannello.** `!angel livello alto`, `!angel scudo on`, `!angel permetti
 discord.gg` si scrivono in chat. Se cade il database, il bot riparte da una copia su disco dei
 canali e continua a moderare, rispondere e registrare su file.
 
-I dettagli — minacce, architettura, obblighi dei termini di servizio di Twitch, installazione —
-stanno in **[docs/TWITCH.md](docs/TWITCH.md)**.
+Minacce, architettura, obblighi dei termini di servizio di Twitch, installazione:
+**[docs/twitch.md](docs/twitch.md)**.
 
 ---
 
-## Bacheca e ticket
+## Installazione
 
-**Bacheca** — i messaggi che raccolgono abbastanza reazioni finiscono in un canale dedicato.
-Sembra una funzione frivola, ma sposta l'attenzione su ciò che il server vuole premiare invece che
-solo su ciò che va punito. L'autovoto è disattivo per impostazione predefinita: altrimenti bastano
-quattro amici e l'autore per arrivare a cinque, e la bacheca smette di dire qualcosa.
+### umbrelOS — dallo store
 
-**Ticket** — assistenza privata in un canale creato al momento, non nei DM. La differenza non è di
-comodità: nei DM non c'è registro, non c'è passaggio di consegne fra moderatori, e soprattutto
-**nessuno può verificare chi sta scrivendo** — che è esattamente il terreno di chi si finge staff.
+**App Store → ⋯ → Community App Stores → Add**, e incolla:
 
-L'apertura passa da una finestra modale che chiede l'oggetto *prima* di creare il canale, così non
-si accumula una fila di ticket vuoti intitolati «aiuto». I permessi del canale sono espliciti e non
-ereditati dalla categoria: ereditarli renderebbe la riservatezza dipendente da una configurazione
-altrove, che è il modo classico in cui un ticket privato smette di esserlo.
-
-Alla chiusura viene generata la trascrizione HTML, inviata in privato a chi ha aperto il ticket e
-allegata al registro; poi il canale viene eliminato dopo dieci secondi, il tempo di leggere il
-messaggio di chiusura. I ticket senza attività si chiudono da soli: uno dimenticato aperto per
-settimane è rumore che nasconde quelli veri.
-
-### La trascrizione
-
-Contiene la conversazione intera — messaggi, immagini, video, link, allegati eliminati — e in cima
-la scheda del ticket: numero, oggetto, chi lo ha aperto, **chi lo ha preso in carico e quando**,
-**chi lo ha chiuso, quando e con quale motivazione**, la durata, chi è stato invitato nel canale e
-quante righe ha scritto ciascun partecipante.
-
-Va in tre posti, perché ognuno dei tre può sparire da solo:
-
-| Dove | Perché |
-|---|---|
-| In privato a chi ha aperto | È la sua conversazione: senza copia resterebbe con nulla in mano |
-| Nel canale `angel-trascrizioni`, creato con gli altri alla predisposizione | È l'archivio che lo staff consulta senza aprire il pannello |
-| Su disco sulla VPS, sotto `STORAGE_DIR/trascrizioni/<server>/` | Un allegato Discord vive finché vive il messaggio, e un messaggio si può cancellare |
-
-Vale anche quando il canale del ticket viene **eliminato** invece che chiuso: ANGEL se ne accorge,
-chiude il ticket con motivazione automatica e produce comunque la trascrizione. È il caso che conta
-di più — eliminare il canale è esattamente ciò che si fa quando si vuole che una conversazione non
-esista più. La ricostruzione parte dall'archivio dei messaggi, non dal canale, e quindi non dipende
-dal canale essendo ancora lì.
-
-Dal pannello, sezione **Ticket e trascrizioni**, si rilegge tutto: serve il ruolo `MOD`, non i
-permessi Discord.
-
----
-
-## Server molto grandi: sharding
-
-Sotto i 2500 server non serve e non va usato: una sola connessione basta, e lo sharding
-aggiungerebbe solo processi da coordinare. Oltre quella soglia Discord lo impone.
-
-È un punto d'ingresso separato, non una complicazione che pagano tutti:
-
-```bash
-node apps/bot/dist/shard.js     # invece di apps/bot/dist/index.js
+```
+https://github.com/Gigiomiccio425/Gigio-dany-appstore
 ```
 
-Il numero di shard è `auto` per impostazione predefinita — dipende dal numero di server e cambia nel
-tempo, sceglierlo a mano significa doverlo correggere prima o poi. Worker, API e database non
-cambiano di una riga: le code e il database sono già condivisi.
+Poi scrivi cinque righe nel file dei segreti. Guida completa:
+**[docs/installazione-umbrel.md](docs/installazione-umbrel.md)**.
+
+### ZimaOS, o qualunque Docker
+
+```bash
+git clone https://github.com/Gigiomiccio425/aegis-discord-bot.git
+cd aegis-discord-bot
+cp .env.example .env && nano .env
+docker compose -f docker-compose.zimaos.yml up -d
+```
+
+Guida completa: **[docs/installazione-zimaos.md](docs/installazione-zimaos.md)**.
+
+### Immagini pubblicate
+
+```
+ghcr.io/gigiomiccio425/aegis-discord-bot:latest
+ghcr.io/gigiomiccio425/aegis-discord-bot:1.31
+ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.6
+```
+
+`1.31` segue l'ultima correzione di quella serie; la versione intera resta ferma. Nel compose
+conviene la versione intera: un aggiornamento che non hai deciso tu è il modo più facile per non
+capire cosa è cambiato.
 
 ---
 
-## Privacy e GDPR
+## Documentazione
 
-Il bot tratta dati personali: gli ID Discord sono identificatori univoci, il contenuto dei messaggi
-lo è a maggior ragione. La Developer Policy di Discord richiede una privacy policy a prescindere.
-
-Cosa offre ANGEL:
-
-- **Modalità di registrazione del contenuto** configurabile: `FULL`, `HASHED` (solo impronta, che
-  riconosce i duplicati senza conservare il testo), `METADATA_ONLY`, o nessuna registrazione.
-- **Retention per categoria**, applicata davvero da un lavoro notturno. Una retention dichiarata e
-  non applicata è peggio di nessuna retention.
-- **`/privacy`** mostra agli utenti esattamente cosa viene registrato e per quanto.
-- **`/cancella-i-miei-dati`** cancella messaggi archiviati, eventi e profilo. I provvedimenti di
-  moderazione restano, ma pseudonimizzati: cancellarli permetterebbe di azzerare la propria fedina
-  uscendo e rientrando nel server.
-- I token OAuth degli utenti del pannello sono cifrati a riposo con AES-256-GCM.
-
----
-
-## Limiti dichiarati
-
-Meglio saperli prima:
-
-- **La cronologia dei messaggi non è ripristinabile come originale.** Discord non lo consente. Un
-  backup ricostruisce ruoli, canali, permessi e impostazioni; i messaggi si possono esportare come
-  trascrizione o ripubblicare come ricostruzione dichiarata (`/archivio`), ma non tornano a essere i
-  messaggi originali — e l'archivio contiene solo ciò che il bot ha visto passare dopo la sua
-  installazione.
-- **Il bot non può leggere i messaggi privati fra utenti.** Phishing e adescamento si consumano
-  soprattutto lì. Ciò che resta è intercettare il primo passo pubblico e riconoscere gli account già
-  compromessi dal loro comportamento.
-- **Il bot non può ottenere indirizzi IP.** L'API Discord non li espone ad alcun bot. Contro gli IP
-  grabber si può solo bloccare il link postato.
-- **Contro i deepfake vocali non esiste rilevamento affidabile.** Bastano tre secondi di audio per
-  clonare una voce con precisione superiore al 95%. L'unica difesa pratica è la parola d'ordine.
-- **L'OCR aggiunge latenza** (0,5-2s per immagine): gira nel worker, in asincrono. Un'immagine
-  malevola può restare visibile qualche secondo prima di essere rimossa.
-- **Google Safe Browsing ha un limite di quota** sul piano gratuito: mitigato con cache Redis e
-  blocklist locali, ma su un server molto attivo può esaurirsi.
-- **L'attribuzione degli inviti può sbagliare** se due persone entrano nello stesso istante: si
-  basa sul confronto dei contatori, che è l'unico metodo disponibile.
+| | |
+|---|---|
+| **[Sicurezza](docs/sicurezza.md)** | Ogni minaccia riconosciuta, e come |
+| **[Installazione su umbrelOS](docs/installazione-umbrel.md)** | Store, segreti, aggiornamenti |
+| **[Installazione su ZimaOS](docs/installazione-zimaos.md)** | Compose, porte, HTTPS, Tailscale |
+| **[Configurazione](docs/configurazione.md)** | Applicazione Discord, primo avvio, ruoli |
+| **[Il pannello](docs/pannello.md)** | Cosa si fa dal web, e chi può entrare |
+| **[Comandi](docs/comandi.md)** | Elenco completo, permessi, personas |
+| **[Il registro](docs/registro.md)** | Cosa viene scritto, dove, per quanto |
+| **[Backup e trasloco](docs/backup-e-trasloco.md)** | Copie, archivio messaggi, cambio macchina |
+| **[Il bot Twitch](docs/twitch.md)** | Il secondo bot, e il suo pannello |
+| **[Architettura](docs/architettura.md)** | Come è fatto dentro, e perché |
+| **[Aggiornare](docs/aggiornare.md)** | Versioni, rollback, cosa resta |
+| **[Sviluppo in locale](docs/sviluppo.md)** | Requisiti, stack di sviluppo |
+| **[Altre funzioni](docs/funzioni.md)** | Notifiche esterne, bacheca, ticket |
+| **[Privacy e limiti](docs/privacy.md)** | GDPR, e cosa ANGEL **non** sa fare |
+| **[Risoluzione dei problemi](docs/risoluzione-problemi.md)** | Quando qualcosa non parte |
 
 ---
 
-## Risoluzione dei problemi
+## Architettura in una riga
 
-**Il bot è online ma non registra nulla**
-Manca un canale di log. Configuralo dal pannello, sezione *Registro eventi*, oppure verifica con
-`/stato` che non compaia l'avviso corrispondente.
+Un solo container fa girare cinque processi — migrazione, bot Discord, worker, pannello, bot
+Twitch — con un supervisore che li tiene in vita. Accanto: Postgres e Redis.
 
-**«Impossibile rimuovere i ruoli: il bersaglio ha una posizione superiore al bot»**
-Sposta il ruolo del bot più in alto nell'elenco dei ruoli del server. È il problema numero uno.
+```
+┌─ angel ──────────────────────────────────┐
+│  avvio.mjs                               │      ┌──────────┐
+│  ├─ migrate   ├─ bot   ├─ worker         │─────▶│ Postgres │
+│  ├─ api      (pannello, :780)            │      └──────────┘
+│  └─ twitch   (pannello streamer, :781)   │      ┌──────────┐
+└──────────────────────────────────────────┘─────▶│  Redis   │
+                                                  └──────────┘
+```
 
-**L'anti-nuke non scatta**
-Serve il permesso *Visualizza registro di controllo*: senza, non c'è modo di sapere chi ha
-cancellato cosa. Verifica con `/stato`.
+Perché uno solo e non cinque: **[docs/architettura.md](docs/architettura.md)**.
 
-**I comandi slash non compaiono**
-Con `DEV_GUILD_ID` impostato sono registrati solo su quella guild. Senza, la propagazione globale
-richiede fino a un'ora. Forza con `npm run commands:deploy`.
+---
 
-**L'accesso al pannello fallisce con «stato non valido»**
-Il redirect OAuth non corrisponde. Deve essere esattamente `PUBLIC_URL` + `/api/auth/callback`,
-anche per quanto riguarda `http`/`https` e la porta.
+## Sul nome
 
-**Le notifiche Twitch non arrivano**
-EventSub richiede un callback pubblico in **HTTPS**: con un `PUBLIC_URL` in http o su localhost la
-sottoscrizione non viene creata e resta attivo solo il controllo periodico, più lento. Verifica
-anche che `TWITCH_EVENTSUB_SECRET` sia impostato.
+Il progetto si chiamava Aegis. Restano `aegis` il nome del database, dei container, dei volumi e
+dell'immagine su ghcr: rinominarli significherebbe ricreare il database e perdere tutto ciò che
+contiene, per un guadagno puramente estetico. Sono nomi che nessuno digita e che nessun utente
+vede.
 
-**Il worker consuma molta memoria**
-È l'OCR: tesseract carica i modelli linguistici in memoria. Riduci le lingue in
-`scanner.image.ocrLanguages` o disattiva `asyncDeepScan` se il server è piccolo.
+---
+
+## Contribuire
+
+Segnalazioni e proposte: [issue](https://github.com/Gigiomiccio425/aegis-discord-bot/issues).
+Prima di aprire una pull request, leggi **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+Hai trovato una vulnerabilità? **Non aprire una issue** — leggi **[SECURITY.md](SECURITY.md)**.
+
+## Licenza
+
+[AGPL-3.0](LICENSE). Se lo fai girare come servizio per altri, il codice modificato va reso
+disponibile.

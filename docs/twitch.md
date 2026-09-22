@@ -310,3 +310,7 @@ potuto salvarlo».
   testo del messaggio.
 - **Senza database e dopo un riavvio, il bot non può sanzionare.** Legge, risponde, registra su
   file, e lo dice.
+
+---
+
+<sub>[← Tutta la documentazione](README.md) · [ANGEL](../README.md)</sub>
