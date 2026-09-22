@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.4"
+version: "1.31.5"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,8 +65,28 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Il lockdown chiude anche le chat delle vocali, e non perde più i permessi
-  dei ruoli.
+  Il pannello non dice più «fatto» a vuoto, e torna la copia leggera su
+  Discord.
+
+
+  - **«Il bot non ha ricevuto il comando».** Se premi lockdown, backup,
+    quarantena o un'altra azione e il bot non è in ascolto in quel momento,
+    il pannello adesso lo dice, invece di rispondere «fatto» per un comando
+    che non è arrivato a nessuno. I salvataggi della configurazione restano
+    come prima: quelli riescono comunque, e il bot li ritrova da solo.
+
+  - **La copia leggera.** Ogni notte, dopo il backup su disco, il bot
+    pubblica in un canale Discord un file con le informazioni principali
+    del server — ruoli, canali, configurazione. Se la macchina muore, il
+    backup su disco muore con lei; questo no. Parte spenta: si accende dal
+    pannello, in Generale → «Copia leggera su Discord», scegliendo un canale
+    che leggono solo gli amministratori. `/copia-leggera adesso` ne pubblica
+    una subito, `/copia-leggera rimetti` rimette la configurazione
+    dall'ultima.
+
+
+  Dalla 1.31.4: il lockdown chiude anche le chat delle vocali, e non perde
+  più i permessi dei ruoli.
 
 
   - **Vocali, palchi e canali media.** Il lockdown ora chiude anche le loro
@@ -141,8 +161,7 @@ releaseNotes: >
 
 
   Dalla 1.31.0 resta: il file dei segreti nasce già scritto con i campi da
-  riempire, e un file che hai già non viene toccato. La copia leggera su
-  Discord non c'è ancora.
+  riempire, e un file che hai già non viene toccato.
 
 
   Il resto del sistema dei segreti è quello della 1.30. Token, chiavi e

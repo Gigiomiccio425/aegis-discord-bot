@@ -76,7 +76,7 @@ services:
   #  tentativo e l'altro.
   # ─────────────────────────────────────────────────────────
   angel:
-    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.4
+    image: ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.5
     restart: on-failure
     stop_grace_period: 1m
 
