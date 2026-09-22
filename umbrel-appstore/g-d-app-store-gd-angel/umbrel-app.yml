@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.1"
+version: "1.31.2"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,8 +65,31 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Corretto il guasto per cui i comandi del pannello potevano non arrivare al
-  bot.
+  Il pannello dice cose vere, e quando qualcosa si blocca lo dice anche lui.
+
+
+  - **«512 minacce oggi» non c'è più.** Il contatore contava tutta la
+    categoria sicurezza, dentro cui stanno anche gli snapshot e i lockdown
+    che ANGEL fa da solo. Ora conta solo le minacce vere: un numero che
+    parte da cinquecento non fa notare niente, e una minaccia vera ci si
+    perdeva dentro.
+
+  - **Il worker non risulta più «fermo» mentre lavora.** I dieci lavori in
+    coda aspettavano tutti sulla stessa connessione a Redis con cui il
+    worker dichiara di essere vivo, e la dichiarazione poteva arrivare
+    troppo tardi. Ora ognuno ha la sua.
+
+  - **Quando un processo risulta «fermo», i log dicono perché.** Se Redis
+    rifiuta la dichiarazione, se non risponde, o se il ciclo degli eventi
+    del bot resta bloccato per più di due secondi, c'è una riga che lo
+    dice. Prima quei casi erano identici: la chiave mancava e basta.
+
+
+  Il lockdown non chiude ancora le chat dei canali vocali: arriva in una
+  prossima versione.
+
+
+  Dalla 1.31.1: i comandi del pannello tornano ad arrivare al bot.
 
 
   - **Il nome di Redis poteva portare al Redis di un'altra app.** Il compose
