@@ -3,6 +3,13 @@
 Le date sono quelle di pubblicazione dell'immagine. Solo le versioni che cambiano qualcosa per chi
 lo usa: le correzioni interne stanno nella cronologia git.
 
+## 1.31.7 — 22 settembre 2026
+
+- **I backup notturni tornano a essere scritti.** La cartella dei backup la creava Docker con
+  proprietario root, e ANGEL non ci poteva scrivere: «cartella di backup non disponibile
+  (EACCES)» all'avvio, e ogni notte nessun backup su disco. Ora il container che sistema i
+  permessi se ne occupa da solo, per i backup e per gli allegati.
+
 ## 1.31.6 — 22 settembre 2026
 
 - **Il backup notturno si dichiara notturno.** Veniva registrato come «creato dal pannello», e il

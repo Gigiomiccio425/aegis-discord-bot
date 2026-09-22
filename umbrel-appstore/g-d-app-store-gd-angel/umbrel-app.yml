@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.6"
+version: "1.31.7"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,8 +65,24 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Il backup notturno si dichiara per quello che è, e gli script di trasloco
-  non possono più toccare il database di un'altra app.
+  I backup notturni tornano a essere scritti.
+
+
+  - **La cartella dei backup non è più di root.** Docker la creava con
+    proprietario root, e ANGEL — che gira con un altro utente — non ci
+    poteva scrivere: all'avvio «cartella di backup non disponibile
+    (EACCES)», e ogni notte nessun backup su disco. Ora il container che
+    sistema i permessi prima dell'avvio se ne occupa da solo, per i backup e
+    per gli allegati. Nessun `sudo chown` da fare a mano.
+
+  - Al primo avvio dopo l'aggiornamento quel messaggio può comparire ancora
+    una volta: i due container partono insieme. Dalla notte dopo i backup si
+    scrivono. Si controlla in `app-data/…/data/backup`, o nel pannello, in
+    Backup.
+
+
+  Dalla 1.31.6: il backup notturno si dichiara per quello che è, e gli
+  script di trasloco non possono più toccare il database di un'altra app.
 
 
   - **Il backup notturno si dichiara notturno.** Veniva registrato come
