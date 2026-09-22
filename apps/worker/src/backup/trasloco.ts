@@ -85,10 +85,13 @@ export const GRUPPI: { titolo: string; nota: string; segrete: boolean; nomi: str
   {
     titolo: 'DATABASE E CODE',
     nota:
-      'La password del database sta dentro DATABASE_URL e va ripetuta identica in\n' +
-      'POSTGRES_PASSWORD nel compose: sono lo stesso valore scritto in due punti.\n' +
-      'Se installi da zero puoi anche inventarne una nuova, purché la cambi in\n' +
-      'tutti e due i posti.',
+      'Su umbrelOS non serve riscriverla: ANGEL genera da solo la password del\n' +
+      'database al primo avvio, in data/segreti/postgres_password, e compone da\n' +
+      'lì DATABASE_URL. Questa riga serve se porti con te il database di prima:\n' +
+      'allora scrivi DATABASE_URL per intero nel file dei segreti, perché quel\n' +
+      'database ha già la sua password e quella generata non combacerebbe.\n' +
+      'Altrove (ZimaOS, Docker semplice) la password sta dentro DATABASE_URL e va\n' +
+      'ripetuta identica in POSTGRES_PASSWORD: è lo stesso valore in due punti.',
     segrete: true,
     nomi: ['DATABASE_URL', 'REDIS_URL'],
   },
