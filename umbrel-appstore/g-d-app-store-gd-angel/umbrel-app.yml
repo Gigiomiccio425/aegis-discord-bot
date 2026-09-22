@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.5"
+version: "1.31.6"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,8 +65,27 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  Il pannello non dice più «fatto» a vuoto, e torna la copia leggera su
-  Discord.
+  Il backup notturno si dichiara per quello che è, e gli script di trasloco
+  non possono più toccare il database di un'altra app.
+
+
+  - **Il backup notturno si dichiara notturno.** Veniva registrato come
+    «creato dal pannello», e il controllo che evita due backup a poche ore di
+    distanza non funzionava. Era così da sempre.
+
+  - **`trasloco.sh` e `aggiorna.sh` scelgono il database giusto.**
+    Prendevano «il primo container che contiene postgres»: su un Umbrel con
+    Immich o Nextcloud poteva essere il loro, e `trasloco.sh importa` ci
+    avrebbe cancellato lo schema. Ora il nome deve essere di ANGEL, e con più
+    candidati si fermano e chiedono. Se non li usi, non cambia niente.
+
+  - **La documentazione è tornata**, aggiornata a com'è ANGEL adesso: la
+    copia leggera, il lockdown sulle vocali, e i casi di questi giorni nella
+    pagina dei problemi.
+
+
+  Dalla 1.31.5: il pannello non dice più «fatto» a vuoto, e torna la copia
+  leggera su Discord.
 
 
   - **«Il bot non ha ricevuto il comando».** Se premi lockdown, backup,
