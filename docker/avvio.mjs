@@ -21,10 +21,11 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, promises as fs } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { assicuraSegreti, cartellaSegreti, istruzioni, FILE_SEGRETI } from './segreti.mjs';
+import { consiglioPermessi, registraVersione } from './versioneDati.mjs';
 
 /** I processi di lunga durata. La migrazione è a parte: finisce e basta. */
 const SERVIZI = [
@@ -267,40 +268,26 @@ function verificaFile() {
 }
 
 /**
- * Segna la versione con cui i dati sono stati usati l'ultima volta.
- *
- * Serve a due cose: riconoscere che è appena avvenuto un aggiornamento, e
- * lasciare accanto ai dati una traccia di quale codice li ha scritti. Senza,
- * chi ritrova una cartella di backup fra un anno non ha modo di sapere quali
- * migrazioni erano state applicate.
+ * Segna la versione con cui i dati sono stati usati l'ultima volta, e dice
+ * se è appena avvenuto un aggiornamento. Il perché, e perché riprova, in
+ * `versioneDati.mjs`.
  */
-async function registraVersione() {
+async function segnaVersione() {
   const cartella = process.env.BACKUP_DIR ?? '/backup';
-  const segnale = path.join(cartella, 'VERSIONE');
   const attuale = process.env.ANGEL_VERSION ?? 'sviluppo';
 
-  try {
-    await fs.mkdir(cartella, { recursive: true });
-    const precedente = await fs.readFile(segnale, 'utf8').catch(() => null);
-    await fs.writeFile(segnale, `${attuale}\n${new Date().toISOString()}\n`, 'utf8');
-
-    const prima = precedente?.split('\n')[0]?.trim();
-    if (prima && prima !== attuale) {
-      log(`aggiornamento rilevato: ${prima} → ${attuale}`);
-      return true;
-    }
-  } catch (errore) {
-    // La cartella di backup non è montata, o è di qualcun altro: non è un
-    // motivo per non partire. Ma va detto cosa fare, perché il sintomo — una
-    // copia notturna che non c'è — si scopre il giorno in cui serve.
-    log(`cartella di backup non disponibile (${errore.code ?? errore.message})`);
-    if (errore.code === 'EACCES' || errore.code === 'EPERM') {
-      log(
-        `la cartella esiste ma appartiene a root: ANGEL gira con un altro utente e non può ` +
-          `scriverci. Le copie di sicurezza resteranno vuote finché non gliela dai — sulla ` +
-          `macchina, una volta sola: sudo chown -R 1000:1000 <cartella dei dati dell'app>`,
-      );
-    }
+  const esito = await registraVersione(cartella, attuale);
+  if (esito.aggiornato) {
+    log(`aggiornamento rilevato: ${esito.prima} → ${attuale}`);
+    return true;
+  }
+  if (esito.errore) {
+    // Non è un motivo per non partire. Ma va detto cosa fare, perché il
+    // sintomo — una copia notturna che non c'è — si scopre il giorno in cui
+    // serve.
+    const codice = esito.errore.code ?? esito.errore.message;
+    log(`cartella di backup non disponibile (${codice})`);
+    if (codice === 'EACCES' || codice === 'EPERM') log(consiglioPermessi(cartella));
   }
   return false;
 }
@@ -408,7 +395,7 @@ async function preparaSegreti() {
 let segreti = await preparaSegreti();
 if (!verificaFile()) process.exit(1);
 
-const aggiornato = await registraVersione();
+const aggiornato = await segnaVersione();
 
 let databasePronto = true;
 
