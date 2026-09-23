@@ -115,7 +115,7 @@ Guida completa: **[docs/installazione-zimaos.md](docs/installazione-zimaos.md)**
 ```
 ghcr.io/gigiomiccio425/aegis-discord-bot:latest
 ghcr.io/gigiomiccio425/aegis-discord-bot:1.31
-ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.7
+ghcr.io/gigiomiccio425/aegis-discord-bot:1.31.8
 ```
 
 `1.31` segue l'ultima correzione di quella serie; la versione intera resta ferma. Nel compose

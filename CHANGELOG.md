@@ -3,6 +3,15 @@
 Le date sono quelle di pubblicazione dell'immagine. Solo le versioni che cambiano qualcosa per chi
 lo usa: le correzioni interne stanno nella cronologia git.
 
+## 1.31.8 — 23 settembre 2026
+
+- **La copia leggera si pubblica dal pannello**, in Backup → «Pubblica adesso». Se è spenta o
+  manca il canale, lo dice.
+- **Il primo avvio dopo un aggiornamento non salta più la copia.** ANGEL arrivava alla cartella
+  dei backup prima che il container dei permessi la sistemasse; ora aspetta qualche secondo.
+- **Il consiglio in caso di cartella non scrivibile non ferma più Postgres**: indica solo la
+  cartella dei backup, non tutta quella dei dati.
+
 ## 1.31.7 — 22 settembre 2026
 
 - **I backup notturni tornano a essere scritti.** La cartella dei backup la creava Docker con

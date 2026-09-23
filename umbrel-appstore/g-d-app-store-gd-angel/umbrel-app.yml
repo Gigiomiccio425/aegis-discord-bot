@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.7"
+version: "1.31.8"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,7 +65,27 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  I backup notturni tornano a essere scritti.
+  La copia leggera si pubblica dal pannello, e il primo avvio dopo un
+  aggiornamento non salta più la sua copia.
+
+
+  - **«Pubblica adesso».** Nella pagina Backup c'è la sezione della copia
+    leggera, con un pulsante. Se è spenta, o manca il canale, te lo dice lì;
+    prima si poteva fare solo con `/copia-leggera adesso` su Discord.
+
+  - **Il primo avvio dopo un aggiornamento aspetta la cartella dei backup.**
+    Il container che sistema i permessi parte insieme ad ANGEL, e ANGEL
+    arrivava alla cartella mentre era ancora di root: non si accorgeva
+    dell'aggiornamento, e saltava la copia che deve fare in quel momento.
+    Ora aspetta qualche secondo.
+
+  - **Il consiglio in caso di problemi non ferma più Postgres.** Diceva di
+    cambiare proprietario a tutta la cartella dei dati, dove c'è anche il
+    database, che con un altro proprietario non parte. Ora indica solo la
+    cartella dei backup.
+
+
+  Dalla 1.31.7: i backup notturni tornano a essere scritti.
 
 
   - **La cartella dei backup non è più di root.** Docker la creava con
