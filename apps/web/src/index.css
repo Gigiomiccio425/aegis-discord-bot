@@ -12,17 +12,41 @@
   andato storto, e in quei momenti l'occhio deve trovare subito la riga che
   conta: un accento caldo su fondo scuro risalta senza urlare, dove il blu
   della piattaforma si confonde con ogni altra interfaccia aperta accanto.
+
+  Questi sono i valori di partenza, quelli del primo disegno. Gli altri temi
+  stanno in `temi.ts` e li sostituiscono sul documento: qui c'è solo quello
+  che serve perché la pagina non lampeggi prima che il tema scelto arrivi.
+
+  La scala `neutral` è ridefinita di proposito: il pannello la usa per il
+  testo, e nei temi chiari si inverte — 200 è il testo principale in ogni
+  tema, quasi bianco sui temi scuri e quasi nero su quelli chiari.
 */
 @theme {
   --color-base: #0b0d13;
   --color-surface: #14161e;
   --color-surface-2: #1c1f2a;
+  --color-surface-hover: #262b36;
   --color-border: #2b2f3d;
   --color-accent: #d8b45f;
   --color-accent-soft: #f0dfae;
-  --color-danger: #e05263;
-  --color-warning: #e8a33d;
-  --color-success: #5fbf8b;
+  --color-accent-hover: #c2a052;
+  --color-on-accent: #14161e;
+  --color-danger: #f06a7a;
+  --color-danger-text: #ffb3bd;
+  --color-danger-hover: #f5838f;
+  --color-on-danger: #1a0508;
+  --color-warning: #f0ad4e;
+  --color-warning-text: #ffd58a;
+  --color-success: #4cc98a;
+  --color-success-text: #9ee8bf;
+  --color-text: #e4e6eb;
+
+  --color-neutral-100: #f5f6f8;
+  --color-neutral-200: #e4e6eb;
+  --color-neutral-300: #c9cdd6;
+  --color-neutral-400: #b0b6c2;
+  --color-neutral-500: #9aa1af;
+  --color-neutral-600: #7c8393;
 }
 
 html,
@@ -33,16 +57,35 @@ body,
 
 body {
   background: var(--color-base);
-  color: #e4e6eb;
-  font-family:
+  color: var(--color-text);
+  font-family: var(
+    --font-pannello,
     ui-sans-serif,
     system-ui,
     'Segoe UI',
     Roboto,
     Helvetica,
     Arial,
-    sans-serif;
+    sans-serif
+  );
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease;
+}
+
+/*
+  Il fuoco da tastiera si vede sempre. Chi naviga il pannello con Tab — o con
+  la ricerca, che è fatta per la tastiera — deve sapere dove si trova.
+
+  Nel livello `base` e non fuori: le regole fuori da ogni livello vincono su
+  tutte le classi di Tailwind, e un campo che il suo contenitore evidenzia già
+  — la casella della ricerca — non potrebbe più toglierlo.
+*/
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -55,4 +98,38 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 5px;
+}
+
+/*
+  L'impostazione raggiunta dalla ricerca.
+
+  Si illumina per qualche secondo e poi torna normale: abbastanza per
+  trovarla con l'occhio in una sezione lunga, non abbastanza da restare
+  accesa mentre la si modifica.
+*/
+@keyframes evidenzia {
+  0%,
+  60% {
+    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 1px transparent;
+  }
+}
+
+.evidenziato {
+  border-radius: 0.5rem;
+  animation: evidenzia 3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+  .evidenziato {
+    animation: none;
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
 }

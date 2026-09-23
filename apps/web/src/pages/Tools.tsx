@@ -12,6 +12,8 @@ import {
   ErrorBox,
   NumberInput,
   formatDate,
+  Gruppo,
+  IntestazionePagina,
 } from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -24,13 +26,21 @@ import {
 
 export function Tools() {
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-semibold">Strumenti</h1>
-      <ServerSetup />
-      <RientroEmergenza />
-      <SayAsBot />
-      <WatchedUsers />
-      <CommandReference />
+    <div>
+      <IntestazionePagina />
+      <div className="space-y-8">
+        <Gruppo titolo="Preparazione ed emergenza">
+          <ServerSetup />
+          <RientroEmergenza />
+        </Gruppo>
+        <Gruppo titolo="Comunicazione e sorveglianza">
+          <SayAsBot />
+          <WatchedUsers />
+        </Gruppo>
+        <Gruppo titolo="Riferimento">
+          <CommandReference />
+        </Gruppo>
+      </div>
     </div>
   );
 }
@@ -74,7 +84,7 @@ function ServerSetup() {
     >
       {error && <ErrorBox message={error} />}
       {stato === 'fatto' && (
-        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
+        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[var(--color-success-text)]">
           Richiesta inviata. Il risultato compare nel registro fra qualche secondo, con l&apos;elenco
           di ciò che è stato creato.
         </div>
@@ -196,12 +206,12 @@ function RientroEmergenza() {
 
       {esito && (
         <div className="mt-4 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm">
-          <p className="font-medium text-[#8fe0b4]">{esito.inserite} righe importate</p>
+          <p className="font-medium text-[var(--color-success-text)]">{esito.inserite} righe importate</p>
           <ul className="mt-2 space-y-0.5 text-xs text-neutral-400">
             {esito.dettaglio.map((riga) => (
               <li key={riga.tabella}>
                 {riga.tabella}: {riga.inserite} su {riga.lette}
-                {riga.errore && <span className="text-[#f2a3ad]"> — {riga.errore}</span>}
+                {riga.errore && <span className="text-[var(--color-danger-text)]"> — {riga.errore}</span>}
               </li>
             ))}
           </ul>
@@ -258,7 +268,7 @@ function SayAsBot() {
     >
       {error && <ErrorBox message={error} />}
       {done && (
-        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
+        <div className="mb-3 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[var(--color-success-text)]">
           Inviato al bot. Compare nel canale entro un istante.
         </div>
       )}
@@ -505,7 +515,7 @@ function CommandReference() {
               <p className="mt-1 font-mono text-xs text-neutral-500">{command.example}</p>
             )}
             {command.caution && (
-              <p className="mt-1 text-xs text-[#ffd479]">⚠ {command.caution}</p>
+              <p className="mt-1 text-xs text-[var(--color-warning-text)]">⚠ {command.caution}</p>
             )}
           </li>
         ))}

@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface AccessEntry {
   id: string;
@@ -58,7 +67,7 @@ export function Access() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Accessi al pannello</h1>
+      <IntestazionePagina />
 
       {error && <ErrorBox message={error} />}
 

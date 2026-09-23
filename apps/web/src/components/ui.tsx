@@ -1,29 +1,188 @@
 import { useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
+import { doveSiamo } from '../navigazione.js';
+
+/* ═══════════════════════════════════════════════════════════════════════
+   L'IMPAGINAZIONE COMUNE
+
+   Ogni pagina comincia allo stesso modo — icona, titolo, una riga che dice
+   a cosa serve, le azioni a destra — e divide il resto in gruppi con un
+   titolo. Chi apre una pagina che non usa da un mese deve capire in due
+   secondi dov'è e cosa ci si fa, senza leggere ogni scheda.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * L'intestazione di una pagina.
+ *
+ * Titolo, icona e descrizione vengono dalla navigazione, così la pagina
+ * dice di sé la stessa cosa che dice la barra laterale. Si possono
+ * sostituire dove la pagina ha qualcosa di più preciso da dire.
+ */
+export function IntestazionePagina({
+  titolo,
+  descrizione,
+  azioni,
+  children,
+}: {
+  titolo?: ReactNode;
+  descrizione?: ReactNode;
+  azioni?: ReactNode;
+  /** Sotto il titolo: avvisi che riguardano tutta la pagina. */
+  children?: ReactNode;
+}) {
+  const { pathname } = useLocation();
+  const qui = doveSiamo(pathname);
+  const Icona = qui?.voce.icona;
+
+  return (
+    <header className="mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          {Icona && (
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)]/12 text-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]/25"
+            >
+              <Icona size={20} strokeWidth={1.8} />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-100">
+              {titolo ?? qui?.voce.label}
+            </h1>
+            {(descrizione ?? qui?.voce.descrizione) && (
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-400">
+                {descrizione ?? qui?.voce.descrizione}
+              </p>
+            )}
+          </div>
+        </div>
+        {azioni && <div className="flex flex-wrap items-center gap-2">{azioni}</div>}
+      </div>
+      {children && <div className="mt-4 space-y-3">{children}</div>}
+    </header>
+  );
+}
+
+/**
+ * Un gruppo di schede con un titolo.
+ *
+ * Divide una pagina per quello che ci si fa: «Preparazione», «Emergenza».
+ * L'occhio scorre i titoli dei gruppi e salta quelli che non c'entrano,
+ * invece di leggere ogni scheda per scoprire di cosa parla.
+ */
+export function Gruppo({
+  titolo,
+  descrizione,
+  id,
+  children,
+}: {
+  titolo: string;
+  descrizione?: string;
+  id?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-20 space-y-4">
+      <div className="flex items-center gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+          {titolo}
+        </h2>
+        <span aria-hidden className="h-px flex-1 bg-[var(--color-border)]" />
+      </div>
+      {descrizione && <p className="-mt-2 text-sm text-neutral-400">{descrizione}</p>}
+      {children}
+    </section>
+  );
+}
 
 export function Card({
   title,
   subtitle,
   children,
   action,
+  id,
+  icona: Icona,
 }: {
   title?: string;
   subtitle?: string;
   children: ReactNode;
   action?: ReactNode;
+  id?: string;
+  icona?: LucideIcon;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <section
+      id={id}
+      className="scroll-mt-20 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm shadow-black/5"
+    >
       {(title || action) && (
-        <header className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            {title && <h2 className="text-base font-semibold">{title}</h2>}
-            {subtitle && <p className="mt-1 text-sm text-neutral-400">{subtitle}</p>}
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 items-start gap-2.5">
+            {Icona && (
+              <Icona
+                aria-hidden
+                size={18}
+                strokeWidth={1.8}
+                className="mt-0.5 shrink-0 text-[var(--color-accent-soft)]"
+              />
+            )}
+            <div className="min-w-0">
+              {title && <h2 className="text-base font-semibold text-neutral-100">{title}</h2>}
+              {subtitle && <p className="mt-1 text-sm leading-relaxed text-neutral-400">{subtitle}</p>}
+            </div>
           </div>
           {action}
         </header>
       )}
       {children}
     </section>
+  );
+}
+
+/**
+ * Acceso o spento.
+ *
+ * Un interruttore dice lo stato a colpo d'occhio anche da lontano, dove una
+ * casella di spunta piccola si confonde con le altre. È un pulsante vero,
+ * con `role="switch"`: la tastiera lo raggiunge e lo spazio lo cambia.
+ */
+export function Interruttore({
+  acceso,
+  onChange,
+  etichetta,
+  id,
+}: {
+  acceso: boolean;
+  onChange: (acceso: boolean) => void;
+  /** Per chi usa un lettore di schermo, quando l'etichetta visibile non è collegata. */
+  etichetta?: string;
+  id?: string;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={acceso}
+      aria-label={etichetta}
+      onClick={() => onChange(!acceso)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+        acceso
+          ? 'border-transparent bg-[var(--color-accent)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface-2)]'
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`inline-block h-4 w-4 rounded-full shadow transition-transform ${
+          acceso
+            ? 'translate-x-[22px] bg-[var(--color-on-accent)]'
+            : 'translate-x-[3px] bg-neutral-500'
+        }`}
+      />
+    </button>
   );
 }
 
@@ -68,11 +227,11 @@ export function Button({
   type?: 'button' | 'submit';
 }) {
   const variants = {
-    default: 'bg-[var(--color-surface-2)] hover:bg-[#262b36] border-[var(--color-border)]',
+    default: 'bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border)]',
     // Testo scuro sull'oro: bianco su oro chiaro scende sotto il rapporto di
     // contrasto leggibile, ed è il pulsante che si preme di corsa.
-    primary: 'bg-[var(--color-accent)] hover:bg-[#c2a052] border-transparent text-[#14161e] font-medium',
-    danger: 'bg-[var(--color-danger)] hover:bg-[#c73538] border-transparent text-white',
+    primary: 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] border-transparent text-[var(--color-on-accent)] font-medium',
+    danger: 'bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] border-transparent text-[var(--color-on-danger)]',
     ghost: 'bg-transparent hover:bg-[var(--color-surface-2)] border-transparent',
   }[variant];
 
@@ -81,7 +240,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${variants}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${variants}`}
     >
       {children}
     </button>
@@ -128,7 +287,7 @@ export function ErrorBox({ message }: { message: string }) {
   return (
     // `whitespace-pre-line`: gli errori di validazione arrivano con un campo
     // per riga, e schiacciarli su una riga sola li rende di nuovo illeggibili.
-    <div className="whitespace-pre-line rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
+    <div className="whitespace-pre-line rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger-text)]">
       {message}
     </div>
   );
@@ -219,6 +378,7 @@ export function NumberInput({
   min,
   title,
   className,
+  id,
   onChange,
 }: {
   value: number;
@@ -226,6 +386,7 @@ export function NumberInput({
   min?: number;
   title?: string;
   className?: string;
+  id?: string;
   onChange: (value: number) => void;
 }) {
   const [text, setText] = useState(String(value));
@@ -238,6 +399,7 @@ export function NumberInput({
 
   return (
     <input
+      id={id}
       type="number"
       value={text}
       step={step}

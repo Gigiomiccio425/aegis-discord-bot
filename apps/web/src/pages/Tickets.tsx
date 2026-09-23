@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, Stat, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  Stat,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface Ticket {
   number: number;
@@ -55,7 +65,7 @@ export function Tickets() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Ticket e trascrizioni</h1>
+      <IntestazionePagina />
 
       {data && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

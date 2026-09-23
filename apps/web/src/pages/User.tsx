@@ -12,6 +12,7 @@ import {
   Stat,
   formatDate,
   severityTone,
+  IntestazionePagina,
 } from '../components/ui.js';
 
 interface Timeline {
@@ -74,17 +75,15 @@ export function User() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">
-            {profile?.displayName ?? profile?.username ?? 'Utente'}
-          </h1>
-          <code className="text-xs text-neutral-500">{userId}</code>
-        </div>
-        <Link to={`/g/${guildId}/log?actorId=${userId}`}>
-          <Button>Vedi solo i suoi eventi</Button>
-        </Link>
-      </div>
+      <IntestazionePagina
+        titolo={profile?.displayName ?? profile?.username ?? 'Utente'}
+        descrizione={<code className="text-xs text-neutral-500">{userId}</code>}
+        azioni={
+          <Link to={`/g/${guildId}/log?actorId=${userId}`}>
+            <Button>Vedi solo i suoi eventi</Button>
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat

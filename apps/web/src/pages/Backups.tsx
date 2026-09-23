@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface Snapshot {
   id: string;
@@ -54,12 +63,13 @@ export function Backups() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Backup</h1>
-        <Button variant="primary" disabled={busy} onClick={() => void createBackup()}>
-          Crea backup ora
-        </Button>
-      </div>
+      <IntestazionePagina
+        azioni={
+          <Button variant="primary" disabled={busy} onClick={() => void createBackup()}>
+            Crea backup ora
+          </Button>
+        }
+      />
 
       <Card>
         <p className="text-sm leading-relaxed text-neutral-300">

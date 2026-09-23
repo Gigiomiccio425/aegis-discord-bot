@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api, type CaseRecord } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 const TONE: Record<string, 'neutral' | 'warning' | 'danger' | 'success'> = {
   NOTE: 'neutral',
@@ -72,19 +81,23 @@ export function Cases() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Provvedimenti</h1>
-        <select
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-        >
-          <option value="ACTIVE">Attivi</option>
-          <option value="EXPIRED">Scaduti</option>
-          <option value="REVOKED">Revocati</option>
-          <option value="">Tutti</option>
-        </select>
-      </div>
+      <IntestazionePagina
+        azioni={
+          <label className="flex items-center gap-2 text-sm text-neutral-400">
+            Mostra
+            <select
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-neutral-200"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="ACTIVE">Attivi</option>
+              <option value="EXPIRED">Scaduti</option>
+              <option value="REVOKED">Revocati</option>
+              <option value="">Tutti</option>
+            </select>
+          </label>
+        }
+      />
 
       {error && <ErrorBox message={error} />}
 

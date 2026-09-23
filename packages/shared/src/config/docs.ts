@@ -422,12 +422,161 @@ export const BY_PATH: Record<string, FieldDoc> = {
     label: 'Conservazione per categoria',
     help: 'Giorni di permanenza nel database, categoria per categoria. 0 = per sempre.',
   },
+
+  /* ── Gruppi di opzioni ───────────────────────────────────────────────
+     Il pannello mostra ogni gruppo come un riquadro con un titolo, e la
+     ricerca lo usa nel percorso di ogni campo. Senza un nome qui, il titolo
+     sarebbe il nome tecnico: «Join burst», «Exemptions». */
+  'general.actionNotice': {
+    label: 'Avviso delle sanzioni in chat',
+    help:
+      'Il cartellino che il bot lascia nel canale quando interviene: cosa ha fatto, a chi e perché. ' +
+      'Toglie il dubbio a chi ha visto sparire un messaggio.',
+  },
+  'general.ownerRole': {
+    label: 'Ruolo del proprietario',
+    help:
+      'Un ruolo tenuto in vita dal bot per chi è elencato in OWNER_IDS: se qualcuno lo toglie o lo ' +
+      'elimina, torna al suo posto.',
+  },
+  'general.identity': {
+    label: 'Identità del bot',
+    help: 'Nome, immagine e stato con cui il bot si presenta. Solo il soprannome vale per questo server soltanto.',
+  },
+  'general.copiaLeggera': {
+    label: 'Copia leggera su Discord',
+    help: 'Ogni notte un file di testo con la configurazione e gli elenchi, pubblicato in un canale riservato.',
+  },
+  'security.antiRaid.joinBurst': {
+    label: 'Ondata di ingressi',
+    help: 'Quanti ingressi in quanto tempo fanno pensare a un raid. È la soglia principale del modulo.',
+  },
+  'security.antiRaid.clustering': {
+    label: 'Gruppi di account simili',
+    help:
+      'Riconosce il raid anche quando è lento: account nuovi, con nomi che si somigliano, entrati a ' +
+      'poca distanza l\'uno dall\'altro.',
+  },
+  'security.antiNuke.whitelist': {
+    label: 'Chi non viene valutato',
+    help: 'Persone, ruoli e bot le cui azioni non contano mai per le soglie. Tenerla corta: ogni voce è una porta.',
+  },
+  'security.antiNuke.rules': {
+    label: 'Regole per azione',
+    help: 'Una soglia per ogni tipo di azione distruttiva: quante in quanto tempo, e cosa fare a chi le supera.',
+  },
+  'security.antiNuke.rules.channelDelete': {
+    label: 'Canali eliminati',
+    help: 'Chi elimina molti canali in poco tempo.',
+  },
+  'security.antiNuke.rules.channelCreate': {
+    label: 'Canali creati',
+    help: 'Chi crea molti canali in poco tempo: il segno tipico di un server riempito di spazzatura.',
+  },
+  'security.antiNuke.rules.roleDelete': {
+    label: 'Ruoli eliminati',
+    help: 'Chi elimina molti ruoli in poco tempo.',
+  },
+  'security.antiNuke.rules.roleCreate': {
+    label: 'Ruoli creati',
+    help: 'Chi crea molti ruoli in poco tempo.',
+  },
+  'security.antiNuke.rules.roleEscalation': {
+    label: 'Permessi pericolosi concessi',
+    help: 'Chi dà a un ruolo, o a sé stesso, permessi da amministratore.',
+  },
+  'security.antiNuke.rules.memberBan': {
+    label: 'Ban in serie',
+    help: 'Chi banna molte persone in poco tempo.',
+  },
+  'security.antiNuke.rules.memberKick': {
+    label: 'Espulsioni in serie',
+    help: 'Chi espelle molte persone in poco tempo.',
+  },
+  'security.antiNuke.rules.webhookCreate': {
+    label: 'Webhook creati',
+    help: 'Chi crea molti webhook: il modo più rapido per spammare in ogni canale senza un account.',
+  },
+  'security.antiNuke.rules.emojiDelete': {
+    label: 'Emoji eliminate',
+    help: 'Chi elimina molte emoji o sticker in poco tempo.',
+  },
+  'security.antiNuke.rules.guildUpdate': {
+    label: 'Modifiche al server',
+    help: 'Chi cambia nome, immagine o impostazioni del server più volte di seguito.',
+  },
+  'security.antiNuke.rules.integrationCreate': {
+    label: 'Integrazioni aggiunte',
+    help: 'Chi aggiunge bot o integrazioni in serie.',
+  },
+  'security.antiSpam.messageRate': {
+    label: 'Troppi messaggi',
+    help: 'Quanti messaggi una persona può mandare nella finestra di tempo.',
+  },
+  'security.antiSpam.duplicateMessages': {
+    label: 'Messaggi ripetuti',
+    help: 'Quante volte lo stesso testo può tornare nella finestra di tempo.',
+  },
+  'security.antiSpam.crossChannelSpam': {
+    label: 'Stesso messaggio in più canali',
+    help: 'In quanti canali diversi si può scrivere nella finestra di tempo.',
+  },
+  'security.antiSpam.imageRate': {
+    label: 'Troppe immagini',
+    help: 'Quanti allegati una persona può mandare nella finestra di tempo.',
+  },
+  'security.antiSpam.mentionRate': {
+    label: 'Troppe menzioni',
+    help: 'Quante persone o ruoli si possono menzionare nella finestra di tempo.',
+  },
+  'security.compromise.signals': {
+    label: 'Segnali e punteggi',
+    help:
+      'Ogni segnale aggiunge punti al messaggio. Uno da solo non basta quasi mai: è la somma a far ' +
+      'pensare a un account rubato.',
+  },
+  'security.language.categories': {
+    label: 'Categorie',
+    help: 'Quali tipi di linguaggio il modulo sorveglia. Si accendono e si spengono una per una.',
+  },
+  'security.language.recidiva': {
+    label: 'Recidiva',
+    help: 'Chi continua dopo il primo messaggio rimosso: la sanzione cresce a ogni volta, entro una finestra di tempo.',
+  },
+  'scanner.image': {
+    label: 'Immagini',
+    help: 'Cerca i link nascosti dentro le immagini: scritti sopra, o dentro un QR.',
+  },
+  'scanner.file': {
+    label: 'Allegati',
+    help: 'Controlla che un file sia davvero quello che dice di essere.',
+  },
+  'scanner.clickfix': {
+    label: 'Finte verifiche «ClickFix»',
+    help: 'Le false CAPTCHA che fanno incollare un comando nel terminale.',
+  },
+  'logging.fileSink': {
+    label: 'Copia su file',
+    help: 'Ogni evento scritto anche su un file di testo sul disco della macchina, oltre che nel database.',
+  },
+  'logging.routes': {
+    label: 'Canale per categoria',
+    help: 'Dove va ogni categoria di eventi quando il registro non usa un canale unico.',
+  },
+  'integrations.giveaways.defaultRequirements': {
+    label: 'Requisiti predefiniti',
+    help: 'Chi può partecipare a un giveaway quando chi lo crea non dice altro.',
+  },
 };
 
 /* ── Chiavi ricorrenti ─────────────────────────────────────────────────
    Descritte una volta e valide ovunque compaiano. */
 const BY_KEY: Record<string, FieldDoc> = {
   /* Struttura comune a tutti i moduli */
+  exemptions: {
+    label: 'Esenzioni',
+    help: 'Chi e dove questo modulo non guarda mai: ruoli, persone, canali.',
+  },
   enabled: {
     label: 'Attivo',
     help: 'Accende o spegne questa funzione. Da spenta non valuta nulla e non consuma risorse.',
@@ -1136,6 +1285,77 @@ export function describeField(path: string): FieldDoc | null {
   }
 
   return null;
+}
+
+/* ── Valori delle scelte fisse ─────────────────────────────────────────
+   Il pannello mostra i campi a scelta fissa come tendine: queste sono le
+   parole che compaiono al posto dei valori tecnici. Il valore salvato resta
+   quello tecnico, identico a prima. */
+const VALORI: Record<string, string> = {
+  // Azioni
+  NONE: 'Nessuna azione',
+  LOG_ONLY: 'Solo registrare',
+  ALERT_STAFF: 'Avvisare lo staff',
+  DELETE_MESSAGE: 'Cancellare il messaggio',
+  PURGE_RECENT: 'Cancellare i messaggi recenti',
+  WARN: 'Ammonire',
+  TIMEOUT: 'Silenziare (timeout)',
+  QUARANTINE: 'Mettere in quarantena',
+  STRIP_ROLES: 'Togliere i ruoli pericolosi',
+  KICK: 'Espellere',
+  BAN: 'Bandire',
+  LOCKDOWN: 'Bloccare il server (lockdown)',
+  REQUIRE_VERIFICATION: 'Chiedere la verifica',
+  // Livello di risposta dell'anti-raid
+  MONITOR: 'Solo osservare',
+  VERIFY: 'Chiedere una verifica',
+  // Verifica d'ingresso
+  OFF: 'Spenta',
+  BUTTON: 'Pulsante',
+  CAPTCHA: 'Captcha',
+  PANEL: 'Pagina web',
+  // Gravità e categorie del linguaggio
+  LIEVE: 'Lieve',
+  MEDIA: 'Media',
+  GRAVE: 'Grave',
+  VOLGARITA: 'Volgarità',
+  INSULTO: 'Insulto',
+  DISCRIMINAZIONE: 'Discriminazione',
+  MINACCIA: 'Minaccia',
+  AUTOLESIONISMO: 'Autolesionismo',
+  BESTEMMIA: 'Bestemmia',
+  SESSUALE: 'Contenuto sessuale',
+  // Registro
+  FULL: 'Testo completo',
+  HASHED: 'Solo un\'impronta del testo',
+  METADATA_ONLY: 'Solo chi, dove e quando',
+  CHANNEL_ONLY: 'Niente nel database, solo il canale',
+  TXT: 'Testo (TXT)',
+  JSONL: 'JSON a righe (JSONL)',
+  BOTH: 'Entrambi',
+  // Ruoli e identità
+  NESSUNO: 'Nessun potere',
+  MODERAZIONE: 'Moderazione',
+  AMMINISTRATORE: 'Amministratore',
+  TECNICO: 'Tecnico',
+  ANGELICO: 'Angelico',
+  YUYU: 'Yuyu',
+  online: 'Online',
+  idle: 'Inattivo',
+  dnd: 'Non disturbare',
+  invisible: 'Invisibile',
+  CUSTOM: 'Personalizzata',
+  PLAYING: 'Sta giocando a',
+  WATCHING: 'Sta guardando',
+  LISTENING: 'Sta ascoltando',
+  COMPETING: 'Sta partecipando a',
+  it: 'Italiano',
+  en: 'Inglese',
+};
+
+/** Il nome leggibile di un valore a scelta fissa, o `null` se non ne ha uno. */
+export function describeValue(valore: string): string | null {
+  return VALORI[valore] ?? null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

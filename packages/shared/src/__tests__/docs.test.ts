@@ -48,6 +48,34 @@ describe('spiegazioni della configurazione', () => {
     expect(orfani).toEqual([]);
   });
 
+  /*
+   * I gruppi di opzioni sono i titoli dei riquadri nel pannello e i passi del
+   * percorso nella ricerca. Un gruppo senza nome compare come «Join burst»:
+   * leggibile per chi ha scritto lo schema, per nessun altro.
+   *
+   * Le sezioni stesse sono escluse: il loro nome sta nel registro dei moduli.
+   */
+  it('dà un nome a ogni gruppo di opzioni', () => {
+    const sezioni = new Set<string>([
+      'general',
+      'security',
+      'integrations',
+      ...MODULE_REGISTRY.map((modulo) => modulo.key),
+    ]);
+    const gruppi: string[] = [];
+    const percorri = (valore: unknown, prefisso: string): void => {
+      if (valore === null || typeof valore !== 'object' || Array.isArray(valore)) return;
+      if (prefisso && !sezioni.has(prefisso)) gruppi.push(prefisso);
+      for (const [chiave, figlio] of Object.entries(valore as Record<string, unknown>)) {
+        percorri(figlio, prefisso ? `${prefisso}.${chiave}` : chiave);
+      }
+    };
+    percorri(defaultGuildConfig(), '');
+
+    expect(gruppi.length).toBeGreaterThan(20);
+    expect(gruppi.filter((percorso) => describeField(percorso) === null)).toEqual([]);
+  });
+
   it('spiega cosa cambia, non ripete il nome del campo', () => {
     const doc = describeField('general.dryRun');
     expect(doc).not.toBeNull();

@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type RiskyUser, type SecurityInventory } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface ThreatSignature {
   id: string;
@@ -67,7 +76,7 @@ export function Security() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Sicurezza</h1>
+      <IntestazionePagina />
 
       {inventory.invitesAtRisk.length > 0 && (
         <Card title="🚨 Codici invito a rischio dirottamento">

@@ -2,7 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, type LogEvent } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, ErrorBox, Empty, Loading, formatDate, severityTone } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorBox,
+  Empty,
+  Loading,
+  formatDate,
+  severityTone,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 const CATEGORIES = [
   'MESSAGE',
@@ -88,13 +98,14 @@ export function Logs() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Registro eventi</h1>
-        <div className="flex gap-2">
-          <Button onClick={() => exportLogs('csv')}>Esporta CSV</Button>
-          <Button onClick={() => exportLogs('json')}>Esporta JSON</Button>
-        </div>
-      </div>
+      <IntestazionePagina
+        azioni={
+          <>
+            <Button onClick={() => exportLogs('csv')}>Esporta CSV</Button>
+            <Button onClick={() => exportLogs('json')}>Esporta JSON</Button>
+          </>
+        }
+      />
 
       <Card>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

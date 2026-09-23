@@ -12,6 +12,7 @@ import {
   Loading,
   NumberInput,
   formatDate,
+  IntestazionePagina,
 } from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -227,17 +228,11 @@ export function Annunci() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Annunci</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Dirette, video e notizie pubblicate nei canali del server. Ogni voce ha il suo canale, il
-          suo messaggio e il suo ruolo da menzionare.
-        </p>
-      </div>
+      <IntestazionePagina descrizione="Dirette, video e notizie pubblicate nei canali del server. Ogni voce ha il suo canale, il suo messaggio e il suo ruolo da menzionare." />
 
       {error && <ErrorBox message={error} />}
       {avviso && (
-        <div className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[#8fe0b4]">
+        <div className="rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/10 p-3 text-sm text-[var(--color-success-text)]">
           {avviso}
         </div>
       )}

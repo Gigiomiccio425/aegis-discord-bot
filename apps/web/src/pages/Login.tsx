@@ -29,14 +29,14 @@ export function Login() {
         </p>
 
         {error && (
-          <div className="mt-5 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[#f2a3ad]">
+          <div className="mt-5 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-danger-text)]">
             {messages[error] ?? 'Accesso non riuscito.'}
           </div>
         )}
 
         <a
           href="/api/auth/login"
-          className="mt-6 block rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-center text-sm font-medium text-[#14161e] transition-colors hover:bg-[#c2a052]"
+          className="mt-6 block rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-center text-sm font-medium text-[var(--color-on-accent)] transition-colors hover:bg-[var(--color-accent-hover)]"
         >
           Accedi con Discord
         </a>

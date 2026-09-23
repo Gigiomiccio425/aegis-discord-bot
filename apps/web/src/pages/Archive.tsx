@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Button, Card, Empty, ErrorBox, Loading, Stat, formatDate } from '../components/ui.js';
+import {
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  Stat,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface ArchiveSummary {
   channels: { channelId: string; messages: number }[];
@@ -40,7 +49,7 @@ export function Archive() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Archivio messaggi</h1>
+      <IntestazionePagina />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Messaggi archiviati" value={data.total.toLocaleString('it-IT')} />

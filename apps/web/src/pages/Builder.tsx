@@ -10,6 +10,7 @@ import {
   ListInput,
   Loading,
   NumberInput,
+  IntestazionePagina,
 } from '../components/ui.js';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -104,7 +105,7 @@ export function Builder() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Comandi personalizzati e personas</h1>
+      <IntestazionePagina />
       {error && <ErrorBox message={error} />}
 
       <PersonaSection

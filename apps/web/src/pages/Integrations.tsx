@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGuildId } from '../App.js';
-import { Badge, Button, Card, Empty, ErrorBox, Loading, formatDate } from '../components/ui.js';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorBox,
+  Loading,
+  formatDate,
+  IntestazionePagina,
+} from '../components/ui.js';
 
 interface PollSummary {
   id: string;
@@ -71,14 +80,16 @@ export function Integrations() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Integrazioni</h1>
-
-      <p className="text-sm text-neutral-400">
-        Sondaggi, giveaway e menu dei ruoli si <strong>creano</strong> dai comandi
-        (<code>/sondaggio</code>, <code>/giveaway</code>, <code>/ruoli-menu</code>): vanno pubblicati
-        in un canale, e sceglierlo da qui per poi non vedere il risultato sarebbe più scomodo. Da
-        qui si osserva l'andamento e si chiude in anticipo.
-      </p>
+      <IntestazionePagina
+        descrizione={
+          <>
+            Sondaggi, giveaway e menu dei ruoli si <strong>creano</strong> dai comandi
+            (<code>/sondaggio</code>, <code>/giveaway</code>, <code>/ruoli-menu</code>): vanno
+            pubblicati in un canale, e sceglierlo da qui per poi non vedere il risultato sarebbe più
+            scomodo. Da qui si osserva l'andamento e si chiude in anticipo.
+          </>
+        }
+      />
 
       <Card title="Sondaggi" subtitle="I risultati sono visibili qui anche a sondaggio aperto: chi amministra non sta votando.">
         {polls.length === 0 ? (

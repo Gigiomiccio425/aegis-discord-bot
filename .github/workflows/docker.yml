@@ -92,6 +92,11 @@ jobs:
       - name: Controllo dei tipi
         run: npx tsc -b
 
+      # Il pannello non fa parte dei riferimenti di `tsc -b`: Vite lo compila
+      # senza controllare i tipi, e un errore lì arrivava in produzione.
+      - name: Controllo dei tipi del pannello
+        run: npx tsc -p apps/web/tsconfig.json --noEmit
+
       - name: Test
         run: npx vitest run
 

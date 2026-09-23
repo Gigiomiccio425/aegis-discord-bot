@@ -176,6 +176,54 @@ function risolvi(percorso: string): z.ZodTypeAny | null {
   return corrente;
 }
 
+/* ── Scelte fisse ─────────────────────────────────────────────────────
+   Un campo come il livello di risposta dell'anti-raid accetta quattro
+   parole e nient'altro. Nel valore è una stringa come tutte, e il pannello
+   mostrava una casella di testo: bisognava sapere a memoria che si scrive
+   «QUARANTINE», e un errore di battitura si scopriva solo al salvataggio. */
+
+function raccogliScelte(schema: z.ZodTypeAny, prefisso: string, trovate: Record<string, string[]>): void {
+  const base = nucleo(schema);
+  const def = base._def as {
+    typeName?: string;
+    shape?: () => Record<string, z.ZodTypeAny>;
+    type?: z.ZodTypeAny;
+    values?: unknown;
+  };
+
+  if (def.typeName === 'ZodEnum' && Array.isArray(def.values) && prefisso) {
+    trovate[prefisso] = def.values.map(String);
+    return;
+  }
+
+  if (def.typeName === 'ZodObject' && def.shape) {
+    for (const [chiave, campo] of Object.entries(def.shape())) {
+      raccogliScelte(campo, prefisso ? `${prefisso}.${chiave}` : chiave, trovate);
+    }
+    return;
+  }
+
+  // Dentro gli elenchi di oggetti la posizione non conta: `*` vale per ogni
+  // elemento, e il pannello sostituisce l'indice prima di cercare.
+  if (def.typeName === 'ZodArray' && def.type && tipoDi(def.type) === 'ZodObject') {
+    raccogliScelte(def.type, `${prefisso}.*`, trovate);
+  }
+}
+
+let cacheScelte: Record<string, string[]> | null = null;
+
+/**
+ * I valori ammessi per ogni campo a scelta fissa, indicizzati per percorso.
+ * Negli elenchi di oggetti l'indice dell'elemento è `*`.
+ */
+export function enumChoices(): Record<string, string[]> {
+  if (cacheScelte) return cacheScelte;
+  const trovate: Record<string, string[]> = {};
+  raccogliScelte(GuildConfigSchema, '', trovate);
+  cacheScelte = trovate;
+  return cacheScelte;
+}
+
 let cache: string[] | null = null;
 
 /**

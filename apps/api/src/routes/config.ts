@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getPrisma } from '@angel/db';
 import {
   defaultGuildConfig,
+  enumChoices,
   MODULE_REGISTRY,
   objectArrayPaths,
   objectArrayTemplates,
@@ -32,6 +33,9 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
       // Lo scheletro di un elemento, per il pulsante «Aggiungi»: davanti a un
       // elenco vuoto non si capisce quali campi vadano scritti.
       objectArrayTemplates: objectArrayTemplates(),
+      // I valori ammessi dei campi a scelta fissa: il pannello li mostra come
+      // tendina invece di una casella dove indovinare la parola giusta.
+      enumChoices: enumChoices(),
       // Segnalato apertamente: una configurazione non valida nel database
       // significa che il bot sta girando con i valori predefiniti.
       invalid: parsed.ok ? null : parsed.errors,
