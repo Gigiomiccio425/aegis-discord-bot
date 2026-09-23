@@ -127,6 +127,8 @@ export function Backups() {
 
       <CopieInstallazione />
 
+      <CopiaLeggera guildId={guildId} />
+
       {diff && (
         <Card
           title="Anteprima del ripristino"
@@ -210,6 +212,52 @@ interface ElencoCopie {
   montata: boolean;
   copie: Copia[];
   avviso?: string;
+}
+
+/**
+ * La copia leggera, pubblicata adesso nel suo canale.
+ *
+ * L'esito resta dentro la sezione. Una copia spenta non è un guasto della
+ * pagina, e sostituire tutto l'elenco dei backup con un avviso nasconderebbe
+ * proprio quello che si stava guardando.
+ */
+function CopiaLeggera({ guildId }: { guildId: string }) {
+  const [occupato, setOccupato] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+  const [avviso, setAvviso] = useState<string | null>(null);
+
+  const pubblica = async () => {
+    setOccupato(true);
+    setErrore(null);
+    setAvviso(null);
+    try {
+      const risposta = await api.post<{ note: string }>(`/api/guilds/${guildId}/copia-leggera`);
+      setAvviso(risposta.note);
+    } catch (err) {
+      setErrore((err as Error).message);
+    } finally {
+      setOccupato(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Copia leggera su Discord"
+      subtitle="Configurazione, comandi, parole ed elenchi in un file pubblicato in un canale: se la macchina si perde, questa resta. Parte da sola ogni notte, dopo la copia completa."
+      action={
+        <Button variant="ghost" disabled={occupato} onClick={() => void pubblica()}>
+          Pubblica adesso
+        </Button>
+      }
+    >
+      {errore && <ErrorBox message={errore} />}
+      {avviso && (
+        <div className="rounded-lg border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm text-neutral-200">
+          {avviso}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function peso(byte: number): string {

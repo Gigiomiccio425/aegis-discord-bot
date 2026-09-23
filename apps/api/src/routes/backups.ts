@@ -1,7 +1,26 @@
 import type { FastifyInstance } from 'fastify';
 import { getPrisma } from '@angel/db';
+import { parseGuildConfig } from '@angel/shared';
 import { requireGuild } from '../guard.js';
 import { botNonInAscolto, sendBotCommand } from '../redis.js';
+
+/**
+ * Perché la copia leggera non si può pubblicare, o `null` se si può.
+ *
+ * Una configurazione che non si legge vale come spenta: meglio dire «è
+ * spenta» che mandare al bot un comando che poi scarta in silenzio.
+ */
+export function motivoCopiaFerma(config: unknown): string | null {
+  const parsed = parseGuildConfig(config);
+  const copia = parsed.ok ? parsed.value.general.copiaLeggera : null;
+  if (!copia?.enabled) {
+    return 'La copia leggera è spenta: accendila in Generale → «Copia leggera su Discord».';
+  }
+  if (!copia.channelId) {
+    return 'Manca il canale dove pubblicare la copia leggera: sceglilo in Generale.';
+  }
+  return null;
+}
 
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { guildId: string } }>(
@@ -115,6 +134,34 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!ricevuto) return botNonInAscolto(reply);
       return { ok: true, note: 'Backup richiesto: comparirà nell\'elenco fra qualche secondo.' };
+    },
+  );
+
+  /*
+   * La copia leggera, pubblicata adesso nel suo canale.
+   *
+   * Se la copia è spenta, il bot lo scrive solo nei log, a livello debug: è
+   * il caso normale del giro notturno, che la chiede a tutti i server. Da un
+   * pulsante no — chi l'ha premuto deve sapere perché nel canale non è
+   * comparso niente. Per questo il controllo si fa qui, prima di mandare il
+   * comando, e la risposta dice cosa manca.
+   */
+  app.post<{ Params: { guildId: string } }>(
+    '/api/guilds/:guildId/copia-leggera',
+    async (request, reply) => {
+      const context = await requireGuild(request, reply, request.params.guildId, 'ADMIN');
+      if (!context) return;
+
+      const guild = await getPrisma().guild.findUnique({
+        where: { id: context.guildId },
+        select: { config: true },
+      });
+      const motivo = motivoCopiaFerma(guild?.config ?? {});
+      if (motivo) return reply.code(409).send({ error: motivo });
+
+      const ricevuto = await sendBotCommand({ action: 'copia.leggera', guildId: context.guildId });
+      if (!ricevuto) return botNonInAscolto(reply);
+      return { ok: true, note: 'Richiesta inviata: la copia comparirà nel canale fra qualche secondo.' };
     },
   );
 }

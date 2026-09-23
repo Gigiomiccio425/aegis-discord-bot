@@ -110,7 +110,7 @@ registro, non gli allegati: per quelli c'è la copia completa. Questa è quella 
 |---|---|
 | **Si accende** | Dal pannello, *Generale* → «Copia leggera su Discord», scegliendo il canale. Parte spenta |
 | **Il canale** | Uno che leggono solo gli amministratori: il file descrive come è fatto il server |
-| **Subito** | `/copia-leggera adesso` ne pubblica una fuori orario |
+| **Subito** | Dal pannello, *Backup* → «Pubblica adesso», oppure `/copia-leggera adesso`. Se è spenta o manca il canale, te lo dice |
 | **Rimetterla** | `/copia-leggera rimetti` dall'ultima pubblicata; con `messaggio:` da una precedente |
 
 **Cosa rimette, e cosa no.** Rimette la configurazione, i comandi, le parole e gli elenchi. Ruoli e
