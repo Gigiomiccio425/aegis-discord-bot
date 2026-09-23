@@ -3,6 +3,25 @@
 Le date sono quelle di pubblicazione dell'immagine. Solo le versioni che cambiano qualcosa per chi
 lo usa: le correzioni interne stanno nella cronologia git.
 
+## 1.32.0 — 23 settembre 2026
+
+- **Il pannello è riorganizzato.** Le pagine stanno in quattro gruppi — Panoramica, Moderazione,
+  Comunità, Sistema — con un'icona ciascuna. In cima a ogni pagina c'è dove ci si trova, la
+  ricerca e il tema; sul telefono il menu si apre dal pulsante in alto.
+- **La configurazione si apre su una panoramica**: lo stato della protezione in cima, i moduli da
+  sistemare, e tutti i moduli in sei categorie, ognuno con il suo interruttore. Il menù di
+  ventisette voci da scorrere non c'è più.
+- **Ogni modulo ha la sua pagina, divisa in schede**, con gli altri moduli della stessa categoria a
+  un clic e un pulsante «Sistema» accanto a ogni problema. Le soglie stanno su una riga sola, i
+  campi a scelta fissa sono tendine con i nomi in italiano, e una barra in basso ricorda le
+  modifiche non salvate.
+- **Ricerca in tutto il pannello**, con Ctrl K (⌘K sul Mac) o «/»: pagine, moduli e ogni singola
+  impostazione, con il valore attuale. Scelta un'impostazione, il pannello porta dritto al campo.
+- **Venti temi**, dodici scuri e otto chiari, più «Automatico» che segue il sistema. Il tema vale
+  per il browser di chi guarda: ogni moderatore tiene il suo.
+- I gruppi di opzioni che comparivano con il nome tecnico — «Join burst», «Exemptions» — hanno un
+  nome italiano.
+
 ## 1.31.8 — 23 settembre 2026
 
 - **La copia leggera si pubblica dal pannello**, in Backup → «Pubblica adesso». Se è spenta o

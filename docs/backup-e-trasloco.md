@@ -131,7 +131,7 @@ una migrazione non si annulla:
 
 ```bash
 curl -O https://raw.githubusercontent.com/Gigiomiccio425/aegis-discord-bot/main/docker/aggiorna.sh
-sudo sh aggiorna.sh docker-compose.yml 1.31.8
+sudo sh aggiorna.sh docker-compose.yml 1.32.0
 ```
 
 Lo script copia il database, imposta la versione indicata, scarica l'immagine e ricrea tutto. La

@@ -8,7 +8,7 @@ id: g-d-app-store-gd-angel
 
 category: Networking
 name: ANGEL
-version: "1.31.8"
+version: "1.32.0"
 tagline: Il custode del tuo server Discord
 
 description: >
@@ -65,8 +65,41 @@ defaultUsername: ""
 defaultPassword: ""
 
 releaseNotes: >
-  La copia leggera si pubblica dal pannello, e il primo avvio dopo un
-  aggiornamento non salta più la sua copia.
+  Il pannello è riorganizzato: pagine in gruppi, una ricerca che porta
+  dritto all'impostazione, venti temi, e una configurazione che si legge
+  senza scorrere un menù di ventisette voci.
+
+
+  - **La configurazione si apre su una panoramica.** In cima lo stato
+    della protezione — attiva, spenta o in modalità prova — poi i moduli da
+    sistemare, poi tutti i moduli in sei categorie, ognuno con il suo
+    interruttore. Per accendere o spegnere un modulo non serve aprirlo.
+
+  - **Ogni modulo ha la sua pagina, divisa in schede.** Gli altri moduli
+    della stessa categoria sono a un clic, e accanto a ogni problema c'è
+    «Sistema», che porta al campo da correggere. Le soglie stanno su una
+    riga sola («6 messaggi in 5 secondi»), e i campi a scelta fissa sono
+    tendine con i nomi in italiano invece di caselle dove scrivere
+    «QUARANTINE».
+
+  - **Ricerca.** Ctrl K, o «/», da qualunque pagina: trova pagine, moduli e
+    ogni impostazione, ne mostra il valore attuale, e scegliendola apre il
+    modulo nella scheda giusta con il campo illuminato.
+
+  - **Venti temi**, dodici scuri e otto chiari, più «Automatico». Si
+    sceglie dalla tavolozza in alto a destra, e vale solo per il tuo
+    browser.
+
+  - Le pagine stanno in quattro gruppi con un'icona ciascuna, e sul
+    telefono il menu si apre dal pulsante in alto.
+
+
+  Nessuna azione richiesta: la configurazione salvata resta quella di
+  prima.
+
+
+  Dalla 1.31.8: la copia leggera si pubblica dal pannello, e il primo avvio
+  dopo un aggiornamento non salta più la sua copia.
 
 
   - **«Pubblica adesso».** Nella pagina Backup c'è la sezione della copia
